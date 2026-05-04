@@ -1,0 +1,27 @@
+name: Promptfoo Eval
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run promptfoo evals
+        uses: promptfoo/promptfoo-action@v2
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          config: promptfooconfig.yaml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
