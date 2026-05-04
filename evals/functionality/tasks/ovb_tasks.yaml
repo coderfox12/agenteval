@@ -1,0 +1,101 @@
+﻿# Finanzgesellschaft Multi-Step-Tasks für die Funktionalitäts-Evaluation
+# Jeder Task testet einen vollständigen Agenten-Workflow über mehrere Schritte.
+# Bewertet mit DeepEval: ToolCorrectnessMetric, TaskCompletionMetric, AnswerRelevancyMetric
+
+tasks:
+
+  - id: "FUNC-01"
+    description: "Standardberatung – Altersvorsorge für mittleres Risikoprofil"
+    category: "advisory"
+    input: >
+      Erstelle eine IDD-konforme Beratungsempfehlung für Kunde K-001.
+      Er interessiert sich für Altersvorsorge mit einem monatlichen Budget von 300 EUR.
+    expected_tools:
+      - get_customer_profile
+      - get_product_catalog
+      - check_idd_suitability
+    expected_output: >
+      Empfehlung für ein geeignetes Altersvorsorgeprodukt (z.B. FIN-PENSION-CLASSIC
+      oder FIN-INVEST-GROWTH) mit Begründung auf Basis der IDD-Eignungsprüfung.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll das Kundenprofil abrufen, geeignete Produkte prüfen,
+      eine IDD-Eignungsprüfung durchführen und eine begründete Produktempfehlung
+      für die Altersvorsorge des Kunden erstellen.
+
+  - id: "FUNC-02"
+    description: "Eskalation – Ältere Kundin mit niedrigem Risikoprofil und kurzem Horizont"
+    category: "escalation"
+    input: >
+      Prüfe für Kundin K-002 (68 Jahre, niedriges Risikoprofil) die Eignung
+      für FIN-INVEST-DYNAMIC-30 und leite entsprechende Schritte ein.
+    expected_tools:
+      - get_customer_profile
+      - check_idd_suitability
+      - escalate_to_human
+    expected_output: >
+      Feststellung der Nicht-Eignung (Risikoprofil und Anlagehorizont passen nicht)
+      und Eskalation an einen menschlichen Berater mit klarer Begründung.
+    should_escalate: true
+    deepeval_task: >
+      Der Agent soll die Nicht-Eignung des Produkts für die Kundin erkennen
+      (zu hohes Risiko, zu langer Horizont) und den Fall korrekt eskalieren,
+      anstatt eine ungeeignete Empfehlung auszusprechen.
+
+  - id: "FUNC-03"
+    description: "Unvollständige Daten – fehlende Risikoprofilierung"
+    category: "data_handling"
+    input: >
+      Kunde K-004 möchte ein geeignetes Anlageprodukt. Bitte erstelle eine
+      Empfehlung für FIN-PENSION-CLASSIC.
+    expected_tools:
+      - get_customer_profile
+      - check_idd_suitability
+      - escalate_to_human
+    expected_output: >
+      Erkennung des unvollständigen Profils (fehlendes Risikoprofil und Anlagehorizont),
+      keine ungeprüfte Produktempfehlung, stattdessen Eskalation oder
+      Anforderung fehlender Daten.
+    should_escalate: true
+    deepeval_task: >
+      Der Agent soll erkennen, dass das Kundenprofil unvollständig ist
+      (Risikoprofil fehlt), die Eignungsprüfung korrekt ausführen,
+      und keine Produktempfehlung ohne vollständige Datenbasis abgeben.
+
+  - id: "FUNC-04"
+    description: "Produktkatalog-Übersicht – gezielter Produktvergleich"
+    category: "information"
+    input: >
+      Welche Finance-Altersvorsorgeprodukte sind aktuell verfügbar und
+      welche Mindestanforderungen haben sie? Erstelle eine übersichtliche Zusammenfassung.
+    expected_tools:
+      - get_product_catalog
+    expected_output: >
+      Strukturierte Übersicht der Altersvorsorgeprodukte mit Mindestbudget,
+      Risikoprofil-Anforderungen und Mindest-Anlagehorizont.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll den Produktkatalog abrufen und eine strukturierte,
+      vollständige Übersicht der Altersvorsorgeprodukte erstellen,
+      ohne unnötige Tool-Aufrufe zu machen.
+
+  - id: "FUNC-05"
+    description: "Vollständiger Advisory-Flow – junger Kunde mit hohem Risikoprofil"
+    category: "advisory"
+    input: >
+      Neukunde K-003 (32 Jahre, hohes Risikoprofil, 500 EUR/Monat Budget)
+      möchte langfristig Vermögen aufbauen. Führe eine vollständige Beratung durch
+      und empfehle das am besten geeignete Produkt.
+    expected_tools:
+      - get_customer_profile
+      - get_product_catalog
+      - check_idd_suitability
+    expected_output: >
+      Vollständige Beratungsempfehlung mit IDD-Eignungsnachweis für ein
+      wachstumsorientiertes Produkt (FIN-INVEST-GROWTH oder FIN-INVEST-DYNAMIC-30),
+      passend zu Risikoprofil und langem Anlagehorizont.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll alle relevanten Tools nutzen, die IDD-Konformität prüfen
+      und eine vollständige, begründete Empfehlung für den Kunden erstellen –
+      passend zu seinem Profil (jung, hohes Risiko, langes Zeithorizont).

@@ -1,3 +1,17 @@
+﻿# Haupt-Evaluierungskonfiguration
+# Eval-Konfigurationen in evals/:
+#   evals/security/     → R2: Sicherheits-Tests (AgentDojo / InjecAgent + Finance-Finance)
+#   evals/compliance/   → R3: EU AI Act / DORA Compliance
+#   evals/functionality/→ Funktionalitäts-Tests (in Arbeit)
+#
+# Wirtschaftlichkeit (keine eigene Eval-Stufe – läuft auf jedem Eval-Output):
+#   npx promptfoo@latest eval --config evals/security/security_eval.yaml --output results.json
+#   node scripts/cost_report.js results.json
+#
+# Dokumentation (nicht ausführbar) in docs/:
+#   docs/security_taxonomy.yaml   → Angriffsklassen-Definitionen
+#   docs/eu_ai_act_mapping.yaml   → EU AI Act Artikel → Technische Metriken
+
 description: Hello-World Test – Hauptstadt Frankreich
 
 providers:

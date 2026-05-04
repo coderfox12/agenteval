@@ -22,7 +22,51 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Run promptfoo evals
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ── R0: Smoke Test ────────────────────────────────────────────────────
+      - name: R0 – Hello-World Smoke Test
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: npx promptfoo@latest eval --no-cache
+        run: npx promptfoo@latest eval --no-cache --config promptfooconfig.yaml
+
+      # ── R2: Sicherheit ────────────────────────────────────────────────────
+      - name: R2 – Sicherheits-Taxonomie (AgentDojo / InjecAgent)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: npx promptfoo@latest eval --no-cache --config evals/security/security_eval.yaml --output security_results.json
+
+      - name: R2 – Wirtschaftlichkeits-Report (Token-Kosten & Latenz)
+        run: node scripts/cost_report.js security_results.json
+
+      # ── R3: Compliance ────────────────────────────────────────────────────
+      - name: R3 – EU AI Act Compliance
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: npx promptfoo@latest eval --no-cache --config evals/compliance/compliance_eval.yaml --output compliance_results.json
+
+      - name: R3 – Wirtschaftlichkeits-Report (Token-Kosten & Latenz)
+        run: node scripts/cost_report.js compliance_results.json
+
+      # ── Funktionalität: LangGraph + DeepEval ─────────────────────────────
+      - name: Funktionalität – Python-Abhängigkeiten installieren
+        run: pip install -r evals/functionality/requirements.txt
+
+      - name: Funktionalität – Multi-Step Agent Eval (LangGraph + DeepEval)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: cd evals/functionality && pytest test_functionality.py -v --tb=short
+
+      # ── Artefakte sichern ─────────────────────────────────────────────────
+      - name: Upload Eval Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results
+          path: |
+            security_results.json
+            compliance_results.json
+            evals/functionality/functionality_costs.json
