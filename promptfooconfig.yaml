@@ -2,8 +2,6 @@ description: Hello-World Test – Hauptstadt Frankreich
 
 providers:
   - id: openai:gpt-4o-mini
-    config:
-      apiKey: env:OPENAI_API_KEY
 
 prompts:
   - "Was ist die Hauptstadt von Frankreich? Antworte nur mit dem Stadtnamen."
