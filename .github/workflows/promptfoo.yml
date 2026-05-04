@@ -58,6 +58,7 @@ jobs:
       - name: Funktionalität – Multi-Step Agent Eval (LangGraph + DeepEval)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
         run: cd evals/functionality && pytest test_functionality.py -v --tb=short
 
       # ── Artefakte sichern ─────────────────────────────────────────────────

@@ -1,6 +1,6 @@
-﻿"""
+"""
 Funktionalitäts-Evaluation des Finanzgesellschaft Advisory Agents
-Framework: LangGraph (Orchestrierung) + DeepEval (Bewertung)
+Framework: LangGraph (Orchestrierung) + DeepEval 3.9.9 (Bewertung)
 
 DeepEval-Metriken:
   - ToolCorrectnessMetric  → Hat der Agent die richtigen Tools aufgerufen?
@@ -28,10 +28,9 @@ from deepeval.metrics import (
     TaskCompletionMetric,
     ToolCorrectnessMetric,
 )
-from deepeval.test_case import LLMTestCase
+from deepeval.test_case import LLMTestCase, ToolCall
 from dotenv import load_dotenv
 
-# Pfad-Setup damit 'agent' und 'cost_tracker' importierbar sind
 sys.path.insert(0, str(Path(__file__).parent))
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
@@ -56,26 +55,28 @@ TASKS = load_tasks()
 
 # ─── Hilfsfunktion ────────────────────────────────────────────────────────────
 
-def run_and_record(task: dict) -> tuple[str, list[str]]:
-    """Führt den Agenten aus, erfasst Kosten und gibt Output + Tool-Calls zurück."""
+def run_and_record(task: dict) -> tuple[str, list[ToolCall]]:
+    """Führt den Agenten aus, erfasst Kosten und gibt Output + ToolCall-Objekte zurück."""
     result = agent.run(task["input"])
     tracker.record(task["id"], result["cost"])
-    return result["output"], result["tools_called"]
+    tools_called = [ToolCall(name=name) for name in result["tools_called"]]
+    return result["output"], tools_called
 
 
 # ─── Tests ────────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
 def test_tool_correctness(task: dict):
-    """Prüft ob der Agent die richtigen Tools in der richtigen Reihenfolge aufgerufen hat."""
+    """Prüft ob der Agent die richtigen Tools aufgerufen hat."""
     actual_output, tools_called = run_and_record(task)
+    expected_tools = [ToolCall(name=name) for name in task["expected_tools"]]
 
     test_case = LLMTestCase(
         input=task["input"],
         actual_output=actual_output,
         expected_output=task["expected_output"],
         tools_called=tools_called,
-        expected_tools=task["expected_tools"],
+        expected_tools=expected_tools,
     )
 
     assert_test(test_case, [ToolCorrectnessMetric(threshold=0.7)])
@@ -92,7 +93,7 @@ def test_task_completion(task: dict):
         expected_output=task["deepeval_task"],
     )
 
-    assert_test(test_case, [TaskCompletionMetric(threshold=0.7)])
+    assert_test(test_case, [TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"])])
 
 
 @pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
