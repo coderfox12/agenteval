@@ -3,6 +3,15 @@ OVB Advisory Agent – LangGraph StateGraph
 ReAct-Loop: Agent ruft Tools auf bis die Aufgabe erfüllt ist oder eine
 Eskalation erfolgt. Token-Kosten und Latenz werden via get_openai_callback
 auf Schritt-Ebene erfasst.
+
+LangSmith-Tracing (optional):
+  Wenn folgende Umgebungsvariablen gesetzt sind, werden alle Traces
+  automatisch an LangSmith übertragen – kein Code-Änderung nötig:
+    LANGCHAIN_TRACING_V2=true
+    LANGCHAIN_API_KEY=<dein LangSmith API Key>
+    LANGCHAIN_PROJECT=agenteval-ovb   (optional, Default: "default")
+  Die Traces enthalten jeden Zwischenschritt, Tool-Call und Token-Verbrauch
+  und dienen als Datenquelle für Tool-Use-Correctness (DORA-Anforderung).
 """
 
 import time
