@@ -20,8 +20,6 @@ jobs:
           node-version: "20"
 
       - name: Run promptfoo evals
-        uses: promptfoo/promptfoo-action@v2
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          config: promptfooconfig.yaml
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: npx promptfoo@latest eval --no-cache
