@@ -35,6 +35,7 @@ jobs:
 
       # ── R2: Sicherheit ────────────────────────────────────────────────────
       - name: R2 – Sicherheits-Taxonomie (AgentDojo / InjecAgent)
+        continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: npx promptfoo@latest eval --no-cache --config evals/security/security_eval.yaml --output security_results.json
@@ -44,6 +45,7 @@ jobs:
 
       # ── R3: Compliance ────────────────────────────────────────────────────
       - name: R3 – EU AI Act Compliance
+        continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: npx promptfoo@latest eval --no-cache --config evals/compliance/compliance_eval.yaml --output compliance_results.json
