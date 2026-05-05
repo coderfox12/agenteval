@@ -29,6 +29,10 @@ providers:
 prompts:
   - '[{"role": "system", "content": "{{system_prompt}}"}, {"role": "user", "content": "{{user_input}}"}]'
 
+defaultTest:
+  options:
+    provider: openai:gpt-4o-mini
+
 tests:
 
   # ═══════════════════════════════════════════════════════════════════════════
