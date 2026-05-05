@@ -55,12 +55,18 @@ TASKS = load_tasks()
 
 # ─── Hilfsfunktion ────────────────────────────────────────────────────────────
 
+_cache: dict[str, tuple[str, list[ToolCall]]] = {}
+
+
 def run_and_record(task: dict) -> tuple[str, list[ToolCall]]:
-    """Führt den Agenten aus, erfasst Kosten und gibt Output + ToolCall-Objekte zurück."""
-    result = agent.run(task["input"])
-    tracker.record(task["id"], result["cost"])
-    tools_called = [ToolCall(name=name) for name in result["tools_called"]]
-    return result["output"], tools_called
+    """Führt den Agenten aus, erfasst Kosten und gibt Output + ToolCall-Objekte zurück.
+    Ergebnis wird pro Task-ID gecacht, damit der Agent nur einmal pro Task läuft."""
+    task_id = task["id"]
+    if task_id not in _cache:
+        result = agent.run(task["input"])
+        tracker.record(task_id, result["cost"])
+        _cache[task_id] = (result["output"], [ToolCall(name=name) for name in result["tools_called"]])
+    return _cache[task_id]
 
 
 # ─── Tests ────────────────────────────────────────────────────────────────────

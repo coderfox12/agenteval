@@ -361,9 +361,9 @@ def generate_report(
 </header>
 <div class="container">
   {_section_summary(sec_data, sec_fin_data, comp_data, scorecard, func_data)}
+  {_section_functionality(func_data)}
   {_section_security(sec_data, sec_fin_data)}
   {_section_compliance(comp_data, scorecard)}
-  {_section_functionality(func_data)}
 </div>
 <footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>
 </body>
