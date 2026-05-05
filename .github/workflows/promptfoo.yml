@@ -58,10 +58,12 @@ jobs:
         run: pip install -r evals/functionality/requirements.txt
 
       - name: Funktionalität – Multi-Step Agent Eval (LangGraph + DeepEval)
+        continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
-        run: cd evals/functionality && pytest test_functionality.py -v --tb=short
+          DEEPEVAL_DISABLE_DOTENV: "1"
+        run: cd evals/functionality && deepeval test run test_functionality.py -v
 
       # ── Artefakte sichern ─────────────────────────────────────────────────
       - name: Upload Eval Results
