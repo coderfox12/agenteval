@@ -22,7 +22,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from deepeval import assert_test
 from deepeval.metrics import (
     AnswerRelevancyMetric,
     TaskCompletionMetric,
@@ -42,6 +41,9 @@ from cost_tracker import CostTracker
 
 agent = FinanceAdvisoryAgent(model="gpt-4o-mini")
 tracker = CostTracker(output_path="functionality_costs.json")
+
+# Akkumuliert Metrik-Scores pro Task über alle Test-Funktionen hinweg
+_metric_results: dict[str, dict] = {}
 
 
 def load_tasks() -> list[dict]:
@@ -85,7 +87,10 @@ def test_tool_correctness(task: dict):
         expected_tools=expected_tools,
     )
 
-    assert_test(test_case, [ToolCorrectnessMetric(threshold=0.7)])
+    metric = ToolCorrectnessMetric(threshold=0.7)
+    metric.measure(test_case)
+    _metric_results.setdefault(task["id"], {})["tool_correctness"] = round(metric.score, 3)
+    assert metric.is_successful(), f"ToolCorrectness: {metric.score:.2f} < 0.7"
 
 
 @pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
@@ -99,7 +104,10 @@ def test_task_completion(task: dict):
         expected_output=task["deepeval_task"],
     )
 
-    assert_test(test_case, [TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"])])
+    metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"])
+    metric.measure(test_case)
+    _metric_results.setdefault(task["id"], {})["task_completion"] = round(metric.score, 3)
+    assert metric.is_successful(), f"TaskCompletion: {metric.score:.2f} < 0.7"
 
 
 @pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
@@ -112,7 +120,10 @@ def test_answer_relevancy(task: dict):
         actual_output=actual_output,
     )
 
-    assert_test(test_case, [AnswerRelevancyMetric(threshold=0.7)])
+    metric = AnswerRelevancyMetric(threshold=0.7)
+    metric.measure(test_case)
+    _metric_results.setdefault(task["id"], {})["answer_relevancy"] = round(metric.score, 3)
+    assert metric.is_successful(), f"AnswerRelevancy: {metric.score:.2f} < 0.7"
 
 
 # ─── Wirtschaftlichkeits-Report nach allen Tests ──────────────────────────────
@@ -120,4 +131,8 @@ def test_answer_relevancy(task: dict):
 def pytest_sessionfinish(session, exitstatus):
     """Gibt den Wirtschaftlichkeits-Report am Ende der Test-Session aus."""
     if tracker.records:
+        for task_id, metrics in _metric_results.items():
+            score_values = [v for v in metrics.values() if isinstance(v, float)]
+            metrics["passed"] = bool(score_values) and all(v >= 0.7 for v in score_values)
+            tracker.update_metrics(task_id, metrics)
         tracker.print_report()

@@ -181,9 +181,9 @@ def _section_summary(sec_data: dict, sec_fin_data: dict, comp_data: dict,
     overall_str = f"{overall_rate:.0%}" if overall_rate is not None else "–"
     overall_cls = "ok" if (overall_rate or 0) >= 0.8 else ("warn" if (overall_rate or 0) >= 0.6 else "err")
 
-    tasks = func_data.get("tasks", []) if func_data else []
-    func_pass = sum(1 for t in tasks if t.get("passed")) if tasks else 0
-    func_total = len(tasks)
+    records = func_data.get("records", []) if func_data else []
+    func_pass = sum(1 for r in records if r.get("passed"))
+    func_total = len(records)
 
     cost_total = (sec_data.get("cost_usd", 0) + sec_fin_data.get("cost_usd", 0)
                   + (func_data.get("summary", {}).get("total_cost_usd", 0) if func_data else 0))
@@ -284,40 +284,58 @@ def _section_functionality(func_data: dict) -> str:
     if not func_data:
         return "<h2>Dimension 1 – Funktionalität</h2><p style='color:#636e72'>Keine Daten vorhanden.</p>"
 
-    tasks = func_data.get("tasks", [])
+    records = func_data.get("records", [])
     summary = func_data.get("summary", {})
 
     rows = []
-    for t in tasks:
-        task_id = t.get("task_id", "–")
-        passed = t.get("passed", False)
-        cost = t.get("cost_usd", 0)
-        latency = t.get("latency_ms", 0)
-        badge = '<span class="badge ok">✓ OK</span>' if passed else '<span class="badge err">✗ Fail</span>'
+    for r in records:
+        task_id = r.get("task_id", "–")
+        passed = r.get("passed")
+        tool_score = r.get("tool_correctness")
+        task_score = r.get("task_completion")
+        rel_score = r.get("answer_relevancy")
+        cost = r.get("cost_usd", 0)
+        latency = r.get("latency_ms", 0)
+
+        if passed is None:
+            badge = '<span class="badge warn">–</span>'
+        elif passed:
+            badge = '<span class="badge ok">✓ OK</span>'
+        else:
+            badge = '<span class="badge err">✗ Fail</span>'
+
+        def _fmt(v):
+            return f"{v:.2f}" if v is not None else "–"
+
         rows.append(
             f"<tr><td>{task_id}</td><td>{badge}</td>"
-            f"<td>${cost:.4f}</td><td>{latency} ms</td></tr>"
+            f"<td>{_fmt(tool_score)}</td><td>{_fmt(task_score)}</td><td>{_fmt(rel_score)}</td>"
+            f"<td>${cost:.4f}</td><td>{latency:,} ms</td></tr>"
         )
 
-    total_tasks = len(tasks)
-    passed_tasks = sum(1 for t in tasks if t.get("passed"))
+    total_tasks = len(records)
+    passed_tasks = sum(1 for r in records if r.get("passed"))
     total_cost = summary.get("total_cost_usd", 0)
     avg_latency = summary.get("avg_latency_ms", 0)
+    total_tokens = summary.get("total_tokens", 0)
 
-    func_cls = "ok" if total_tasks and passed_tasks / total_tasks >= 0.8 else "warn"
+    func_cls = "ok" if total_tasks and passed_tasks / total_tasks >= 0.8 else ("warn" if total_tasks else "")
     cards = [
         _card(f"{passed_tasks}/{total_tasks}", "Tasks bestanden", func_cls),
-        _card(f"${total_cost:.3f}", "API-Kosten (USD)"),
-        _card(f"{avg_latency:.0f} ms", "Ø Latenz"),
+        _card(f"{total_tokens:,}", "Tokens gesamt"),
+        _card(f"${total_cost:.4f}", "API-Kosten (USD)"),
+        _card(f"{avg_latency:,} ms", "Ø Latenz"),
     ]
 
-    table_rows = "".join(rows) if rows else "<tr><td colspan='4' style='color:#636e72'>Keine Task-Daten</td></tr>"
+    table_rows = "".join(rows) if rows else "<tr><td colspan='7' style='color:#636e72'>Keine Task-Daten</td></tr>"
 
     return (
         "<h2>Dimension 1 – Funktionalität (LangGraph + DeepEval)</h2>"
         '<div class="cards">' + "".join(cards) + "</div><br>"
         "<table><thead><tr>"
-        "<th>Task</th><th>Status</th><th>Kosten (USD)</th><th>Latenz</th>"
+        "<th>Task</th><th>Status</th><th>Tool Correctness</th>"
+        "<th>Task Completion</th><th>Answer Relevancy</th>"
+        "<th>Kosten (USD)</th><th>Latenz</th>"
         "</tr></thead><tbody>" + table_rows + "</tbody></table>"
     )
 

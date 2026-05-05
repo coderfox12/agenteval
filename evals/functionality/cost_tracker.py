@@ -17,6 +17,13 @@ class CostTracker:
         self.records.append({"task_id": task_id, **cost_data})
         self._save()
 
+    def update_metrics(self, task_id: str, metrics: dict) -> None:
+        for r in self.records:
+            if r["task_id"] == task_id:
+                r.update(metrics)
+                break
+        self._save()
+
     def _save(self) -> None:
         payload = {"records": self.records, "summary": self._summary()}
         self.output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
