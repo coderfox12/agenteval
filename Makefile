@@ -5,22 +5,23 @@
 # Voraussetzungen:
 #   - Node.js + npx  (für promptfoo)
 #   - Python 3.11+   (für Funktionalitäts-Eval und Scorecard)
+#   - pip install -e . (einmalig, installiert agenteval-ovb als Package)
 #   - OPENAI_API_KEY in .env oder Umgebungsvariable
 #
 # Optionale Erweiterungen:
 #   - MISTRAL_API_KEY          → für make benchmark (Mistral-Provider)
-#   - Ollama mit llama3:8b     → für make benchmark (Open-Source-Provider)
+#   - GROQ_API_KEY             → für make benchmark (Open-Source-Provider)
 #   - LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY → LangSmith-Tracing
 
 .PHONY: all eval smoke security security-finance security-all \
-        compliance scorecard functionality report benchmark install clean
+        compliance scorecard functionality report report-html benchmark install clean
 
-# ── Hauptziel: Alle Evals ─────────────────────────────────────────────────────
+# ── Hauptziel: Alle Evals + HTML-Report ──────────────────────────────────────
 all: eval
 
-eval: security compliance functionality report
+eval: security security-finance compliance functionality report
 	@echo ""
-	@echo "✅ Alle Evals abgeschlossen."
+	@echo "✅ Alle Evals abgeschlossen. Report: report.html"
 
 # ── R0: Smoke Test ────────────────────────────────────────────────────────────
 smoke:
@@ -50,15 +51,25 @@ compliance:
 
 # ── Compliance Scorecard (EU AI Act Mapping) ──────────────────────────────────
 scorecard:
-	python3 scripts/compliance_scorecard.py compliance_results.json
+	agenteval-scorecard compliance_results.json
 
 # ── Funktionalität: LangGraph + DeepEval ─────────────────────────────────────
 functionality:
-	cd evals/functionality && pytest test_functionality.py -v --tb=short
+	cd evals/functionality && deepeval test run test_functionality.py -v
 
-# ── Reporting ─────────────────────────────────────────────────────────────────
-report: scorecard
-	@echo "📊 Reports generiert."
+# ── HTML-Report ───────────────────────────────────────────────────────────────
+report-html:
+	agenteval-report \
+	  --security security_results.json \
+	  --security security_finance_results.json \
+	  --compliance compliance_results.json \
+	  --scorecard compliance_scorecard.json \
+	  --functionality evals/functionality/functionality_costs.json \
+	  --out report.html
+
+# ── Reporting (Scorecard + HTML) ──────────────────────────────────────────────
+report: scorecard report-html
+	@echo "📊 Reports generiert: compliance_scorecard.json, report.html"
 
 # ── Multi-Modell-Benchmark (Vendor Neutrality) ────────────────────────────────
 # Benötigt: MISTRAL_API_KEY + GROQ_API_KEY (beide kostenlos erhältlich)
@@ -67,9 +78,9 @@ benchmark:
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 install:
-	pip install -r evals/functionality/requirements.txt
+	pip install -e .
 
 # ── Aufräumen ─────────────────────────────────────────────────────────────────
 clean:
-	rm -f *_results.json compliance_scorecard.json
+	rm -f *_results.json compliance_scorecard.json report.html
 	rm -f evals/functionality/functionality_costs.json

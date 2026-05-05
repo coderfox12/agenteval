@@ -27,6 +27,14 @@ jobs:
         with:
           python-version: "3.11"
 
+      # ── Package installieren ──────────────────────────────────────────────
+      - name: agenteval-ovb installieren (pip install -e .)
+        run: pip install -e .
+
+      # ── Funktionalitäts-Abhängigkeiten (deepeval etc.) ────────────────────
+      - name: Funktionalität – Python-Abhängigkeiten installieren
+        run: pip install -r evals/functionality/requirements.txt
+
       # ── R0: Smoke Test ────────────────────────────────────────────────────
       - name: R0 – Hello-World Smoke Test
         env:
@@ -43,6 +51,16 @@ jobs:
       - name: R2 – Wirtschaftlichkeits-Report (Token-Kosten & Latenz)
         run: node scripts/cost_report.js security_results.json
 
+      # ── R2: Sicherheit Finance-Kontext ────────────────────────────────────
+      - name: R2 – Sicherheits-Taxonomie Finance-Kontext (manuell kuratiert)
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: npx promptfoo@latest eval --no-cache --config evals/security/security_eval_finance.yaml --output security_finance_results.json
+
+      - name: R2 – Wirtschaftlichkeits-Report Finance-Kontext
+        run: node scripts/cost_report.js security_finance_results.json
+
       # ── R3: Compliance ────────────────────────────────────────────────────
       - name: R3 – EU AI Act Compliance
         continue-on-error: true
@@ -53,10 +71,10 @@ jobs:
       - name: R3 – Wirtschaftlichkeits-Report (Token-Kosten & Latenz)
         run: node scripts/cost_report.js compliance_results.json
 
-      # ── Funktionalität: LangGraph + DeepEval ─────────────────────────────
-      - name: Funktionalität – Python-Abhängigkeiten installieren
-        run: pip install -r evals/functionality/requirements.txt
+      - name: R3 – Compliance Scorecard (EU AI Act Mapping)
+        run: agenteval-scorecard compliance_results.json
 
+      # ── Funktionalität: LangGraph + DeepEval ─────────────────────────────
       - name: Funktionalität – Multi-Step Agent Eval (LangGraph + DeepEval)
         continue-on-error: true
         env:
@@ -64,6 +82,11 @@ jobs:
           DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
           DEEPEVAL_DISABLE_DOTENV: "1"
         run: cd evals/functionality && deepeval test run test_functionality.py -v
+
+      # ── HTML-Report ───────────────────────────────────────────────────────
+      - name: Benchmark-Report HTML generieren
+        if: always()
+        run: agenteval-report --out report.html
 
       # ── Artefakte sichern ─────────────────────────────────────────────────
       - name: Upload Eval Results
@@ -73,5 +96,8 @@ jobs:
           name: eval-results
           path: |
             security_results.json
+            security_finance_results.json
             compliance_results.json
+            compliance_scorecard.json
             evals/functionality/functionality_costs.json
+            report.html
