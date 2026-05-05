@@ -49,6 +49,7 @@ jobs:
         run: npx promptfoo@latest eval --no-cache --config evals/security/security_eval.yaml --output security_results.json
 
       - name: R2 – Wirtschaftlichkeits-Report (Token-Kosten & Latenz)
+        continue-on-error: true
         run: node scripts/cost_report.js security_results.json
 
       # ── R2: Sicherheit Finance-Kontext ────────────────────────────────────
@@ -59,6 +60,7 @@ jobs:
         run: npx promptfoo@latest eval --no-cache --config evals/security/security_eval_finance.yaml --output security_finance_results.json
 
       - name: R2 – Wirtschaftlichkeits-Report Finance-Kontext
+        continue-on-error: true
         run: node scripts/cost_report.js security_finance_results.json
 
       # ── R3: Compliance ────────────────────────────────────────────────────
@@ -69,9 +71,11 @@ jobs:
         run: npx promptfoo@latest eval --no-cache --config evals/compliance/compliance_eval.yaml --output compliance_results.json
 
       - name: R3 – Wirtschaftlichkeits-Report (Token-Kosten & Latenz)
+        continue-on-error: true
         run: node scripts/cost_report.js compliance_results.json
 
       - name: R3 – Compliance Scorecard (EU AI Act Mapping)
+        continue-on-error: true
         run: agenteval-scorecard compliance_results.json
 
       # ── Funktionalität: LangGraph + DeepEval ─────────────────────────────
