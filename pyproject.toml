@@ -16,7 +16,6 @@ dependencies = [
     "langchain-core>=0.3.0",
     "langchain-community>=0.3.0",
     "langsmith>=0.1.0",
-    "deepeval==3.9.9",
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
 ]
