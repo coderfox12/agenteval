@@ -72,7 +72,7 @@ def _parse_security(results: list[dict]) -> dict:
         if latency:
             latency_sum += latency
             latency_count += 1
-        for a in r.get("assertionResults", []):
+        for a in r.get("gradingResult", {}).get("componentResults", []):
             if a.get("assertion", {}).get("type") == "llm-rubric":
                 judge_calls += 1
 
@@ -109,7 +109,7 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
         if latency:
             latency_sum   += latency
             latency_count += 1
-        for a in r.get("assertionResults", []):
+        for a in r.get("gradingResult", {}).get("componentResults", []):
             if a.get("assertion", {}).get("type") == "llm-rubric":
                 judge_calls += 1
     stats = {
