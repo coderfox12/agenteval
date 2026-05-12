@@ -10,8 +10,9 @@ OVB Holding AG × TU Darmstadt – Kooperatives Seminar Sommersemester 2026
 
 ```bash
 # 1. Voraussetzungen: Python 3.11+, Node.js 20+, OPENAI_API_KEY
-cp .env.example .env          # OPENAI_API_KEY eintragen
-pip install -e .              # agenteval-ovb als Package installieren
+cp .env.example .env                               # OPENAI_API_KEY eintragen
+pip install -e .                                   # agenteval-ovb als Package installieren
+pip install -r evals/functionality/requirements.txt  # DeepEval + LangGraph
 
 # 2. Alle Evals + HTML-Report
 make eval
@@ -27,8 +28,8 @@ make eval
 |-----------|------|--------|
 | **D1 Funktionalität** | LangGraph + DeepEval | Task-Completion, Tool-Use-Correctness |
 | **D2 Sicherheit** | promptfoo | Prompt-Injection-Resistenz, Data-Leakage-Rate |
-| **D3 Wirtschaftlichkeit** | cost_report.js | Token-Kosten, Latenz (p50/p95) |
-| **D4 Compliance** | promptfoo + Scorecard | EU AI Act Art. 9/13/14/15/52 |
+| **D3 Compliance** | promptfoo + Scorecard | EU AI Act Art. 9/13/14/15/52 |
+| **Wirtschaftlichkeit** *(Querschnitt)* | cost_report.js | Tokens, Kosten in USD, Latenz (p50/p95) |
 
 ---
 
