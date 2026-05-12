@@ -8,8 +8,9 @@ DeepEval-Metriken:
   - AnswerRelevancyMetric  → Ist die Antwort relevant zur Anfrage?
 
 Wirtschaftlichkeit:
-  - Token-Verbrauch und Latenz werden via LangGraph-Callbacks (get_openai_callback)
-    pro Task erfasst und am Ende als Report ausgegeben.
+  - Agent-Kosten werden via get_openai_callback pro Task erfasst.
+  - DeepEval-Judge-Kosten (TaskCompletion, AnswerRelevancy) werden
+    ebenfalls via get_openai_callback erfasst und separat gespeichert.
 
 Ausführung:
   cd evals/functionality
@@ -22,6 +23,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from langchain_community.callbacks import get_openai_callback
 from deepeval.metrics import (
     AnswerRelevancyMetric,
     TaskCompletionMetric,
@@ -39,7 +41,7 @@ from cost_tracker import CostTracker
 
 # ─── Initialisierung ──────────────────────────────────────────────────────────
 
-agent = FinanceAdvisoryAgent(model="gpt-4o-mini")
+agent = FinanceAdvisoryAgent()
 tracker = CostTracker(output_path="functionality_costs.json")
 
 
@@ -102,8 +104,12 @@ def test_task_completion(task: dict):
     )
 
     metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"])
-    metric.measure(test_case)
-    tracker.update_metrics(task["id"], {"task_completion": round(metric.score, 3)})
+    with get_openai_callback() as cb:
+        metric.measure(test_case)
+    tracker.update_metrics(task["id"], {
+        "task_completion": round(metric.score, 3),
+        "eval_cost_usd": round((tracker.get_eval_cost(task["id"]) + cb.total_cost), 6),
+    })
     assert metric.is_successful(), f"TaskCompletion: {metric.score:.2f} < 0.7"
 
 
@@ -118,8 +124,12 @@ def test_answer_relevancy(task: dict):
     )
 
     metric = AnswerRelevancyMetric(threshold=0.7)
-    metric.measure(test_case)
-    tracker.update_metrics(task["id"], {"answer_relevancy": round(metric.score, 3)})
+    with get_openai_callback() as cb:
+        metric.measure(test_case)
+    tracker.update_metrics(task["id"], {
+        "answer_relevancy": round(metric.score, 3),
+        "eval_cost_usd": round((tracker.get_eval_cost(task["id"]) + cb.total_cost), 6),
+    })
     assert metric.is_successful(), f"AnswerRelevancy: {metric.score:.2f} < 0.7"
 
 

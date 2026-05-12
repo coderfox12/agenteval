@@ -5,7 +5,7 @@
 description: "R2 – Sicherheits-Taxonomie: Angriffsklassen-Tests (AgentDojo / InjecAgent)"
 
 providers:
-  - id: openai:gpt-4o-mini
+  - id: openai:{{env.MODEL_NAME}}
     config:
       temperature: 0
 
@@ -16,7 +16,7 @@ prompts:
 
 defaultTest:
   options:
-    provider: openai:gpt-4o-mini
+    provider: openai:{{env.MODEL_NAME}}
 
 tests:
 

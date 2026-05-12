@@ -165,6 +165,11 @@ def _card(value: str, label: str, cls: str = "") -> str:
     return f'<div class="card {cls}"><div class="val">{value}</div><div class="lbl">{label}</div></div>'
 
 
+def _fmt_int(n: int | float) -> str:
+    """Ganzzahl mit Punkt als Tausendertrennzeichen (deutsche Notation)."""
+    return f"{int(n):,}".replace(",", ".")
+
+
 # ---------------------------------------------------------------------------
 # Sections
 # ---------------------------------------------------------------------------
@@ -193,10 +198,10 @@ def _section_summary(sec_data: dict, sec_fin_data: dict, comp_data: dict,
     func_cls = "ok" if func_total and func_pass / func_total >= 0.8 else ("warn" if func_total else "")
 
     cards = [
-        _card(overall_str, "Compliance-Gesamtstatus", overall_cls),
+        _card(f"{func_pass}/{func_total}", "Funktions-Tasks bestanden", func_cls),
         _card(f"{sec_pass}/{sec_total}", "Security Tests bestanden", sec_cls),
         _card(f"{comp_pass}/{comp_total}", "Compliance Tests bestanden", comp_cls),
-        _card(f"{func_pass}/{func_total}", "Funktions-Tasks bestanden", func_cls),
+        _card(overall_str, "Compliance-Gesamtstatus", overall_cls),
         _card(f"${cost_total:.3f}", "API-Kosten gesamt (USD)"),
     ]
     return '<h2>Übersicht</h2><div class="cards">' + "".join(cards) + "</div>"
@@ -229,8 +234,8 @@ def _section_security(sec_data: dict, sec_fin_data: dict) -> str:
     cards = [
         _card(f"{total_pass}/{total_all}", "Tests bestanden", "ok" if total_all and total_pass/total_all >= 0.9 else "warn"),
         _card(f"${cost:.3f}", "API-Kosten (USD)"),
-        _card(f"{tokens:,}", "Tokens gesamt"),
-        _card(f"{lat} ms", "Ø Latenz"),
+        _card(f"{_fmt_int(tokens)}", "Tokens gesamt"),
+        _card(f"{_fmt_int(lat)} ms", "Ø Latenz"),
     ]
 
     return (
@@ -310,7 +315,7 @@ def _section_functionality(func_data: dict) -> str:
         rows.append(
             f"<tr><td>{task_id}</td><td>{badge}</td>"
             f"<td>{_fmt(tool_score)}</td><td>{_fmt(task_score)}</td><td>{_fmt(rel_score)}</td>"
-            f"<td>${cost:.4f}</td><td>{latency:,} ms</td></tr>"
+            f"<td>${cost:.4f}</td><td>{_fmt_int(latency)} ms</td></tr>"
         )
 
     total_tasks = len(records)
@@ -322,9 +327,9 @@ def _section_functionality(func_data: dict) -> str:
     func_cls = "ok" if total_tasks and passed_tasks / total_tasks >= 0.8 else ("warn" if total_tasks else "")
     cards = [
         _card(f"{passed_tasks}/{total_tasks}", "Tasks bestanden", func_cls),
-        _card(f"{total_tokens:,}", "Tokens gesamt"),
+        _card(f"{_fmt_int(total_tokens)}", "Tokens gesamt"),
         _card(f"${total_cost:.4f}", "API-Kosten (USD)"),
-        _card(f"{avg_latency:,} ms", "Ø Latenz"),
+        _card(f"{_fmt_int(avg_latency)} ms", "Ø Latenz"),
     ]
 
     table_rows = "".join(rows) if rows else "<tr><td colspan='7' style='color:#636e72'>Keine Task-Daten</td></tr>"

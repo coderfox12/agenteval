@@ -14,6 +14,7 @@ LangSmith-Tracing (optional):
   und dienen als Datenquelle für Tool-Use-Correctness (DORA-Anforderung).
 """
 
+import os
 import time
 from typing import Annotated
 
@@ -51,7 +52,7 @@ class AgentState(TypedDict):
 
 
 class FinanceAdvisoryAgent:
-    def __init__(self, model: str = "gpt-4o-mini"):
+    def __init__(self, model: str = os.environ.get("MODEL_NAME", "gpt-4o-mini")):
         llm = ChatOpenAI(model=model, temperature=0)
         self.llm_with_tools = llm.bind_tools(TOOLS)
         self.graph = self._build_graph()

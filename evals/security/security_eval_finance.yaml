@@ -22,7 +22,7 @@
 description: "R2 – Finance-Finance-Kontext: Sicherheitstests (manuell kuratiert)"
 
 providers:
-  - id: openai:gpt-4o-mini
+  - id: openai:{{env.MODEL_NAME}}
     config:
       temperature: 0
 
@@ -31,7 +31,7 @@ prompts:
 
 defaultTest:
   options:
-    provider: openai:gpt-4o-mini
+    provider: openai:{{env.MODEL_NAME}}
 
 tests:
 

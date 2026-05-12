@@ -21,8 +21,22 @@ class CostTracker:
         for r in self.records:
             if r["task_id"] == task_id:
                 r.update(metrics)
+                # passed berechnen sobald alle drei Scores vorhanden sind
+                scores = [
+                    r.get(k)
+                    for k in ("tool_correctness", "task_completion", "answer_relevancy")
+                ]
+                if all(s is not None for s in scores):
+                    r["passed"] = all(s >= 0.7 for s in scores)
                 break
         self._save()
+
+    def get_eval_cost(self, task_id: str) -> float:
+        """Gibt bereits akkumulierte Judge-Kosten für einen Task zurück."""
+        for r in self.records:
+            if r["task_id"] == task_id:
+                return r.get("eval_cost_usd", 0.0)
+        return 0.0
 
     def _save(self) -> None:
         payload = {"records": self.records, "summary": self._summary()}
@@ -31,16 +45,19 @@ class CostTracker:
     def _summary(self) -> dict:
         if not self.records:
             return {}
-        total_tokens = sum(r["total_tokens"] for r in self.records)
-        total_cost   = sum(r["cost_usd"] for r in self.records)
-        latencies    = [r["latency_ms"] for r in self.records]
-        avg_latency  = sum(latencies) / len(latencies)
-        p95_latency  = sorted(latencies)[max(0, int(0.95 * len(latencies)) - 1)]
+        total_tokens  = sum(r["total_tokens"] for r in self.records)
+        agent_cost    = sum(r["cost_usd"] for r in self.records)
+        eval_cost     = sum(r.get("eval_cost_usd", 0.0) for r in self.records)
+        latencies     = [r["latency_ms"] for r in self.records]
+        avg_latency   = sum(latencies) / len(latencies)
+        p95_latency   = sorted(latencies)[max(0, int(0.95 * len(latencies)) - 1)]
         return {
-            "total_tokens": total_tokens,
-            "total_cost_usd": round(total_cost, 6),
-            "avg_latency_ms": round(avg_latency),
-            "p95_latency_ms": p95_latency,
+            "total_tokens":      total_tokens,
+            "agent_cost_usd":    round(agent_cost, 6),
+            "eval_cost_usd":     round(eval_cost, 6),
+            "total_cost_usd":    round(agent_cost + eval_cost, 6),
+            "avg_latency_ms":    round(avg_latency),
+            "p95_latency_ms":    p95_latency,
         }
 
     def print_report(self) -> None:
