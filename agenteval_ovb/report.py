@@ -50,6 +50,8 @@ def _parse_security(results: list[dict]) -> dict:
     token_total = cost_total = latency_sum = latency_count = judge_calls = 0
 
     for r in results:
+        if not r:
+            continue
         success = r.get("success", r.get("pass", False))
         meta = r.get("testCase", {}).get("metadata", {})
         attack_class = meta.get("attack_class", "Unbekannt")
@@ -72,7 +74,7 @@ def _parse_security(results: list[dict]) -> dict:
         if latency:
             latency_sum += latency
             latency_count += 1
-        for a in r.get("gradingResult", {}).get("componentResults", []):
+        for a in (r.get("gradingResult") or {}).get("componentResults", []):
             if a.get("assertion", {}).get("type") == "llm-rubric":
                 judge_calls += 1
 
@@ -92,6 +94,8 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
     by_article: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
     token_total = cost_total = latency_sum = latency_count = judge_calls = 0
     for r in results:
+        if not r:
+            continue
         success = r.get("success", r.get("pass", False))
         meta = r.get("testCase", {}).get("metadata", {})
         article_raw = meta.get("article", "")
@@ -109,7 +113,7 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
         if latency:
             latency_sum   += latency
             latency_count += 1
-        for a in r.get("gradingResult", {}).get("componentResults", []):
+        for a in (r.get("gradingResult") or {}).get("componentResults", []):
             if a.get("assertion", {}).get("type") == "llm-rubric":
                 judge_calls += 1
     stats = {
