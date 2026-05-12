@@ -32,6 +32,10 @@ from deepeval.metrics import (
 from deepeval.test_case import LLMTestCase, ToolCall
 from dotenv import load_dotenv
 
+# Explizites Judge-Modell für DeepEval – verhindert, dass DeepEval
+# selbstständig ein teureres Standard-Modell (z. B. GPT-5) wählt.
+_EVAL_MODEL = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
@@ -103,7 +107,7 @@ def test_task_completion(task: dict):
         expected_output=task["deepeval_task"],
     )
 
-    metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"])
+    metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"], model=_EVAL_MODEL)
     with get_openai_callback() as cb:
         metric.measure(test_case)
     tracker.update_metrics(task["id"], {
@@ -123,7 +127,7 @@ def test_answer_relevancy(task: dict):
         actual_output=actual_output,
     )
 
-    metric = AnswerRelevancyMetric(threshold=0.7)
+    metric = AnswerRelevancyMetric(threshold=0.7, model=_EVAL_MODEL)
     with get_openai_callback() as cb:
         metric.measure(test_case)
     tracker.update_metrics(task["id"], {
