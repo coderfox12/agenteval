@@ -17,6 +17,7 @@ CLI:
 
 import argparse
 import json
+import os
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -110,14 +111,24 @@ header p  { font-size: .85rem; opacity: .75; margin-top: 4px; }
 h2 { font-size: 1.15rem; font-weight: 700; color: #1a2744;
      border-left: 4px solid #0984e3; padding-left: 12px; margin: 36px 0 16px; }
 h3 { font-size: .95rem; font-weight: 600; color: #636e72; margin-bottom: 10px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 .card { background: #fff; border-radius: 10px; padding: 20px 22px;
-        box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-.card .val { font-size: 2rem; font-weight: 700; color: #0984e3; }
-.card .lbl { font-size: .78rem; color: #636e72; margin-top: 4px; }
+        box-shadow: 0 1px 4px rgba(0,0,0,.08); display: flex; flex-direction: column; gap: 10px; }
+.card .lbl { font-size: .95rem; font-weight: 700; color: #1a2744; }
+.card .val { font-size: 1.9rem; font-weight: 700; color: #0984e3; }
+.card .pct-row { display: flex; align-items: center; gap: 8px; }
+.card .pct-bar-wrap { flex: 1; background: #e0e0e0; border-radius: 4px; height: 6px; }
+.card .pct-bar { height: 6px; border-radius: 4px; background: #0984e3; }
+.card .pct-bar.ok  { background: #00b894; }
+.card .pct-bar.warn { background: #fdcb6e; }
+.card .pct-bar.err  { background: #d63031; }
+.card .pct-txt { font-size: .8rem; font-weight: 700; white-space: nowrap; }
 .card.ok  .val { color: #00b894; }
 .card.warn .val { color: #fdcb6e; }
 .card.err  .val { color: #d63031; }
+.model-badge { display: inline-block; background: #0984e3; color: #fff;
+               border-radius: 6px; padding: 3px 12px; font-size: .8rem;
+               font-weight: 700; margin-left: 12px; vertical-align: middle; }
 table { width: 100%; border-collapse: collapse; background: #fff;
         border-radius: 10px; overflow: hidden;
         box-shadow: 0 1px 4px rgba(0,0,0,.08); font-size: .88rem; }
@@ -162,7 +173,27 @@ def _bar(numerator: int, denominator: int, threshold: float = 0.8) -> str:
 
 
 def _card(value: str, label: str, cls: str = "") -> str:
-    return f'<div class="card {cls}"><div class="val">{value}</div><div class="lbl">{label}</div></div>'
+    return f'<div class="card {cls}"><div class="lbl">{label}</div><div class="val">{value}</div></div>'
+
+
+def _card_summary(label: str, numerator: int, denominator: int, threshold: float = 0.8) -> str:
+    """Übersichtskarte mit Label oben, Fraktion, Prozentbalken."""
+    if denominator == 0:
+        return f'<div class="card"><div class="lbl">{label}</div><div class="val">–</div></div>'
+    rate = numerator / denominator
+    pct = round(rate * 100)
+    cls = "ok" if rate >= threshold else ("warn" if rate >= threshold * 0.7 else "err")
+    val_cls = cls
+    return (
+        f'<div class="card {val_cls}">'
+        f'<div class="lbl">{label}</div>'
+        f'<div class="val">{numerator}/{denominator}</div>'
+        f'<div class="pct-row">'
+        f'<div class="pct-bar-wrap"><div class="pct-bar {cls}" style="width:{pct}%"></div></div>'
+        f'<span class="pct-txt">{pct} %</span>'
+        f'</div>'
+        f'</div>'
+    )
 
 
 def _fmt_int(n: int | float) -> str:
@@ -198,10 +229,9 @@ def _section_summary(sec_data: dict, sec_fin_data: dict, comp_data: dict,
     func_cls = "ok" if func_total and func_pass / func_total >= 0.8 else ("warn" if func_total else "")
 
     cards = [
-        _card(f"{func_pass}/{func_total}", "Funktions-Tasks bestanden", func_cls),
-        _card(f"{sec_pass}/{sec_total}", "Security Tests bestanden", sec_cls),
-        _card(f"{comp_pass}/{comp_total}", "Compliance Tests bestanden", comp_cls),
-        _card(overall_str, "Compliance-Gesamtstatus", overall_cls),
+        _card_summary("Funktions-Tasks bestanden", func_pass, func_total, 0.8),
+        _card_summary("Security-Tests bestanden",  sec_pass,  sec_total,  0.9),
+        _card_summary("Compliance-Tests bestanden", comp_pass, comp_total, 0.8),
         _card(f"${cost_total:.3f}", "API-Kosten gesamt (USD)"),
     ]
     return '<h2>Übersicht</h2><div class="cards">' + "".join(cards) + "</div>"
@@ -355,6 +385,7 @@ def generate_report(
     scorecard_path: str | None = None,
     functionality_path: str | None = None,
     out_path: str = "report.html",
+    model_name: str | None = None,
 ) -> Path:
     security_paths = security_paths or []
 
@@ -368,6 +399,8 @@ def generate_report(
     func_data    = _parse_func_costs(_load_json(functionality_path))
 
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
+    model = model_name or os.environ.get("MODEL_NAME", "gpt-4o-mini")
+    model_badge = f'<span class="model-badge">{model}</span>'
 
     html = f"""<!DOCTYPE html>
 <html lang="de">
@@ -380,7 +413,7 @@ def generate_report(
 <body>
 <header>
   <h1>Agent-Eval@OVB – Benchmark Report</h1>
-  <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now}</p>
+  <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Modell: {model_badge} &nbsp;|&nbsp; Erstellt: {now}</p>
 </header>
 <div class="container">
   {_section_summary(sec_data, sec_fin_data, comp_data, scorecard, func_data)}
