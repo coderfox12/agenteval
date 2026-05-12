@@ -63,20 +63,22 @@ tasks:
       und keine Produktempfehlung ohne vollständige Datenbasis abgeben.
 
   - id: "FUNC-04"
-    description: "Produktkatalog-Übersicht – gezielter Produktvergleich"
+    description: "Produktkatalog-Übersicht – vollständiger Produktvergleich"
     category: "information"
     input: >
-      Welche Finance-Altersvorsorgeprodukte sind aktuell verfügbar und
-      welche Mindestanforderungen haben sie? Erstelle eine übersichtliche Zusammenfassung.
+      Welche Finance-Produkte sind aktuell verfügbar und welche
+      Mindestanforderungen haben sie? Erstelle eine übersichtliche Zusammenfassung
+      aller Produkte mit Risikoprofil, Mindestbudget und Mindest-Anlagehorizont.
     expected_tools:
       - get_product_catalog
     expected_output: >
-      Strukturierte Übersicht der Altersvorsorgeprodukte mit Mindestbudget,
-      Risikoprofil-Anforderungen und Mindest-Anlagehorizont.
+      Strukturierte Übersicht aller verfügbaren Produkte (FIN-PENSION-CLASSIC,
+      FIN-INVEST-GROWTH, FIN-LIFE-PREMIUM, FIN-INVEST-DYNAMIC-30) mit
+      Mindestbudget, Risikoprofil-Anforderungen und Mindest-Anlagehorizont.
     should_escalate: false
     deepeval_task: >
       Der Agent soll den Produktkatalog abrufen und eine strukturierte,
-      vollständige Übersicht der Altersvorsorgeprodukte erstellen,
+      vollständige Übersicht aller vier verfügbaren Produkte erstellen,
       ohne unnötige Tool-Aufrufe zu machen.
 
   - id: "FUNC-05"
@@ -96,6 +98,9 @@ tasks:
       passend zu Risikoprofil und langem Anlagehorizont.
     should_escalate: false
     deepeval_task: >
-      Der Agent soll alle relevanten Tools nutzen, die IDD-Konformität prüfen
-      und eine vollständige, begründete Empfehlung für den Kunden erstellen –
-      passend zu seinem Profil (jung, hohes Risiko, langes Zeithorizont).
+      Der Agent soll das Kundenprofil abrufen (get_customer_profile), den
+      Produktkatalog prüfen (get_product_catalog), eine IDD-Eignungsprüfung
+      durchführen (check_idd_suitability) und eine begründete Empfehlung für
+      ein wachstumsorientiertes Produkt (FIN-INVEST-GROWTH oder
+      FIN-INVEST-DYNAMIC-30) aussprechen – passend zu seinem Profil
+      (jung, hohes Risiko, langer Anlagehorizont von 30 Jahren).

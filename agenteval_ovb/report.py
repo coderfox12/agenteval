@@ -47,7 +47,7 @@ def _promptfoo_results(data: dict | None) -> list[dict]:
 def _parse_security(results: list[dict]) -> dict:
     by_class: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
     total_pass = total_fail = 0
-    token_total = cost_total = latency_sum = latency_count = 0
+    token_total = cost_total = latency_sum = latency_count = judge_calls = 0
 
     for r in results:
         success = r.get("success", r.get("pass", False))
@@ -72,6 +72,9 @@ def _parse_security(results: list[dict]) -> dict:
         if latency:
             latency_sum += latency
             latency_count += 1
+        for a in r.get("assertionResults", []):
+            if a.get("assertion", {}).get("type") == "llm-rubric":
+                judge_calls += 1
 
     return {
         "total_pass": total_pass,
@@ -80,13 +83,14 @@ def _parse_security(results: list[dict]) -> dict:
         "token_total": token_total,
         "cost_usd": round(cost_total, 6),
         "latency_p50_ms": round(latency_sum / max(latency_count, 1)),
+        "judge_calls": judge_calls,
     }
 
 
 def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
     """Gibt (by_article, stats) zurück. stats enthält cost_usd, token_total, latency_p50_ms."""
     by_article: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
-    token_total = cost_total = latency_sum = latency_count = 0
+    token_total = cost_total = latency_sum = latency_count = judge_calls = 0
     for r in results:
         success = r.get("success", r.get("pass", False))
         meta = r.get("testCase", {}).get("metadata", {})
@@ -105,10 +109,14 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
         if latency:
             latency_sum   += latency
             latency_count += 1
+        for a in r.get("assertionResults", []):
+            if a.get("assertion", {}).get("type") == "llm-rubric":
+                judge_calls += 1
     stats = {
         "token_total":     token_total,
         "cost_usd":        round(cost_total, 6),
         "latency_p50_ms":  round(latency_sum / max(latency_count, 1)),
+        "judge_calls":     judge_calls,
     }
     return dict(by_article), stats
 
@@ -175,11 +183,16 @@ footer { text-align: center; color: #b2bec3; font-size: .78rem; padding: 32px 0;
 """
 
 
+def _classify(rate: float, threshold: float) -> str:
+    """Einheitliche Dreistufen-Klassifizierung für alle Karten und Badges."""
+    return "ok" if rate >= threshold else ("err" if rate < threshold * 0.7 else "warn")
+
+
 def _pct_badge(numerator: int, denominator: int, threshold: float = 0.8) -> str:
     if denominator == 0:
         return '<span class="badge warn">n/a</span>'
     rate = numerator / denominator
-    cls = "ok" if rate >= threshold else ("warn" if rate >= threshold * 0.7 else "err")
+    cls = _classify(rate, threshold)
     return f'<span class="badge {cls}">{rate:.0%}</span>'
 
 
@@ -187,8 +200,7 @@ def _bar(numerator: int, denominator: int, threshold: float = 0.8) -> str:
     if denominator == 0:
         return ""
     pct = round(numerator / denominator * 100)
-    rate = numerator / denominator
-    cls = "ok" if rate >= threshold else ("err" if rate < threshold * 0.7 else "")
+    cls = _classify(numerator / denominator, threshold)
     return (
         f'<div class="bar-wrap">'
         f'<div class="bar {cls}" style="width:{pct}%"></div>'
@@ -206,10 +218,9 @@ def _card_summary(label: str, numerator: int, denominator: int, threshold: float
         return f'<div class="card"><div class="lbl">{label}</div><div class="val">–</div></div>'
     rate = numerator / denominator
     pct = round(rate * 100)
-    cls = "ok" if rate >= threshold else ("warn" if rate >= threshold * 0.7 else "err")
-    val_cls = cls
+    cls = _classify(rate, threshold)
     return (
-        f'<div class="card {val_cls}">'
+        f'<div class="card {cls}">'
         f'<div class="lbl">{label}</div>'
         f'<div class="val">{numerator}/{denominator}</div>'
         f'<div class="pct-row">'
@@ -241,15 +252,16 @@ def _section_summary(sec_data: dict, sec_fin_data: dict, comp_data: dict,
     func_pass = sum(1 for r in records if r.get("passed"))
     func_total = len(records)
 
+    func_summary = func_data.get("summary", {}) if func_data else {}
+    func_model_cost = func_summary.get("agent_cost_usd", func_summary.get("total_cost_usd", 0))
     cost_total = (sec_data.get("cost_usd", 0) + sec_fin_data.get("cost_usd", 0)
-                  + comp_stats.get("cost_usd", 0)
-                  + (func_data.get("summary", {}).get("total_cost_usd", 0) if func_data else 0))
+                  + comp_stats.get("cost_usd", 0) + func_model_cost)
 
     cards = [
         _card_summary("Funktions-Tasks bestanden", func_pass, func_total, 0.8),
         _card_summary("Security-Tests bestanden",  sec_pass,  sec_total,  0.9),
         _card_summary("Compliance-Tests bestanden", comp_pass, comp_total, 0.8),
-        _card(f"${cost_total:.3f}", "API-Kosten gesamt (USD)"),
+        _card(f"${cost_total:.3f}", "Modell-Kosten gesamt (USD)"),
     ]
     return '<h2>Übersicht</h2><div class="cards">' + "".join(cards) + "</div>"
 
@@ -299,9 +311,10 @@ def _section_security(sec_data: dict, sec_fin_data: dict) -> str:
     lat        = sec_data.get("latency_p50_ms") or sec_fin_data.get("latency_p50_ms") or 0
 
     cards = [
-        _card(f"{total_pass}/{total_all}", "Tests bestanden", "ok" if total_all and total_pass/total_all >= 0.9 else "warn"),
+        _card(f"{total_pass}/{total_all}", "Tests bestanden",
+              _classify(total_pass / total_all, 0.9) if total_all else ""),
         _card(f"{_fmt_int(tokens)}", "Tokens gesamt"),
-        _card(f"${cost:.3f}", "API-Kosten (USD)"),
+        _card(f"${cost:.3f}", "Modell-Kosten (USD)"),
         _card(f"{_fmt_int(lat)} ms", "Ø Latenz"),
     ]
 
@@ -346,9 +359,10 @@ def _section_compliance(comp_data: dict, comp_stats: dict, scorecard: dict | Non
     lat     = comp_stats.get("latency_p50_ms", 0)
 
     cards = [
-        _card(overall_str, "Compliance-Gesamtrate", overall_cls),
+        _card(overall_str, "Compliance-Gesamtrate",
+              _classify(overall_rate, 0.8) if overall_rate is not None else overall_cls),
         _card(f"{_fmt_int(tokens)}", "Tokens gesamt"),
-        _card(f"${cost:.3f}", "API-Kosten (USD)"),
+        _card(f"${cost:.3f}", "Modell-Kosten (USD)"),
         _card(f"{_fmt_int(lat)} ms", "Ø Latenz"),
     ]
 
@@ -396,15 +410,15 @@ def _section_functionality(func_data: dict) -> str:
 
     total_tasks = len(records)
     passed_tasks = sum(1 for r in records if r.get("passed"))
-    total_cost = summary.get("total_cost_usd", 0)
+    model_cost = summary.get("agent_cost_usd", summary.get("total_cost_usd", 0))
     avg_latency = summary.get("avg_latency_ms", 0)
     total_tokens = summary.get("total_tokens", 0)
 
-    func_cls = "ok" if total_tasks and passed_tasks / total_tasks >= 0.8 else ("warn" if total_tasks else "")
+    func_cls = _classify(passed_tasks / total_tasks, 0.8) if total_tasks else ""
     cards = [
         _card(f"{passed_tasks}/{total_tasks}", "Tasks bestanden", func_cls),
         _card(f"{_fmt_int(total_tokens)}", "Tokens gesamt"),
-        _card(f"${total_cost:.4f}", "API-Kosten (USD)"),
+        _card(f"${model_cost:.4f}", "Modell-Kosten (USD)"),
         _card(f"{_fmt_int(avg_latency)} ms", "Ø Latenz"),
     ]
 
@@ -416,8 +430,62 @@ def _section_functionality(func_data: dict) -> str:
         "<table><thead><tr>"
         "<th>Task</th><th>Status</th><th>Tool Correctness</th>"
         "<th>Task Completion</th><th>Answer Relevancy</th>"
-        "<th>Kosten (USD)</th><th>Latenz</th>"
+        "<th>Modell-Kosten (USD)</th><th>Latenz</th>"
         "</tr></thead><tbody>" + table_rows + "</tbody></table>"
+    )
+
+
+def _section_eval_overhead(
+    sec_data: dict, sec_fin_data: dict,
+    comp_stats: dict,
+    func_data: dict,
+    judge_model: str,
+) -> str:
+    # D1: exakt aus functionality_costs.json
+    d1_judge = (func_data.get("summary", {}).get("eval_cost_usd", 0) if func_data else 0)
+
+    # D2/D3: geschätzt aus Anzahl llm-rubric-Aufrufe × ~600/150 Tokens
+    sec_judge_calls = sec_data.get("judge_calls", 0) + sec_fin_data.get("judge_calls", 0)
+    d2_judge = sec_judge_calls * calc_cost_usd(judge_model, 600, 150)
+
+    comp_judge_calls = comp_stats.get("judge_calls", 0)
+    d3_judge = comp_judge_calls * calc_cost_usd(judge_model, 600, 150)
+
+    total_judge = d1_judge + d2_judge + d3_judge
+
+    d1_judge_calls = len((func_data or {}).get("records", [])) * 2  # TaskCompletion + AnswerRelevancy
+
+    rows = [
+        f"<tr><td>D1 – Funktionalität</td>"
+        f"<td>${d1_judge:.4f}</td>"
+        f"<td>{d1_judge_calls}</td>"
+        f"<td><small>exakt (DeepEval-Callback)</small></td></tr>",
+
+        f"<tr><td>D2 – Sicherheit</td>"
+        f"<td>${d2_judge:.4f}</td>"
+        f"<td>{sec_judge_calls}</td>"
+        f"<td><small>geschätzt (~600&thinsp;/&thinsp;150 Tokens je Aufruf)</small></td></tr>",
+
+        f"<tr><td>D3 – Compliance</td>"
+        f"<td>${d3_judge:.4f}</td>"
+        f"<td>{comp_judge_calls}</td>"
+        f"<td><small>geschätzt (~600&thinsp;/&thinsp;150 Tokens je Aufruf)</small></td></tr>",
+
+        f"<tr style='font-weight:700'><td>Gesamt</td>"
+        f"<td>${total_judge:.4f}</td><td></td><td></td></tr>",
+    ]
+
+    return (
+        f"<h2>Evaluierungs-Overhead</h2>"
+        f"<p style='color:#636e72;font-size:.85rem;margin-bottom:16px'>"
+        f"Judge-Kosten entstehen durch LLM-as-Judge-Bewertungen (llm-rubric / DeepEval). "
+        f"Das Judge-Modell ist unabhängig vom getesteten Modell fest auf "
+        f"<strong>{judge_model}</strong> fixiert, um Vergleichbarkeit zwischen "
+        f"verschiedenen getesteten Modellen zu gewährleisten. "
+        f"D2/D3-Werte sind Schätzungen basierend auf der Anzahl erkannter Judge-Aufrufe.</p>"
+        "<table><thead><tr>"
+        "<th>Dimension</th><th>Judge-Kosten (USD)</th><th>Judge-Aufrufe</th><th>Genauigkeit</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
     )
 
 
@@ -442,10 +510,11 @@ def generate_report(
     comp_results  = _promptfoo_results(_load_json(compliance_path))
     comp_data, comp_stats = _parse_compliance(comp_results)
     scorecard     = _load_json(scorecard_path)
-    func_data    = _parse_func_costs(_load_json(functionality_path))
+    func_data     = _parse_func_costs(_load_json(functionality_path))
 
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
     model = model_name or os.environ.get("MODEL_NAME", "gpt-5.4-mini")
+    judge_model = os.environ.get("JUDGE_MODEL", model)
     model_badge = f'<span class="model-badge">{model}</span>'
 
     html = f"""<!DOCTYPE html>
@@ -468,6 +537,7 @@ def generate_report(
   {_section_functionality(func_data)}
   {_section_security(sec_data, sec_fin_data)}
   {_section_compliance(comp_data, comp_stats, scorecard)}
+  {_section_eval_overhead(sec_data, sec_fin_data, comp_stats, func_data, judge_model)}
 </div>
 <footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>
 </body>
