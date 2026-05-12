@@ -42,9 +42,6 @@ from cost_tracker import CostTracker
 agent = FinanceAdvisoryAgent(model="gpt-4o-mini")
 tracker = CostTracker(output_path="functionality_costs.json")
 
-# Akkumuliert Metrik-Scores pro Task über alle Test-Funktionen hinweg
-_metric_results: dict[str, dict] = {}
-
 
 def load_tasks() -> list[dict]:
     tasks_path = Path(__file__).parent / "tasks" / "ovb_tasks.yaml"
@@ -89,7 +86,7 @@ def test_tool_correctness(task: dict):
 
     metric = ToolCorrectnessMetric(threshold=0.7)
     metric.measure(test_case)
-    _metric_results.setdefault(task["id"], {})["tool_correctness"] = round(metric.score, 3)
+    tracker.update_metrics(task["id"], {"tool_correctness": round(metric.score, 3)})
     assert metric.is_successful(), f"ToolCorrectness: {metric.score:.2f} < 0.7"
 
 
@@ -106,7 +103,7 @@ def test_task_completion(task: dict):
 
     metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"])
     metric.measure(test_case)
-    _metric_results.setdefault(task["id"], {})["task_completion"] = round(metric.score, 3)
+    tracker.update_metrics(task["id"], {"task_completion": round(metric.score, 3)})
     assert metric.is_successful(), f"TaskCompletion: {metric.score:.2f} < 0.7"
 
 
@@ -122,17 +119,21 @@ def test_answer_relevancy(task: dict):
 
     metric = AnswerRelevancyMetric(threshold=0.7)
     metric.measure(test_case)
-    _metric_results.setdefault(task["id"], {})["answer_relevancy"] = round(metric.score, 3)
+    tracker.update_metrics(task["id"], {"answer_relevancy": round(metric.score, 3)})
     assert metric.is_successful(), f"AnswerRelevancy: {metric.score:.2f} < 0.7"
 
 
 # ─── Wirtschaftlichkeits-Report nach allen Tests ──────────────────────────────
 
 def pytest_sessionfinish(session, exitstatus):
-    """Gibt den Wirtschaftlichkeits-Report am Ende der Test-Session aus."""
-    if tracker.records:
-        for task_id, metrics in _metric_results.items():
-            score_values = [v for v in metrics.values() if isinstance(v, float)]
-            metrics["passed"] = bool(score_values) and all(v >= 0.7 for v in score_values)
-            tracker.update_metrics(task_id, metrics)
-        tracker.print_report()
+    """Berechnet passed-Flag aus gespeicherten Scores und gibt Report aus."""
+    if not tracker.records:
+        return
+    for r in tracker.records:
+        scores = [
+            r[k] for k in ("tool_correctness", "task_completion", "answer_relevancy")
+            if k in r
+        ]
+        r["passed"] = bool(scores) and all(s >= 0.7 for s in scores)
+    tracker._save()
+    tracker.print_report()
