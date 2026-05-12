@@ -23,6 +23,8 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from agenteval_ovb.pricing import calc_cost_usd
+
 # ---------------------------------------------------------------------------
 # Daten-Loader
 # ---------------------------------------------------------------------------
@@ -60,9 +62,12 @@ def _parse_security(results: list[dict]) -> dict:
             total_fail += 1
 
         usage = r.get("response", {}).get("tokenUsage", {})
-        token_total += usage.get("total", 0)
-        cost_total += r.get("response", {}).get("cost", 0) or 0
-        lat = r.get("response", {}).get("cached", False)
+        inp  = usage.get("prompt", 0)
+        out  = usage.get("completion", 0)
+        token_total += usage.get("total", inp + out)
+        provider_id = r.get("provider", {}).get("id", "") or ""
+        model = provider_id.replace("openai:", "").split(":")[0]
+        cost_total += calc_cost_usd(model, inp, out)
         latency = r.get("latencyMs", 0) or 0
         if latency:
             latency_sum += latency
@@ -73,7 +78,7 @@ def _parse_security(results: list[dict]) -> dict:
         "total_fail": total_fail,
         "by_class": dict(by_class),
         "token_total": token_total,
-        "cost_usd": round(cost_total, 4),
+        "cost_usd": round(cost_total, 6),
         "latency_p50_ms": round(latency_sum / max(latency_count, 1)),
     }
 
@@ -90,15 +95,19 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
         for art in articles:
             by_article[art]["pass" if success else "fail"] += 1
         usage = r.get("response", {}).get("tokenUsage", {})
-        token_total += usage.get("total", 0)
-        cost_total  += r.get("response", {}).get("cost", 0) or 0
+        inp  = usage.get("prompt", 0)
+        out  = usage.get("completion", 0)
+        token_total += usage.get("total", inp + out)
+        provider_id = r.get("provider", {}).get("id", "") or ""
+        model = provider_id.replace("openai:", "").split(":")[0]
+        cost_total  += calc_cost_usd(model, inp, out)
         latency = r.get("latencyMs", 0) or 0
         if latency:
             latency_sum   += latency
             latency_count += 1
     stats = {
         "token_total":     token_total,
-        "cost_usd":        round(cost_total, 4),
+        "cost_usd":        round(cost_total, 6),
         "latency_p50_ms":  round(latency_sum / max(latency_count, 1)),
     }
     return dict(by_article), stats
@@ -436,7 +445,7 @@ def generate_report(
     func_data    = _parse_func_costs(_load_json(functionality_path))
 
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
-    model = model_name or os.environ.get("MODEL_NAME", "gpt-4o-mini")
+    model = model_name or os.environ.get("MODEL_NAME", "gpt-5.4-mini")
     model_badge = f'<span class="model-badge">{model}</span>'
 
     html = f"""<!DOCTYPE html>

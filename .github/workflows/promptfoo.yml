@@ -8,7 +8,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  MODEL_NAME: ${{ vars.MODEL_NAME || 'gpt-4o-mini' }}
+  MODEL_NAME: ${{ vars.MODEL_NAME || 'gpt-5.4-mini' }}
 
 jobs:
   eval:

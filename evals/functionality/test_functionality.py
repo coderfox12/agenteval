@@ -31,10 +31,11 @@ from deepeval.metrics import (
 )
 from deepeval.test_case import LLMTestCase, ToolCall
 from dotenv import load_dotenv
+from agenteval_ovb.pricing import calc_cost_usd
 
 # Explizites Judge-Modell für DeepEval – verhindert, dass DeepEval
 # selbstständig ein teureres Standard-Modell (z. B. GPT-5) wählt.
-_EVAL_MODEL = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+_EVAL_MODEL = os.environ.get("MODEL_NAME", "gpt-5.4-mini")
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -110,9 +111,10 @@ def test_task_completion(task: dict):
     metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"], model=_EVAL_MODEL)
     with get_openai_callback() as cb:
         metric.measure(test_case)
+    judge_cost = calc_cost_usd(_EVAL_MODEL, cb.prompt_tokens, cb.completion_tokens)
     tracker.update_metrics(task["id"], {
         "task_completion": round(metric.score, 3),
-        "eval_cost_usd": round((tracker.get_eval_cost(task["id"]) + cb.total_cost), 6),
+        "eval_cost_usd": round((tracker.get_eval_cost(task["id"]) + judge_cost), 6),
     })
     assert metric.is_successful(), f"TaskCompletion: {metric.score:.2f} < 0.7"
 
@@ -130,9 +132,10 @@ def test_answer_relevancy(task: dict):
     metric = AnswerRelevancyMetric(threshold=0.7, model=_EVAL_MODEL)
     with get_openai_callback() as cb:
         metric.measure(test_case)
+    judge_cost = calc_cost_usd(_EVAL_MODEL, cb.prompt_tokens, cb.completion_tokens)
     tracker.update_metrics(task["id"], {
         "answer_relevancy": round(metric.score, 3),
-        "eval_cost_usd": round((tracker.get_eval_cost(task["id"]) + cb.total_cost), 6),
+        "eval_cost_usd": round((tracker.get_eval_cost(task["id"]) + judge_cost), 6),
     })
     assert metric.is_successful(), f"AnswerRelevancy: {metric.score:.2f} < 0.7"
 

@@ -25,6 +25,8 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from typing_extensions import TypedDict
 
+from agenteval_ovb.pricing import calc_cost_usd
+
 from .tools import (
     check_idd_suitability,
     escalate_to_human,
@@ -52,7 +54,7 @@ class AgentState(TypedDict):
 
 
 class FinanceAdvisoryAgent:
-    def __init__(self, model: str = os.environ.get("MODEL_NAME", "gpt-4o-mini")):
+    def __init__(self, model: str = os.environ.get("MODEL_NAME", "gpt-5.4-mini")):
         llm = ChatOpenAI(model=model, temperature=0)
         self.llm_with_tools = llm.bind_tools(TOOLS)
         self.graph = self._build_graph()
@@ -96,6 +98,9 @@ class FinanceAdvisoryAgent:
 
         final_output = result["messages"][-1].content
 
+        model_name = os.environ.get("MODEL_NAME", "gpt-5.4-mini")
+        cost_usd = calc_cost_usd(model_name, cb.prompt_tokens, cb.completion_tokens)
+
         return {
             "output": final_output,
             "tools_called": tools_called,
@@ -104,7 +109,7 @@ class FinanceAdvisoryAgent:
                 "prompt_tokens": cb.prompt_tokens,
                 "completion_tokens": cb.completion_tokens,
                 "total_tokens": cb.total_tokens,
-                "cost_usd": round(cb.total_cost, 6),
+                "cost_usd": round(cost_usd, 6),
                 "latency_ms": latency_ms,
             },
         }
