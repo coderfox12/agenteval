@@ -181,6 +181,17 @@ def test_answer_relevancy(agent_cfg, task):
     assert metric.is_successful(), f"AnswerRelevancy: {metric.score:.2f} < 0.7"
 
 
+# ─── pytest-xdist: Tests pro Agent auf denselben Worker gruppieren ───────────
+
+def pytest_collection_modifyitems(items):
+    """Gruppiert alle Tests eines Agenten auf denselben xdist-Worker.
+    So bleiben Cache und CostTracker innerhalb eines Prozesses konsistent."""
+    for item in items:
+        if hasattr(item, "callspec") and "agent_cfg" in item.callspec.params:
+            agent_id = item.callspec.params["agent_cfg"]["id"]
+            item.add_marker(pytest.mark.xdist_group(name=agent_id))
+
+
 # ─── Abschluss-Report nach allen Tests ───────────────────────────────────────
 
 def pytest_sessionfinish(session, exitstatus):

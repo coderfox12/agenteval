@@ -37,6 +37,7 @@ jobs:
       - name: R0 – Hello-World Smoke Test
         env:
           OPENAI_API_KEY: ${{ secrets.AGENT_API_KEY }}
+          MODEL_NAME: gpt-5.4-mini
         run: npx promptfoo@latest eval --no-cache --config promptfooconfig.yaml
 
       # ── R2 + R3: Security & Compliance – alle Agenten ─────────────────────
@@ -56,7 +57,7 @@ jobs:
           JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
           DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
           DEEPEVAL_DISABLE_DOTENV: "1"
-        run: cd evals/functionality && deepeval test run test_functionality.py -v
+        run: cd evals/functionality && deepeval test run test_functionality.py -v -n auto --dist=loadgroup
 
       # ── HTML-Report ───────────────────────────────────────────────────────
       - name: Benchmark-Report HTML generieren
