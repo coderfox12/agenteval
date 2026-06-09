@@ -125,6 +125,20 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
     return dict(by_article), stats
 
 
+def _load_judge_model_from_config() -> str | None:
+    """Liest das Judge-Modell aus agents.yaml, falls die Datei existiert."""
+    try:
+        import yaml as _yaml
+        candidates = [Path("agents.yaml"), Path(__file__).parent.parent / "agents.yaml"]
+        for p in candidates:
+            if p.exists():
+                cfg = _yaml.safe_load(p.read_text(encoding="utf-8"))
+                return cfg.get("judge", {}).get("model")
+    except Exception:
+        pass
+    return None
+
+
 def _parse_func_costs(data: dict | None) -> dict:
     if not data:
         return {}
@@ -183,6 +197,33 @@ tr:hover td { background: #f7f9fc; }
 .bar.ok   { background: #00b894; }
 .bar.err  { background: #d63031; }
 .section  { margin-bottom: 8px; }
+.agent-divider { margin: 48px 0 0; padding: 18px 22px;
+                 background: #1a2744; color: #fff; border-radius: 10px;
+                 font-size: 1.05rem; font-weight: 700; }
+.agent-divider .agent-model { font-size: .82rem; font-weight: 400;
+                               opacity: .7; margin-left: 10px; }
+.chart-wrap { background: #fff; border-radius: 10px; padding: 24px 28px;
+              box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 16px; }
+.chart-title { font-size: .82rem; font-weight: 700; color: #636e72;
+               text-transform: uppercase; letter-spacing: .05em; margin-bottom: 18px; }
+.chart-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.chart-label { width: 180px; font-size: .85rem; font-weight: 600;
+               color: #2d3436; flex-shrink: 0; white-space: nowrap;
+               overflow: hidden; text-overflow: ellipsis; }
+.chart-bar-track { flex: 1; background: #f0f0f0; border-radius: 6px; height: 22px;
+                   position: relative; overflow: hidden; }
+.chart-bar-fill { height: 100%; border-radius: 6px; transition: width .3s;
+                  display: flex; align-items: center; padding-left: 8px;
+                  font-size: .75rem; font-weight: 700; color: #fff; white-space: nowrap; }
+.chart-bar-fill.ok   { background: #00b894; }
+.chart-bar-fill.warn { background: #fdcb6e; color: #856404; }
+.chart-bar-fill.err  { background: #d63031; }
+.chart-legend { display: flex; gap: 20px; margin-top: 6px; flex-wrap: wrap; }
+.chart-legend-item { display: flex; align-items: center; gap: 6px;
+                     font-size: .78rem; color: #636e72; }
+.chart-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+               gap: 16px; margin-bottom: 4px; }
 footer { text-align: center; color: #b2bec3; font-size: .78rem; padding: 32px 0; }
 """
 
@@ -494,6 +535,358 @@ def _section_eval_overhead(
 
 
 # ---------------------------------------------------------------------------
+# Multi-Agent-Vergleich
+# ---------------------------------------------------------------------------
+
+def _radar_svg(entries: list[dict]) -> str:
+    """Inline SVG Radar/Spider-Chart (5 Achsen, kein JS, kein CDN)."""
+    import math
+
+    W, H = 520, 385
+    cx, cy, r = 195, 192, 130
+
+    AXES = [
+        ("D1 Funktionalität", "func_rate"),
+        ("D2 Sicherheit",     "sec_rate"),
+        ("Geschwindigkeit",   "speed_rate"),
+        ("Kosteneffizienz",   "cost_rate"),
+        ("D3 Compliance",     "comp_rate"),
+    ]
+    n_axes = len(AXES)
+    angles = [-math.pi / 2 + i * 2 * math.pi / n_axes for i in range(n_axes)]
+    COLORS = ["#0984e3", "#00b894", "#e17055", "#6c5ce7", "#fd79a8"]
+
+    def pt(axis_i: int, frac: float) -> tuple[float, float]:
+        a = angles[axis_i]
+        return cx + frac * r * math.cos(a), cy + frac * r * math.sin(a)
+
+    svg: list[str] = [
+        f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" '
+        f'style="width:100%;max-width:{W}px;height:auto;display:block">'
+    ]
+
+    # Grid-Pentagone
+    for lvl in [0.2, 0.4, 0.6, 0.8, 1.0]:
+        pts = " ".join(f"{pt(i, lvl)[0]:.1f},{pt(i, lvl)[1]:.1f}" for i in range(n_axes))
+        color = "#b2bec3" if lvl == 1.0 else "#dfe6e9"
+        sw    = "1.2"    if lvl == 1.0 else "0.7"
+        svg.append(f'<polygon points="{pts}" fill="none" stroke="{color}" stroke-width="{sw}"/>')
+
+    # Achsenlinien
+    for i in range(n_axes):
+        x2, y2 = pt(i, 1.0)
+        svg.append(f'<line x1="{cx}" y1="{cy}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="#dfe6e9" stroke-width="0.7"/>')
+
+    # Prozent-Labels an der ersten Achse
+    for lvl in [0.2, 0.4, 0.6, 0.8, 1.0]:
+        lx, ly = pt(0, lvl)
+        svg.append(
+            f'<text x="{lx + 4:.0f}" y="{ly:.0f}" font-size="9" fill="#b2bec3" '
+            f'dominant-baseline="middle">{int(lvl * 100)}%</text>'
+        )
+
+    # Achsen-Beschriftungen
+    label_scale = 1.36
+    for i, (label, _) in enumerate(AXES):
+        lx, ly = pt(i, label_scale)
+        if lx < cx - 8:
+            anchor, dx = "end", -2
+        elif lx > cx + 8:
+            anchor, dx = "start", 2
+        else:
+            anchor, dx = "middle", 0
+        svg.append(
+            f'<text x="{lx + dx:.0f}" y="{ly:.0f}" font-size="11" font-weight="600" '
+            f'fill="#1a2744" text-anchor="{anchor}" dominant-baseline="middle">{label}</text>'
+        )
+
+    # Agent-Polygone (Fläche + Umriss)
+    for idx, entry in enumerate(entries):
+        color  = COLORS[idx % len(COLORS)]
+        scores = [max(0.0, min(1.0, entry.get(key, 0.0))) for _, key in AXES]
+        pts    = " ".join(f"{pt(i, scores[i])[0]:.1f},{pt(i, scores[i])[1]:.1f}" for i in range(n_axes))
+        svg.append(
+            f'<polygon points="{pts}" fill="{color}" fill-opacity="0.13" '
+            f'stroke="{color}" stroke-width="2.2" stroke-linejoin="round"/>'
+        )
+        for i in range(n_axes):
+            dx2, dy2 = pt(i, scores[i])
+            svg.append(
+                f'<circle cx="{dx2:.1f}" cy="{dy2:.1f}" r="4.5" '
+                f'fill="{color}" stroke="#fff" stroke-width="1.5"/>'
+            )
+
+    # Legende
+    leg_x, leg_y = 388, 48
+    leg_h = len(entries) * 26 + 16
+    svg.append(
+        f'<rect x="{leg_x - 8}" y="{leg_y - 8}" width="128" height="{leg_h}" '
+        f'rx="6" fill="#f8f9fa" stroke="#dfe6e9" stroke-width="0.8"/>'
+    )
+    for idx, entry in enumerate(entries):
+        color = COLORS[idx % len(COLORS)]
+        ey    = leg_y + idx * 26
+        svg.append(f'<rect x="{leg_x}" y="{ey}" width="13" height="13" rx="3" fill="{color}"/>')
+        lbl = entry["label"][:15] + ("…" if len(entry["label"]) > 15 else "")
+        svg.append(f'<text x="{leg_x + 19}" y="{ey + 10}" font-size="11" fill="#2d3436">{lbl}</text>')
+
+    svg.append("</svg>")
+    return "".join(svg)
+
+
+def _chart_bar(label: str, pct: float, cls: str, value_str: str) -> str:
+    """Einzelne horizontale Balkenzeile für den Vergleichs-Chart."""
+    width = round(pct * 100)
+    return (
+        f'<div class="chart-row">'
+        f'<div class="chart-label" title="{label}">{label}</div>'
+        f'<div class="chart-bar-track">'
+        f'<div class="chart-bar-fill {cls}" style="width:{width}%">'
+        f'{value_str if width > 15 else ""}'
+        f'</div>'
+        f'</div>'
+        f'<span style="font-size:.78rem;color:#636e72;width:48px;text-align:right">{value_str}</span>'
+        f'</div>'
+    )
+
+
+def _section_comparison(agents_data: list[dict]) -> str:
+    """Vergleich aller getesteten Agenten: Balkendiagramme + Tabelle."""
+    if len(agents_data) <= 1:
+        return ""
+
+    # ── Daten pro Agent berechnen ─────────────────────────────────────────
+    entries = []
+    for e in agents_data:
+        func     = e.get("func_data") or {}
+        records  = func.get("records", [])
+        summary  = func.get("summary", {})
+        sec      = e.get("sec_data") or {}
+        sec_fin  = e.get("sec_fin_data") or {}
+        comp_d   = e.get("comp_data") or {}
+
+        func_total  = len(records)
+        func_passed = sum(1 for r in records if r.get("passed"))
+        func_rate   = func_passed / func_total if func_total else 0.0
+
+        sec_pass  = sec.get("total_pass", 0) + sec_fin.get("total_pass", 0)
+        sec_total = sec_pass + sec.get("total_fail", 0) + sec_fin.get("total_fail", 0)
+        sec_rate  = sec_pass / sec_total if sec_total else 0.0
+
+        comp_pass  = sum(v["pass"] for v in comp_d.values()) if comp_d else 0
+        comp_total = comp_pass + sum(v["fail"] for v in comp_d.values()) if comp_d else 0
+        comp_rate  = comp_pass / comp_total if comp_total else 0.0
+
+        cost    = summary.get("agent_cost_usd", summary.get("total_cost_usd", 0))
+        latency = summary.get("avg_latency_ms", 0)
+
+        entries.append({
+            "label":      e["label"],
+            "model":      e["model"],
+            "func_rate":  func_rate,  "func_pass":  func_passed,  "func_total":  func_total,
+            "sec_rate":   sec_rate,   "sec_pass":   sec_pass,     "sec_total":   sec_total,
+            "comp_rate":  comp_rate,  "comp_pass":  comp_pass,    "comp_total":  comp_total,
+            "cost":       cost,
+            "latency":    latency,
+        })
+
+    # Kosteneffizienz + Geschwindigkeit normalisieren (bester Agent = 1.0)
+    max_cost = max((e["cost"]    for e in entries), default=1) or 1
+    max_lat  = max((e["latency"] for e in entries), default=1) or 1
+    for e in entries:
+        e["cost_rate"]  = 1.0 - e["cost"]    / max_cost
+        e["speed_rate"] = 1.0 - e["latency"] / max_lat
+
+    # ── Radar-Chart ───────────────────────────────────────────────────────
+    radar = (
+        '<div class="chart-wrap" style="margin-bottom:16px">'
+        '<div class="chart-title">Gesamtprofil – alle Dimensionen im Vergleich</div>'
+        + _radar_svg(entries)
+        + '<p style="font-size:.78rem;color:#b2bec3;margin-top:8px">'
+        'Kosteneffizienz und Geschwindigkeit sind relativ normalisiert: '
+        'der günstigste/schnellste Agent erhält 100 %.</p>'
+        + '</div>'
+    )
+
+    # ── Balkendiagramme (eine Kachel pro Dimension) ───────────────────────
+    def _chart(title: str, rate_key: str, pass_key: str, total_key: str, threshold: float) -> str:
+        bars = "".join(
+            _chart_bar(
+                label=e["label"],
+                pct=e[rate_key],
+                cls=_classify(e[rate_key], threshold) if e[total_key] else "warn",
+                value_str=f"{e[pass_key]}/{e[total_key]}" if e[total_key] else "–",
+            )
+            for e in entries
+        )
+        return (
+            f'<div class="chart-wrap">'
+            f'<div class="chart-title">{title}</div>'
+            f'{bars}'
+            f'</div>'
+        )
+
+    charts = (
+        '<div class="charts-grid">'
+        + _chart("D1 – Funktionalität",  "func_rate", "func_pass", "func_total", 0.8)
+        + _chart("D2 – Sicherheit",       "sec_rate",  "sec_pass",  "sec_total",  0.9)
+        + _chart("D3 – Compliance",       "comp_rate", "comp_pass", "comp_total", 0.8)
+        + '</div>'
+    )
+
+    # ── Vergleichstabelle ─────────────────────────────────────────────────
+    rows = []
+    for e in entries:
+        rows.append(
+            f"<tr>"
+            f"<td><strong>{e['label']}</strong><br>"
+            f"<small style='color:#636e72'>{e['model']}</small></td>"
+            f"<td>{_pct_badge(e['func_pass'], e['func_total'], 0.8)}</td>"
+            f"<td>{_pct_badge(e['sec_pass'],  e['sec_total'],  0.9)}</td>"
+            f"<td>{_pct_badge(e['comp_pass'], e['comp_total'], 0.8)}</td>"
+            f"<td>${e['cost']:.4f}</td>"
+            f"<td>{_fmt_int(e['latency'])} ms</td>"
+            f"</tr>"
+        )
+
+    table = (
+        "<table><thead><tr>"
+        "<th>Agent / Modell</th>"
+        "<th>D1 Funktionalität</th>"
+        "<th>D2 Sicherheit</th>"
+        "<th>D3 Compliance</th>"
+        "<th>Agent-Kosten (USD)</th>"
+        "<th>Ø Latenz</th>"
+        "</tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+
+    return "<h2>Agenten-Vergleich</h2>" + radar + charts + "<br>" + table
+
+
+def _agent_block(entry: dict, judge_model: str) -> str:
+    """Erzeugt den vollständigen HTML-Block für einen einzelnen Agenten.
+    Alle Daten (Security, Compliance, Funktionalität) kommen aus entry."""
+    label        = entry["label"]
+    model        = entry["model"]
+    func_data    = entry.get("func_data") or {}
+    sec_data     = entry.get("sec_data") or {}
+    sec_fin_data = entry.get("sec_fin_data") or {}
+    comp_data    = entry.get("comp_data") or {}
+    comp_stats   = entry.get("comp_stats") or {}
+    scorecard    = entry.get("scorecard")
+
+    divider = (
+        f'<div class="agent-divider">'
+        f'{label}'
+        f'<span class="agent-model">{model}</span>'
+        f'</div>'
+    )
+
+    return (
+        divider
+        + _section_summary(sec_data, sec_fin_data, comp_data, comp_stats, scorecard, func_data)
+        + _section_functionality(func_data)
+        + _section_security(sec_data, sec_fin_data)
+        + _section_compliance(comp_data, comp_stats, scorecard)
+        + _section_eval_overhead(sec_data, sec_fin_data, comp_stats, func_data, judge_model)
+    )
+
+
+def generate_multi_agent_report(
+    agents_config: list[dict],
+    functionality_dir: str = "evals/functionality",
+    security_paths: list[str] | None = None,
+    compliance_path: str | None = None,
+    scorecard_path: str | None = None,
+    out_path: str = "report.html",
+    judge_model: str | None = None,
+) -> Path:
+    """Erzeugt einen einzelnen HTML-Report für alle Agenten in agents_config.
+
+    Oben steht der Agenten-Vergleich, darunter folgen die Einzelauswertungen.
+    Security- und Compliance-Daten gelten für alle Agenten gemeinsam
+    (werden pro Agent-Block wiederholt angezeigt).
+    """
+    security_paths = security_paths or []
+    _judge = judge_model or _load_judge_model_from_config() or os.environ.get("JUDGE_MODEL_NAME", "gpt-5.4-mini")
+
+    # Daten pro Agent laden (Security, Compliance, Funktionalität)
+    agents_data = []
+    for cfg in agents_config:
+        agent_id = cfg["id"]
+
+        # Security – per-Agent-Dateien, Fallback auf geteilte Dateien
+        sec_path     = f"security_results_{agent_id}.json"
+        sec_fin_path = f"security_finance_results_{agent_id}.json"
+        sec_data     = _parse_security(_promptfoo_results(
+            _load_json(sec_path) or (_load_json(security_paths[0]) if security_paths else None)
+        ))
+        sec_fin_data = _parse_security(_promptfoo_results(
+            _load_json(sec_fin_path) or (_load_json(security_paths[1]) if len(security_paths) > 1 else None)
+        ))
+
+        # Compliance – per-Agent-Dateien, Fallback auf geteilte Dateien
+        comp_path      = f"compliance_results_{agent_id}.json"
+        scorecard_path_agent = f"compliance_scorecard_{agent_id}.json"
+        comp_results   = _promptfoo_results(
+            _load_json(comp_path) or _load_json(compliance_path)
+        )
+        comp_data, comp_stats = _parse_compliance(comp_results)
+        scorecard = _load_json(scorecard_path_agent) or _load_json(scorecard_path)
+
+        # Funktionalität
+        func_path = Path(functionality_dir) / f"functionality_costs_{agent_id}.json"
+        func_data = _parse_func_costs(_load_json(str(func_path)))
+
+        agents_data.append({
+            "id":           agent_id,
+            "label":        cfg.get("label", agent_id),
+            "model":        cfg.get("model", ""),
+            "func_data":    func_data,
+            "sec_data":     sec_data,
+            "sec_fin_data": sec_fin_data,
+            "comp_data":    comp_data,
+            "comp_stats":   comp_stats,
+            "scorecard":    scorecard,
+        })
+
+    now = datetime.now().strftime("%d.%m.%Y %H:%M")
+    agent_names = ", ".join(e["label"] for e in agents_data)
+
+    blocks = "".join(_agent_block(e, _judge) for e in agents_data)
+
+    html = f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent-Eval@OVB – Multi-Agent Report</title>
+<style>{_CSS}</style>
+</head>
+<body>
+<header>
+  <div class="inner">
+    <h1>Agent-Eval@OVB – Multi-Agent Report</h1>
+    <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now} &nbsp;|&nbsp; {agent_names}</p>
+  </div>
+</header>
+<div class="container">
+  {_section_comparison(agents_data)}
+  {blocks}
+</div>
+<footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>
+</body>
+</html>"""
+
+    out = Path(out_path)
+    out.write_text(html, encoding="utf-8")
+    print(f"✅ Multi-Agent-Report gespeichert: {out.resolve()}")
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Report zusammenbauen
 # ---------------------------------------------------------------------------
 
@@ -517,8 +910,8 @@ def generate_report(
     func_data     = _parse_func_costs(_load_json(functionality_path))
 
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
-    model = model_name or os.environ.get("MODEL_NAME", "gpt-5.4-mini")
-    judge_model = os.environ.get("JUDGE_MODEL", model)
+    model = model_name or os.environ.get("AGENT_MODEL_NAME", "gpt-5.4-mini")
+    judge_model = _load_judge_model_from_config() or os.environ.get("JUDGE_MODEL_NAME", model)
     model_badge = f'<span class="model-badge">{model}</span>'
 
     html = f"""<!DOCTYPE html>
@@ -558,25 +951,48 @@ def generate_report(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    import yaml as _yaml
+
     parser = argparse.ArgumentParser(description="Agent-Eval@OVB HTML-Report-Generator")
-    parser.add_argument("--security",      action="append", metavar="FILE",
+    parser.add_argument("--agents-config",    metavar="FILE", default="agents.yaml",
+                        help="agents.yaml mit Agent-Konfigurationen (Multi-Agent-Modus)")
+    parser.add_argument("--functionality-dir", metavar="DIR",
+                        default="evals/functionality",
+                        help="Verzeichnis mit functionality_costs_{agent_id}.json-Dateien")
+    parser.add_argument("--security",         action="append", metavar="FILE",
                         help="Promptfoo Security-Ergebnis JSON (mehrfach verwendbar)")
-    parser.add_argument("--compliance",    metavar="FILE", default="compliance_results.json")
-    parser.add_argument("--scorecard",     metavar="FILE", default="compliance_scorecard.json")
-    parser.add_argument("--functionality", metavar="FILE",
-                        default="evals/functionality/functionality_costs.json")
-    parser.add_argument("--out",           metavar="FILE", default="report.html")
+    parser.add_argument("--compliance",       metavar="FILE", default="compliance_results.json")
+    parser.add_argument("--scorecard",        metavar="FILE", default="compliance_scorecard.json")
+    parser.add_argument("--functionality",    metavar="FILE",
+                        help="Einzelagent-Modus: direkter Pfad zur functionality_costs.json")
+    parser.add_argument("--out",              metavar="FILE", default="report.html")
     args = parser.parse_args()
 
     security_paths = args.security or ["security_results.json", "security_finance_results.json"]
 
-    generate_report(
-        security_paths=security_paths,
-        compliance_path=args.compliance,
-        scorecard_path=args.scorecard,
-        functionality_path=args.functionality,
-        out_path=args.out,
-    )
+    # Multi-Agent-Modus wenn agents.yaml existiert und kein --functionality gesetzt
+    agents_cfg_path = Path(args.agents_config)
+    if agents_cfg_path.exists() and not args.functionality:
+        with open(agents_cfg_path, encoding="utf-8") as f:
+            agents_config = _yaml.safe_load(f)["agents"]
+        generate_multi_agent_report(
+            agents_config=agents_config,
+            functionality_dir=args.functionality_dir,
+            security_paths=security_paths,
+            compliance_path=args.compliance,
+            scorecard_path=args.scorecard,
+            out_path=args.out,
+        )
+    else:
+        # Einzelagent-Modus (Rückwärtskompatibilität)
+        func_path = args.functionality or "evals/functionality/functionality_costs.json"
+        generate_report(
+            security_paths=security_paths,
+            compliance_path=args.compliance,
+            scorecard_path=args.scorecard,
+            functionality_path=func_path,
+            out_path=args.out,
+        )
 
 
 if __name__ == "__main__":

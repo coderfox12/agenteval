@@ -7,10 +7,9 @@ DeepEval-Metriken:
   - TaskCompletionMetric   → Wurde die Gesamtaufgabe erfüllt?
   - AnswerRelevancyMetric  → Ist die Antwort relevant zur Anfrage?
 
-Wirtschaftlichkeit:
-  - Agent-Kosten werden via get_openai_callback pro Task erfasst.
-  - DeepEval-Judge-Kosten (TaskCompletion, AnswerRelevancy) werden
-    ebenfalls via get_openai_callback erfasst und separat gespeichert.
+Multi-Agent:
+  Alle in agents.yaml definierten Agenten werden getestet.
+  Pro Agent entsteht eine eigene functionality_costs_{agent_id}.json.
 
 Ausführung:
   cd evals/functionality
@@ -33,54 +32,95 @@ from deepeval.test_case import LLMTestCase, ToolCall
 from dotenv import load_dotenv
 from agenteval_ovb.pricing import calc_cost_usd
 
-# Explizites Judge-Modell für DeepEval – verhindert, dass DeepEval
-# selbstständig ein teureres Standard-Modell (z. B. GPT-5) wählt.
-_EVAL_MODEL = os.environ.get("MODEL_NAME", "gpt-5.4-mini")
-
 sys.path.insert(0, str(Path(__file__).parent))
 
+# .env laden bevor Env-Variablen ausgelesen werden
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 from agent.graph import FinanceAdvisoryAgent
 from cost_tracker import CostTracker
 
-# ─── Initialisierung ──────────────────────────────────────────────────────────
 
-agent = FinanceAdvisoryAgent()
-tracker = CostTracker(output_path="functionality_costs.json")
+# ─── Konfiguration laden ──────────────────────────────────────────────────────
+
+def _load_config() -> dict:
+    path = Path(__file__).parent.parent.parent / "agents.yaml"
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 
-def load_tasks() -> list[dict]:
-    tasks_path = Path(__file__).parent / "tasks" / "ovb_tasks.yaml"
-    with open(tasks_path, encoding="utf-8") as f:
+def _load_tasks() -> list[dict]:
+    path = Path(__file__).parent / "tasks" / "ovb_tasks.yaml"
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)["tasks"]
 
 
-TASKS = load_tasks()
+_CONFIG     = _load_config()
+AGENTS_CONFIG = _CONFIG["agents"]
+TASKS         = _load_tasks()
+
+# Judge-Konfiguration aus agents.yaml
+_JUDGE_CFG      = _CONFIG.get("judge", {})
+_JUDGE_MODEL    = _JUDGE_CFG.get("model", "gpt-5.4-mini")
+_JUDGE_API_KEY  = os.environ.get(_JUDGE_CFG.get("api_key_env", "JUDGE_API_KEY"))
+_JUDGE_API_BASE = _JUDGE_CFG.get("api_base") or None
+
+# DeepEval liest OPENAI_API_KEY und OPENAI_BASE_URL aus der Umgebung.
+# Wir setzen sie auf die Judge-Credentials aus agents.yaml.
+if _JUDGE_API_KEY:
+    os.environ["OPENAI_API_KEY"] = _JUDGE_API_KEY
+if _JUDGE_API_BASE:
+    os.environ["OPENAI_BASE_URL"] = _JUDGE_API_BASE
 
 
-# ─── Hilfsfunktion ────────────────────────────────────────────────────────────
+# ─── Agent- und Tracker-Instanzen (lazy, gecacht) ────────────────────────────
 
-_cache: dict[str, tuple[str, list[ToolCall]]] = {}
+_agent_instances: dict[str, FinanceAdvisoryAgent] = {}
+_trackers: dict[str, CostTracker] = {}
 
 
-def run_and_record(task: dict) -> tuple[str, list[ToolCall]]:
-    """Führt den Agenten aus, erfasst Kosten und gibt Output + ToolCall-Objekte zurück.
-    Ergebnis wird pro Task-ID gecacht, damit der Agent nur einmal pro Task läuft."""
-    task_id = task["id"]
-    if task_id not in _cache:
+def _get_agent(cfg: dict) -> tuple[FinanceAdvisoryAgent, CostTracker]:
+    agent_id = cfg["id"]
+    if agent_id not in _agent_instances:
+        api_key = os.environ.get(cfg["api_key_env"])
+        _agent_instances[agent_id] = FinanceAdvisoryAgent(
+            model=cfg["model"],
+            api_key=api_key,
+            api_base=cfg.get("api_base") or None,
+        )
+        _trackers[agent_id] = CostTracker(
+            output_path=f"functionality_costs_{agent_id}.json"
+        )
+    return _agent_instances[agent_id], _trackers[agent_id]
+
+
+# ─── Ergebnis-Cache: (agent_id, task_id) → (output, tool_calls) ──────────────
+
+_cache: dict[tuple[str, str], tuple[str, list[ToolCall]]] = {}
+
+
+def _run_and_record(agent_cfg: dict, task: dict) -> tuple[str, list[ToolCall]]:
+    """Führt den Agenten aus und cached das Ergebnis pro (Agent, Task)."""
+    key = (agent_cfg["id"], task["id"])
+    if key not in _cache:
+        agent, tracker = _get_agent(agent_cfg)
         result = agent.run(task["input"])
-        tracker.record(task_id, result["cost"])
-        _cache[task_id] = (result["output"], [ToolCall(name=name) for name in result["tools_called"]])
-    return _cache[task_id]
+        tracker.record(task["id"], result["cost"])
+        _cache[key] = (result["output"], [ToolCall(name=n) for n in result["tools_called"]])
+    return _cache[key]
+
+
+# ─── Parametrisierung: alle (Agent, Task)-Kombinationen ──────────────────────
+
+_PARAMS = [(a, t) for a in AGENTS_CONFIG for t in TASKS]
+_IDS    = [f"{a['id']}__{t['id']}" for a, t in _PARAMS]
 
 
 # ─── Tests ────────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
-def test_tool_correctness(task: dict):
-    """Prüft ob der Agent die richtigen Tools aufgerufen hat."""
-    actual_output, tools_called = run_and_record(task)
+@pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
+def test_tool_correctness(agent_cfg, task):
+    actual_output, tools_called = _run_and_record(agent_cfg, task)
     expected_tools = [ToolCall(name=name) for name in task["expected_tools"]]
 
     test_case = LLMTestCase(
@@ -93,14 +133,14 @@ def test_tool_correctness(task: dict):
 
     metric = ToolCorrectnessMetric(threshold=0.7)
     metric.measure(test_case)
+    _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {"tool_correctness": round(metric.score, 3)})
     assert metric.is_successful(), f"ToolCorrectness: {metric.score:.2f} < 0.7"
 
 
-@pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
-def test_task_completion(task: dict):
-    """Prüft ob der Agent die Gesamtaufgabe vollständig erfüllt hat."""
-    actual_output, _ = run_and_record(task)
+@pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
+def test_task_completion(agent_cfg, task):
+    actual_output, _ = _run_and_record(agent_cfg, task)
 
     test_case = LLMTestCase(
         input=task["input"],
@@ -108,49 +148,49 @@ def test_task_completion(task: dict):
         expected_output=task["deepeval_task"],
     )
 
-    metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"], model=_EVAL_MODEL)
+    metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"], model=_JUDGE_MODEL)
     with get_openai_callback() as cb:
         metric.measure(test_case)
-    judge_cost = calc_cost_usd(_EVAL_MODEL, cb.prompt_tokens, cb.completion_tokens)
+    judge_cost = calc_cost_usd(_JUDGE_MODEL, cb.prompt_tokens, cb.completion_tokens)
+    _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
         "task_completion": round(metric.score, 3),
-        "eval_cost_usd": round((tracker.get_eval_cost(task["id"]) + judge_cost), 6),
+        "eval_cost_usd": round(tracker.get_eval_cost(task["id"]) + judge_cost, 6),
     })
     assert metric.is_successful(), f"TaskCompletion: {metric.score:.2f} < 0.7"
 
 
-@pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
-def test_answer_relevancy(task: dict):
-    """Prüft ob die Antwort des Agenten relevant zur gestellten Aufgabe ist."""
-    actual_output, _ = run_and_record(task)
+@pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
+def test_answer_relevancy(agent_cfg, task):
+    actual_output, _ = _run_and_record(agent_cfg, task)
 
     test_case = LLMTestCase(
         input=task["input"],
         actual_output=actual_output,
     )
 
-    metric = AnswerRelevancyMetric(threshold=0.7, model=_EVAL_MODEL)
+    metric = AnswerRelevancyMetric(threshold=0.7, model=_JUDGE_MODEL)
     with get_openai_callback() as cb:
         metric.measure(test_case)
-    judge_cost = calc_cost_usd(_EVAL_MODEL, cb.prompt_tokens, cb.completion_tokens)
+    judge_cost = calc_cost_usd(_JUDGE_MODEL, cb.prompt_tokens, cb.completion_tokens)
+    _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
         "answer_relevancy": round(metric.score, 3),
-        "eval_cost_usd": round((tracker.get_eval_cost(task["id"]) + judge_cost), 6),
+        "eval_cost_usd": round(tracker.get_eval_cost(task["id"]) + judge_cost, 6),
     })
     assert metric.is_successful(), f"AnswerRelevancy: {metric.score:.2f} < 0.7"
 
 
-# ─── Wirtschaftlichkeits-Report nach allen Tests ──────────────────────────────
+# ─── Abschluss-Report nach allen Tests ───────────────────────────────────────
 
 def pytest_sessionfinish(session, exitstatus):
-    """Berechnet passed-Flag aus gespeicherten Scores und gibt Report aus."""
-    if not tracker.records:
-        return
-    for r in tracker.records:
-        scores = [
-            r[k] for k in ("tool_correctness", "task_completion", "answer_relevancy")
-            if k in r
-        ]
-        r["passed"] = bool(scores) and all(s >= 0.7 for s in scores)
-    tracker._save()
-    tracker.print_report()
+    for agent_id, tracker in _trackers.items():
+        if not tracker.records:
+            continue
+        for r in tracker.records:
+            scores = [r.get(k) for k in ("tool_correctness", "task_completion", "answer_relevancy")]
+            r["passed"] = bool(scores) and all(s >= 0.7 for s in scores if s is not None)
+        tracker._save()
+        print(f"\n{'='*70}")
+        print(f"  Agent: {agent_id}")
+        tracker.print_report()

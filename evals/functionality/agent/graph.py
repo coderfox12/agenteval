@@ -1,8 +1,12 @@
-﻿"""
+"""
 OVB Advisory Agent – LangGraph StateGraph
 ReAct-Loop: Agent ruft Tools auf bis die Aufgabe erfüllt ist oder eine
 Eskalation erfolgt. Token-Kosten und Latenz werden via get_openai_callback
 auf Schritt-Ebene erfasst.
+
+Unterstützte API-Anbieter: alle OpenAI-kompatiblen Endpunkte.
+Für Anthropic/Gemini etc. einfach OpenRouter als Proxy nutzen
+(api_base=https://openrouter.ai/api/v1, Modellname z.B. anthropic/claude-3-haiku).
 
 LangSmith-Tracing (optional):
   Wenn folgende Umgebungsvariablen gesetzt sind, werden alle Traces
@@ -10,8 +14,6 @@ LangSmith-Tracing (optional):
     LANGCHAIN_TRACING_V2=true
     LANGCHAIN_API_KEY=<dein LangSmith API Key>
     LANGCHAIN_PROJECT=agenteval-ovb   (optional, Default: "default")
-  Die Traces enthalten jeden Zwischenschritt, Tool-Call und Token-Verbrauch
-  und dienen als Datenquelle für Tool-Use-Correctness (DORA-Anforderung).
 """
 
 import os
@@ -54,8 +56,14 @@ class AgentState(TypedDict):
 
 
 class FinanceAdvisoryAgent:
-    def __init__(self, model: str = os.environ.get("MODEL_NAME", "gpt-5.4-mini")):
-        llm = ChatOpenAI(model=model, temperature=0)
+    def __init__(
+        self,
+        model: str = os.environ.get("AGENT_MODEL_NAME", "gpt-5.4-mini"),
+        api_key: str | None = os.environ.get("AGENT_API_KEY"),
+        api_base: str | None = os.environ.get("AGENT_API_BASE") or None,
+    ):
+        self.model_name = model
+        llm = ChatOpenAI(model=model, api_key=api_key, base_url=api_base, temperature=0)
         self.llm_with_tools = llm.bind_tools(TOOLS)
         self.graph = self._build_graph()
 
@@ -97,9 +105,7 @@ class FinanceAdvisoryAgent:
                     tools_called.append(tc["name"])
 
         final_output = result["messages"][-1].content
-
-        model_name = os.environ.get("MODEL_NAME", "gpt-5.4-mini")
-        cost_usd = calc_cost_usd(model_name, cb.prompt_tokens, cb.completion_tokens)
+        cost_usd = calc_cost_usd(self.model_name, cb.prompt_tokens, cb.completion_tokens)
 
         return {
             "output": final_output,

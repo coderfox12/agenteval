@@ -158,7 +158,10 @@ def print_scorecard(by_article: dict, unmapped: dict, results_path: str) -> None
             icon = "✅" if t["success"] else "❌"
             print(f"  {icon} {t['desc']}")
 
-    out_path = Path(results_path).with_name("compliance_scorecard.json")
+    out_name = Path(results_path).name.replace("compliance_results", "compliance_scorecard")
+    if out_name == Path(results_path).name:
+        out_name = "compliance_scorecard.json"
+    out_path = Path(results_path).with_name(out_name)
     out_path.write_text(json.dumps(scorecard, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print(f"\n{sep}")
