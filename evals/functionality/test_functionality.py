@@ -94,20 +94,42 @@ def _get_agent(cfg: dict) -> tuple[FinanceAdvisoryAgent, CostTracker]:
     return _agent_instances[agent_id], _trackers[agent_id]
 
 
-# ─── Ergebnis-Cache: (agent_id, task_id) → (output, tool_calls) ──────────────
+# ─── Ergebnis-Cache: (agent_id, task_id) → (output, tool_calls) oder None bei Fehler ─
 
-_cache: dict[tuple[str, str], tuple[str, list[ToolCall]]] = {}
+_cache: dict[tuple[str, str], tuple[str, list[ToolCall]] | None] = {}
+# Fehlermeldungen pro (agent_id, task_id) für pytest.skip-Nachrichten
+_errors: dict[tuple[str, str], str] = {}
 
 
-def _run_and_record(agent_cfg: dict, task: dict) -> tuple[str, list[ToolCall]]:
-    """Führt den Agenten aus und cached das Ergebnis pro (Agent, Task)."""
+def _run_and_record(
+    agent_cfg: dict, task: dict
+) -> tuple[str, list[ToolCall]] | None:
+    """Führt den Agenten aus und cached das Ergebnis pro (Agent, Task).
+
+    Gibt None zurück wenn der Agent fehlschlägt (Quota, Timeout, Auth-Fehler).
+    Der Fehler wird im CostTracker als Fehler-Record festgehalten.
+    """
     key = (agent_cfg["id"], task["id"])
     if key not in _cache:
         agent, tracker = _get_agent(agent_cfg)
-        result = agent.run(task["input"])
-        tracker.record(task["id"], result["cost"])
-        _cache[key] = (result["output"], [ToolCall(name=n) for n in result["tools_called"]])
+        try:
+            result = agent.run(task["input"])
+            tracker.record(task["id"], result["cost"])
+            _cache[key] = (result["output"], [ToolCall(name=n) for n in result["tools_called"]])
+        except Exception as exc:
+            err_str = str(exc)
+            tracker.record_error(task["id"], err_str)
+            _cache[key] = None
+            _errors[key] = err_str
     return _cache[key]
+
+
+def _skip_if_error(agent_cfg: dict, task: dict) -> None:
+    """Wirft pytest.skip wenn der Agent für diesen Task fehlgeschlagen ist."""
+    key = (agent_cfg["id"], task["id"])
+    if _cache.get(key) is None and key in _errors:
+        short = _errors[key][:160].replace("\n", " ")
+        pytest.skip(f"Agent '{agent_cfg['id']}' fehlgeschlagen – {short}")
 
 
 # ─── Parametrisierung: alle (Agent, Task)-Kombinationen ──────────────────────
@@ -120,7 +142,9 @@ _IDS    = [f"{a['id']}__{t['id']}" for a, t in _PARAMS]
 
 @pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
 def test_tool_correctness(agent_cfg, task):
-    actual_output, tools_called = _run_and_record(agent_cfg, task)
+    _run_and_record(agent_cfg, task)          # Fehler im Cache festhalten
+    _skip_if_error(agent_cfg, task)           # Skip wenn Agent fehlgeschlagen
+    actual_output, tools_called = _cache[(agent_cfg["id"], task["id"])]
     expected_tools = [ToolCall(name=name) for name in task["expected_tools"]]
 
     test_case = LLMTestCase(
@@ -140,7 +164,9 @@ def test_tool_correctness(agent_cfg, task):
 
 @pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
 def test_task_completion(agent_cfg, task):
-    actual_output, _ = _run_and_record(agent_cfg, task)
+    _run_and_record(agent_cfg, task)
+    _skip_if_error(agent_cfg, task)
+    actual_output, _ = _cache[(agent_cfg["id"], task["id"])]
 
     test_case = LLMTestCase(
         input=task["input"],
@@ -162,7 +188,9 @@ def test_task_completion(agent_cfg, task):
 
 @pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
 def test_answer_relevancy(agent_cfg, task):
-    actual_output, _ = _run_and_record(agent_cfg, task)
+    _run_and_record(agent_cfg, task)
+    _skip_if_error(agent_cfg, task)
+    actual_output, _ = _cache[(agent_cfg["id"], task["id"])]
 
     test_case = LLMTestCase(
         input=task["input"],
@@ -199,8 +227,14 @@ def pytest_sessionfinish(session, exitstatus):
         if not tracker.records:
             continue
         for r in tracker.records:
+            if r.get("error"):
+                r["passed"] = False          # Fehler-Record: immer False, nicht überschreiben
+                continue
             scores = [r.get(k) for k in ("tool_correctness", "task_completion", "answer_relevancy")]
-            r["passed"] = bool(scores) and all(s >= 0.7 for s in scores if s is not None)
+            if all(s is not None for s in scores):
+                r["passed"] = all(s >= 0.7 for s in scores)
+            else:
+                r["passed"] = False          # unvollständige Metriken → nicht bestanden
         tracker._save()
         print(f"\n{'='*70}")
         print(f"  Agent: {agent_id}")

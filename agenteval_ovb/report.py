@@ -44,14 +44,43 @@ def _promptfoo_results(data: dict | None) -> list[dict]:
     return data.get("results", {}).get("results", data.get("results", []))
 
 
+def _is_provider_error(r: dict) -> bool:
+    """Erkennt ob ein Promptfoo-Ergebnis ein Provider-/API-Fehler war
+    (z. B. Quota erschöpft, Timeout) und keine echte Agenten-Antwort enthält."""
+    resp   = r.get("response") or {}
+    output = str(resp.get("output", "") or "")
+    # Explizites Fehlerfeld im Response-Objekt
+    if resp.get("error"):
+        return True
+    # Promptfoo-Fehlerpräfix im Output (tritt bei 429 / Provider-Down auf)
+    if output.lstrip().startswith("[ERROR]"):
+        return True
+    return False
+
+
+def _api_error_banner(count: int, context: str) -> str:
+    """Gibt ein gelbes Warning-Banner zurück, das Provider-/API-Fehler anzeigt."""
+    return (
+        '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;'
+        'padding:14px 18px;margin:16px 0 20px;font-size:.88rem;line-height:1.6">'
+        f'⚠️ <strong>{count} Test(s) durch API-Fehler nicht auswertbar</strong> – '
+        f'{context} '
+        'Mögliche Ursache: API-Kontingent erschöpft oder Anbieter überlastet. '
+        'Diese Tests zählen als nicht bestanden.'
+        '</div>'
+    )
+
+
 def _parse_security(results: list[dict]) -> dict:
     by_class: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
-    total_pass = total_fail = 0
+    total_pass = total_fail = provider_errors = 0
     token_total = cost_total = latency_sum = latency_count = judge_calls = 0
 
     for r in results:
         if not r:
             continue
+        if _is_provider_error(r):
+            provider_errors += 1
         success = r.get("success", r.get("pass", False))
         meta = r.get("testCase", {}).get("metadata", {})
         attack_class = meta.get("attack_class", "Unbekannt")
@@ -79,23 +108,26 @@ def _parse_security(results: list[dict]) -> dict:
                 judge_calls += 1
 
     return {
-        "total_pass": total_pass,
-        "total_fail": total_fail,
-        "by_class": dict(by_class),
-        "token_total": token_total,
-        "cost_usd": round(cost_total, 6),
-        "latency_p50_ms": round(latency_sum / max(latency_count, 1)),
-        "judge_calls": judge_calls,
+        "total_pass":      total_pass,
+        "total_fail":      total_fail,
+        "by_class":        dict(by_class),
+        "token_total":     token_total,
+        "cost_usd":        round(cost_total, 6),
+        "latency_p50_ms":  round(latency_sum / max(latency_count, 1)),
+        "judge_calls":     judge_calls,
+        "provider_errors": provider_errors,
     }
 
 
 def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
     """Gibt (by_article, stats) zurück. stats enthält cost_usd, token_total, latency_p50_ms."""
     by_article: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
-    token_total = cost_total = latency_sum = latency_count = judge_calls = 0
+    token_total = cost_total = latency_sum = latency_count = judge_calls = provider_errors = 0
     for r in results:
         if not r:
             continue
+        if _is_provider_error(r):
+            provider_errors += 1
         success = r.get("success", r.get("pass", False))
         meta = r.get("testCase", {}).get("metadata", {})
         article_raw = meta.get("article", "")
@@ -121,6 +153,7 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
         "cost_usd":        round(cost_total, 6),
         "latency_p50_ms":  round(latency_sum / max(latency_count, 1)),
         "judge_calls":     judge_calls,
+        "provider_errors": provider_errors,
     }
     return dict(by_article), stats
 
@@ -197,9 +230,14 @@ tr:hover td { background: #f7f9fc; }
 .bar.ok   { background: #00b894; }
 .bar.err  { background: #d63031; }
 .section  { margin-bottom: 8px; }
-.agent-divider { margin: 48px 0 0; padding: 18px 22px;
-                 background: #1a2744; color: #fff; border-radius: 10px;
-                 font-size: 1.05rem; font-weight: 700; }
+.section-group { background: #fff; border-radius: 14px;
+                 box-shadow: 0 3px 18px rgba(0,0,0,.10);
+                 margin-bottom: 52px; overflow: hidden; }
+.section-group-body { padding: 28px 32px; }
+.section-group-body > h2:first-child { margin-top: 0; }
+.agent-divider { margin: 0; padding: 20px 28px;
+                 background: linear-gradient(135deg, #1a2744 0%, #2d4880 100%);
+                 color: #fff; font-size: 1.05rem; font-weight: 700; }
 .agent-divider .agent-model { font-size: .82rem; font-weight: 400;
                                opacity: .7; margin-left: 10px; }
 .chart-wrap { background: #fff; border-radius: 10px; padding: 24px 28px;
@@ -222,8 +260,7 @@ tr:hover td { background: #f7f9fc; }
 .chart-legend-item { display: flex; align-items: center; gap: 6px;
                      font-size: .78rem; color: #636e72; }
 .chart-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
-.charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-               gap: 16px; margin-bottom: 4px; }
+.charts-grid { display: flex; flex-direction: column; gap: 16px; margin-bottom: 4px; }
 footer { text-align: center; color: #b2bec3; font-size: .78rem; padding: 32px 0; }
 """
 
@@ -302,13 +339,35 @@ def _section_summary(sec_data: dict, sec_fin_data: dict, comp_data: dict,
     cost_total = (sec_data.get("cost_usd", 0) + sec_fin_data.get("cost_usd", 0)
                   + comp_stats.get("cost_usd", 0) + func_model_cost)
 
+    # Gesamt-API-Fehler über alle Dimensionen
+    total_api_errors = (
+        func_summary.get("error_count", 0)
+        + sec_data.get("provider_errors", 0)
+        + sec_fin_data.get("provider_errors", 0)
+        + comp_stats.get("provider_errors", 0)
+    )
+    summary_banner = ""
+    if total_api_errors:
+        summary_banner = (
+            '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;'
+            'padding:12px 18px;margin:0 0 18px;font-size:.86rem;line-height:1.6">'
+            f'⚠️ <strong>Achtung – {total_api_errors} Test(s) in mindestens einer Dimension '
+            'durch API-Fehler nicht auswertbar.</strong> '
+            'Details sind in den jeweiligen Dimensionsabschnitten vermerkt.'
+            '</div>'
+        )
+
     cards = [
         _card_summary("Funktions-Tasks bestanden", func_pass, func_total, 0.8),
         _card_summary("Security-Tests bestanden",  sec_pass,  sec_total,  0.9),
         _card_summary("Compliance-Tests bestanden", comp_pass, comp_total, 0.8),
         _card(f"${cost_total:.3f}", "Modell-Kosten gesamt (USD)"),
     ]
-    return '<h2>Übersicht</h2><div class="cards">' + "".join(cards) + "</div>"
+    return (
+        '<h2>Übersicht</h2>'
+        + summary_banner
+        + '<div class="cards">' + "".join(cards) + "</div>"
+    )
 
 
 _ATTACK_CLASS_LABELS: dict[str, str] = {
@@ -354,6 +413,11 @@ def _section_security(sec_data: dict, sec_fin_data: dict) -> str:
     cost       = sec_data.get("cost_usd", 0) + sec_fin_data.get("cost_usd", 0)
     tokens     = sec_data.get("token_total", 0) + sec_fin_data.get("token_total", 0)
     lat        = sec_data.get("latency_p50_ms") or sec_fin_data.get("latency_p50_ms") or 0
+    prov_err   = sec_data.get("provider_errors", 0) + sec_fin_data.get("provider_errors", 0)
+
+    banner = (_api_error_banner(prov_err,
+              "Der Anbieter hat auf einen Teil der Anfragen nicht geantwortet.")
+              if prov_err else "")
 
     cards = [
         _card(f"{total_pass}/{total_all}", "Tests bestanden",
@@ -362,14 +426,17 @@ def _section_security(sec_data: dict, sec_fin_data: dict) -> str:
         _card(f"${cost:.3f}", "Modell-Kosten (USD)"),
         _card(f"{_fmt_int(lat)} ms", "Ø Latenz"),
     ]
+    if prov_err:
+        cards.append(_card(str(prov_err), "Nicht auswertbar (API-Fehler)", "err"))
 
     return (
         "<h2>Dimension 2 – Sicherheit</h2>"
-        '<div class="cards">' + "".join(cards) + "</div>"
-        "<br>"
-        "<table><thead><tr>"
-        "<th>Angriffsklasse</th><th>Bestanden</th><th>Rate</th><th>Verteilung</th>"
-        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        + banner
+        + '<div class="cards">' + "".join(cards) + "</div>"
+        + "<br>"
+        + "<table><thead><tr>"
+        + "<th>Angriffsklasse</th><th>Bestanden</th><th>Rate</th><th>Verteilung</th>"
+        + "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
     )
 
 
@@ -399,9 +466,14 @@ def _section_compliance(comp_data: dict, comp_stats: dict, scorecard: dict | Non
     overall_str = f"{overall_rate:.0%}" if overall_rate is not None else "–"
     overall_cls = "ok" if (overall_rate or 0) >= 0.8 else ("warn" if (overall_rate or 0) >= 0.6 else "err")
 
-    cost    = comp_stats.get("cost_usd", 0)
-    tokens  = comp_stats.get("token_total", 0)
-    lat     = comp_stats.get("latency_p50_ms", 0)
+    cost      = comp_stats.get("cost_usd", 0)
+    tokens    = comp_stats.get("token_total", 0)
+    lat       = comp_stats.get("latency_p50_ms", 0)
+    prov_err  = comp_stats.get("provider_errors", 0)
+
+    banner = (_api_error_banner(prov_err,
+              "Der Anbieter hat auf einen Teil der Compliance-Anfragen nicht geantwortet.")
+              if prov_err else "")
 
     cards = [
         _card(overall_str, "Compliance-Gesamtrate",
@@ -410,73 +482,121 @@ def _section_compliance(comp_data: dict, comp_stats: dict, scorecard: dict | Non
         _card(f"${cost:.3f}", "Modell-Kosten (USD)"),
         _card(f"{_fmt_int(lat)} ms", "Ø Latenz"),
     ]
+    if prov_err:
+        cards.append(_card(str(prov_err), "Nicht auswertbar (API-Fehler)", "err"))
 
     return (
         "<h2>Dimension 3 – Compliance</h2>"
-        '<div class="cards">' + "".join(cards) + "</div><br>"
-        "<table><thead><tr>"
-        "<th>Artikel</th><th>Bestanden</th><th>Rate</th><th>Verteilung</th><th>Status</th>"
-        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        + banner
+        + '<div class="cards">' + "".join(cards) + "</div><br>"
+        + "<table><thead><tr>"
+        + "<th>Artikel</th><th>Bestanden</th><th>Rate</th><th>Verteilung</th><th>Status</th>"
+        + "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
     )
 
 
 def _section_functionality(func_data: dict) -> str:
     if not func_data:
-        return "<h2>Dimension 1 – Funktionalität</h2><p style='color:#636e72; margin-top:12px'>Keine Daten vorhanden.</p>"
+        return ("<h2>Dimension 1 – Funktionalität</h2>"
+                "<p style='color:#636e72; margin-top:12px'>Keine Daten vorhanden.</p>")
 
     records = func_data.get("records", [])
     summary = func_data.get("summary", {})
 
-    rows = []
-    for r in records:
-        task_id = r.get("task_id", "–")
-        passed = r.get("passed")
-        tool_score = r.get("tool_correctness")
-        task_score = r.get("task_completion")
-        rel_score = r.get("answer_relevancy")
-        cost = r.get("cost_usd", 0)
-        latency = r.get("latency_ms", 0)
+    if not records:
+        return ("<h2>Dimension 1 – Funktionalität</h2>"
+                "<p style='color:#636e72; margin-top:12px'>Keine Task-Daten vorhanden.</p>")
 
-        if passed is None:
-            badge = '<span class="badge warn">–</span>'
-        elif passed:
-            badge = '<span class="badge ok">✓ OK</span>'
-        else:
-            badge = '<span class="badge err">✗ Fail</span>'
+    err_records = [r for r in records if r.get("error")]
 
-        def _fmt(v):
-            return f"{v:.2f}" if v is not None else "–"
-
-        rows.append(
-            f"<tr><td>{task_id}</td><td>{badge}</td>"
-            f"<td>{_fmt(tool_score)}</td><td>{_fmt(task_score)}</td><td>{_fmt(rel_score)}</td>"
-            f"<td>${cost:.4f}</td><td>{_fmt_int(latency)} ms</td></tr>"
+    # ── Abort-Banner ──────────────────────────────────────────────────────────
+    banner = ""
+    if err_records:
+        first_err = err_records[0]
+        at_str = f" um {first_err['aborted_at']}" if first_err.get("aborted_at") else ""
+        banner = (
+            '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;'
+            'padding:14px 18px;margin:16px 0 20px;font-size:.88rem;line-height:1.6">'
+            f'⚠️ <strong>{len(err_records)} Task(s) durch API-Fehler abgebrochen</strong> – '
+            f'Erste Unterbrechung bei Task <code>{first_err["task_id"]}</code>{at_str}. '
+            'Mögliche Ursache: API-Kontingent erschöpft oder Anbieter überlastet. '
+            'Übersprungene Tasks zählen als nicht bestanden.'
+            '</div>'
         )
 
-    total_tasks = len(records)
-    passed_tasks = sum(1 for r in records if r.get("passed"))
-    model_cost = summary.get("agent_cost_usd", summary.get("total_cost_usd", 0))
-    avg_latency = summary.get("avg_latency_ms", 0)
+    # ── Tabellenzeilen ────────────────────────────────────────────────────────
+    rows = []
+    for r in records:
+        task_id   = r.get("task_id", "–")
+        error_msg = r.get("error")
+
+        if error_msg:
+            short_err  = (error_msg[:180] + "…") if len(error_msg) > 180 else error_msg
+            aborted_at = r.get("aborted_at", "")
+            time_info  = (f"<br><small style='color:#b2bec3'>Abgebrochen: {aborted_at}</small>"
+                          if aborted_at else "")
+            rows.append(
+                f'<tr style="background:#fff8f8">'
+                f'<td><code>{task_id}</code></td>'
+                f'<td><span class="badge err">⚠ API-Fehler</span></td>'
+                f'<td colspan="3" style="color:#636e72;font-size:.82rem">'
+                f'{short_err}{time_info}</td>'
+                f'<td>–</td><td>–</td></tr>'
+            )
+        else:
+            passed     = r.get("passed")
+            tool_score = r.get("tool_correctness")
+            task_score = r.get("task_completion")
+            rel_score  = r.get("answer_relevancy")
+            cost       = r.get("cost_usd", 0)
+            latency    = r.get("latency_ms", 0)
+
+            if passed is None:
+                badge = '<span class="badge warn">–</span>'
+            elif passed:
+                badge = '<span class="badge ok">✓ OK</span>'
+            else:
+                badge = '<span class="badge err">✗ Fail</span>'
+
+            def _fmt(v):
+                return f"{v:.2f}" if v is not None else "–"
+
+            rows.append(
+                f"<tr><td>{task_id}</td><td>{badge}</td>"
+                f"<td>{_fmt(tool_score)}</td><td>{_fmt(task_score)}</td><td>{_fmt(rel_score)}</td>"
+                f"<td>${cost:.4f}</td><td>{_fmt_int(latency)} ms</td></tr>"
+            )
+
+    # ── Kennzahlen-Karten ─────────────────────────────────────────────────────
+    total_tasks  = len(records)
+    passed_tasks = sum(1 for r in records if r.get("passed") and not r.get("error"))
+    error_count  = len(err_records)
+    model_cost   = summary.get("agent_cost_usd", summary.get("total_cost_usd", 0))
+    avg_latency  = summary.get("avg_latency_ms", 0)
     total_tokens = summary.get("total_tokens", 0)
 
-    func_cls = _classify(passed_tasks / total_tasks, 0.8) if total_tasks else ""
-    cards = [
-        _card(f"{passed_tasks}/{total_tasks}", "Tasks bestanden", func_cls),
+    cards = [_card_summary("Tasks bestanden", passed_tasks, total_tasks, 0.8)]
+    if error_count:
+        cards.append(_card(str(error_count), "Abgebrochen (API-Fehler)", "err"))
+    cards += [
         _card(f"{_fmt_int(total_tokens)}", "Tokens gesamt"),
         _card(f"${model_cost:.4f}", "Modell-Kosten (USD)"),
         _card(f"{_fmt_int(avg_latency)} ms", "Ø Latenz"),
     ]
 
-    table_rows = "".join(rows) if rows else "<tr><td colspan='7' style='color:#636e72'>Keine Task-Daten</td></tr>"
+    table_rows = ("".join(rows)
+                  if rows else
+                  "<tr><td colspan='7' style='color:#636e72'>Keine Task-Daten</td></tr>")
 
     return (
         "<h2>Dimension 1 – Funktionalität</h2>"
-        '<div class="cards">' + "".join(cards) + "</div><br>"
-        "<table><thead><tr>"
-        "<th>Task</th><th>Status</th><th>Tool Correctness</th>"
-        "<th>Task Completion</th><th>Answer Relevancy</th>"
-        "<th>Modell-Kosten (USD)</th><th>Latenz</th>"
-        "</tr></thead><tbody>" + table_rows + "</tbody></table>"
+        + banner
+        + '<div class="cards">' + "".join(cards) + "</div><br>"
+        + "<table><thead><tr>"
+        + "<th>Task</th><th>Status</th><th>Tool Correctness</th>"
+        + "<th>Task Completion</th><th>Answer Relevancy</th>"
+        + "<th>Modell-Kosten (USD)</th><th>Latenz</th>"
+        + "</tr></thead><tbody>" + table_rows + "</tbody></table>"
     )
 
 
@@ -542,8 +662,8 @@ def _radar_svg(entries: list[dict]) -> str:
     """Inline SVG Radar/Spider-Chart (5 Achsen, kein JS, kein CDN)."""
     import math
 
-    W, H = 520, 385
-    cx, cy, r = 195, 192, 130
+    W, H = 660, 420
+    cx, cy, r = 270, 205, 130
 
     AXES = [
         ("D1 Funktionalität", "func_rate"),
@@ -586,7 +706,7 @@ def _radar_svg(entries: list[dict]) -> str:
         )
 
     # Achsen-Beschriftungen
-    label_scale = 1.36
+    label_scale = 1.30
     for i, (label, _) in enumerate(AXES):
         lx, ly = pt(i, label_scale)
         if lx < cx - 8:
@@ -617,18 +737,20 @@ def _radar_svg(entries: list[dict]) -> str:
             )
 
     # Legende
-    leg_x, leg_y = 388, 48
-    leg_h = len(entries) * 26 + 16
+    leg_x, leg_y = 440, 52
+    leg_row_h = 28
+    leg_h = len(entries) * leg_row_h + 18
+    leg_w = 208
     svg.append(
-        f'<rect x="{leg_x - 8}" y="{leg_y - 8}" width="128" height="{leg_h}" '
-        f'rx="6" fill="#f8f9fa" stroke="#dfe6e9" stroke-width="0.8"/>'
+        f'<rect x="{leg_x - 10}" y="{leg_y - 10}" width="{leg_w}" height="{leg_h}" '
+        f'rx="7" fill="#f8f9fa" stroke="#dfe6e9" stroke-width="0.9"/>'
     )
     for idx, entry in enumerate(entries):
         color = COLORS[idx % len(COLORS)]
-        ey    = leg_y + idx * 26
+        ey    = leg_y + idx * leg_row_h
         svg.append(f'<rect x="{leg_x}" y="{ey}" width="13" height="13" rx="3" fill="{color}"/>')
-        lbl = entry["label"][:15] + ("…" if len(entry["label"]) > 15 else "")
-        svg.append(f'<text x="{leg_x + 19}" y="{ey + 10}" font-size="11" fill="#2d3436">{lbl}</text>')
+        lbl = entry["label"][:26] + ("…" if len(entry["label"]) > 26 else "")
+        svg.append(f'<text x="{leg_x + 19}" y="{ey + 10}" font-size="10.5" fill="#2d3436">{lbl}</text>')
 
     svg.append("</svg>")
     return "".join(svg)
@@ -658,12 +780,13 @@ def _section_comparison(agents_data: list[dict]) -> str:
     # ── Daten pro Agent berechnen ─────────────────────────────────────────
     entries = []
     for e in agents_data:
-        func     = e.get("func_data") or {}
-        records  = func.get("records", [])
-        summary  = func.get("summary", {})
-        sec      = e.get("sec_data") or {}
-        sec_fin  = e.get("sec_fin_data") or {}
-        comp_d   = e.get("comp_data") or {}
+        func        = e.get("func_data") or {}
+        records     = func.get("records", [])
+        summary     = func.get("summary", {})
+        sec         = e.get("sec_data") or {}
+        sec_fin     = e.get("sec_fin_data") or {}
+        comp_d      = e.get("comp_data") or {}
+        comp_stats_e = e.get("comp_stats") or {}
 
         func_total  = len(records)
         func_passed = sum(1 for r in records if r.get("passed"))
@@ -677,17 +800,28 @@ def _section_comparison(agents_data: list[dict]) -> str:
         comp_total = comp_pass + sum(v["fail"] for v in comp_d.values()) if comp_d else 0
         comp_rate  = comp_pass / comp_total if comp_total else 0.0
 
-        cost    = summary.get("agent_cost_usd", summary.get("total_cost_usd", 0))
-        latency = summary.get("avg_latency_ms", 0)
+        # Kosten: Summe aus Funktionalität + Security + Compliance
+        func_cost = summary.get("agent_cost_usd", summary.get("total_cost_usd", 0))
+        sec_cost  = sec.get("cost_usd", 0) + sec_fin.get("cost_usd", 0)
+        comp_cost = comp_stats_e.get("cost_usd", 0)
+        cost      = func_cost + sec_cost + comp_cost
+
+        # Latenz: bevorzuge Funktionalität, Fallback auf Security
+        latency = (summary.get("avg_latency_ms") or
+                   sec.get("latency_p50_ms") or
+                   sec_fin.get("latency_p50_ms") or 0)
+
+        func_errors = sum(1 for r in records if r.get("error"))
 
         entries.append({
-            "label":      e["label"],
-            "model":      e["model"],
-            "func_rate":  func_rate,  "func_pass":  func_passed,  "func_total":  func_total,
-            "sec_rate":   sec_rate,   "sec_pass":   sec_pass,     "sec_total":   sec_total,
-            "comp_rate":  comp_rate,  "comp_pass":  comp_pass,    "comp_total":  comp_total,
-            "cost":       cost,
-            "latency":    latency,
+            "label":       e["label"],
+            "model":       e["model"],
+            "func_rate":   func_rate,  "func_pass":   func_passed,  "func_total":   func_total,
+            "func_errors": func_errors,
+            "sec_rate":    sec_rate,   "sec_pass":    sec_pass,     "sec_total":    sec_total,
+            "comp_rate":   comp_rate,  "comp_pass":   comp_pass,    "comp_total":   comp_total,
+            "cost":        cost,
+            "latency":     latency,
         })
 
     # Kosteneffizienz + Geschwindigkeit normalisieren (bester Agent = 1.0)
@@ -737,11 +871,18 @@ def _section_comparison(agents_data: list[dict]) -> str:
     # ── Vergleichstabelle ─────────────────────────────────────────────────
     rows = []
     for e in entries:
+        # D1-Zelle: Prozentzahl + optionales Abbruch-Symbol
+        func_badge = _pct_badge(e["func_pass"], e["func_total"], 0.8)
+        if e.get("func_errors", 0):
+            func_badge += (
+                f' <span title="{e["func_errors"]} Task(s) durch API-Fehler abgebrochen" '
+                f'style="color:#e17055;font-weight:700;cursor:help">⚠</span>'
+            )
         rows.append(
             f"<tr>"
             f"<td><strong>{e['label']}</strong><br>"
             f"<small style='color:#636e72'>{e['model']}</small></td>"
-            f"<td>{_pct_badge(e['func_pass'], e['func_total'], 0.8)}</td>"
+            f"<td>{func_badge}</td>"
             f"<td>{_pct_badge(e['sec_pass'],  e['sec_total'],  0.9)}</td>"
             f"<td>{_pct_badge(e['comp_pass'], e['comp_total'], 0.8)}</td>"
             f"<td>${e['cost']:.4f}</td>"
@@ -784,13 +925,19 @@ def _agent_block(entry: dict, judge_model: str) -> str:
         f'</div>'
     )
 
-    return (
-        divider
-        + _section_summary(sec_data, sec_fin_data, comp_data, comp_stats, scorecard, func_data)
+    body = (
+        _section_summary(sec_data, sec_fin_data, comp_data, comp_stats, scorecard, func_data)
         + _section_functionality(func_data)
         + _section_security(sec_data, sec_fin_data)
         + _section_compliance(comp_data, comp_stats, scorecard)
         + _section_eval_overhead(sec_data, sec_fin_data, comp_stats, func_data, judge_model)
+    )
+
+    return (
+        '<div class="section-group">'
+        + divider
+        + '<div class="section-group-body">' + body + '</div>'
+        + '</div>'
     )
 
 
@@ -855,6 +1002,12 @@ def generate_multi_agent_report(
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
     agent_names = ", ".join(e["label"] for e in agents_data)
 
+    comparison_html = (
+        '<div class="section-group">'
+        '<div class="section-group-body">'
+        + _section_comparison(agents_data)
+        + '</div></div>'
+    )
     blocks = "".join(_agent_block(e, _judge) for e in agents_data)
 
     html = f"""<!DOCTYPE html>
@@ -873,7 +1026,7 @@ def generate_multi_agent_report(
   </div>
 </header>
 <div class="container">
-  {_section_comparison(agents_data)}
+  {comparison_html}
   {blocks}
 </div>
 <footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>

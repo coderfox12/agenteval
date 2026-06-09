@@ -5,6 +5,7 @@ analog zu scripts/cost_report.js, aber direkt aus LangGraph-Callbacks.
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 
@@ -15,6 +16,16 @@ class CostTracker:
 
     def record(self, task_id: str, cost_data: dict) -> None:
         self.records.append({"task_id": task_id, **cost_data})
+        self._save()
+
+    def record_error(self, task_id: str, error_msg: str) -> None:
+        """Erfasst einen fehlgeschlagenen Task (z. B. API-Quota erschöpft, Timeout)."""
+        self.records.append({
+            "task_id":    task_id,
+            "error":      str(error_msg)[:400],
+            "aborted_at": datetime.now().isoformat(timespec="seconds"),
+            "passed":     False,
+        })
         self._save()
 
     def update_metrics(self, task_id: str, metrics: dict) -> None:
@@ -45,19 +56,28 @@ class CostTracker:
     def _summary(self) -> dict:
         if not self.records:
             return {}
-        total_tokens  = sum(r["total_tokens"] for r in self.records)
-        agent_cost    = sum(r["cost_usd"] for r in self.records)
-        eval_cost     = sum(r.get("eval_cost_usd", 0.0) for r in self.records)
-        latencies     = [r["latency_ms"] for r in self.records]
-        avg_latency   = sum(latencies) / len(latencies)
-        p95_latency   = sorted(latencies)[max(0, int(0.95 * len(latencies)) - 1)]
+        # Fehler-Records haben keine Tokens/Kosten/Latenz → sicher mit .get()
+        ok_records   = [r for r in self.records if not r.get("error")]
+        err_records  = [r for r in self.records if r.get("error")]
+        total_tokens = sum(r.get("total_tokens", 0) for r in self.records)
+        agent_cost   = sum(r.get("cost_usd", 0) for r in self.records)
+        eval_cost    = sum(r.get("eval_cost_usd", 0.0) for r in self.records)
+        latencies    = [r["latency_ms"] for r in ok_records if "latency_ms" in r]
+        avg_latency  = sum(latencies) / len(latencies) if latencies else 0
+        p95_latency  = sorted(latencies)[max(0, int(0.95 * len(latencies)) - 1)] if latencies else 0
         return {
-            "total_tokens":      total_tokens,
-            "agent_cost_usd":    round(agent_cost, 6),
-            "eval_cost_usd":     round(eval_cost, 6),
-            "total_cost_usd":    round(agent_cost + eval_cost, 6),
-            "avg_latency_ms":    round(avg_latency),
-            "p95_latency_ms":    p95_latency,
+            "total_tokens":     total_tokens,
+            "agent_cost_usd":   round(agent_cost, 6),
+            "eval_cost_usd":    round(eval_cost, 6),
+            "total_cost_usd":   round(agent_cost + eval_cost, 6),
+            "avg_latency_ms":   round(avg_latency),
+            "p95_latency_ms":   p95_latency,
+            # Fehler-Statistik
+            "error_count":      len(err_records),
+            "aborted":          len(err_records) > 0,
+            "first_error_task": err_records[0]["task_id"]  if err_records else None,
+            "first_error_msg":  err_records[0]["error"]    if err_records else None,
+            "first_error_at":   err_records[0].get("aborted_at") if err_records else None,
         }
 
     def print_report(self) -> None:
