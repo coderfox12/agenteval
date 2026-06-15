@@ -2,34 +2,35 @@
 #
 # Verwendung: make <target> [USE_CASE=uc1|uc2|uc3|uc4]
 #
+# Zwei orthogonale Dimensionen:
+#   USE_CASE  = WAS getestet wird (Domäne, Tools, Tasks, Metriken)  → uc1..uc4
+#   agents.yaml = WOMIT getestet wird (Modelle/Endpunkte)           → alle Agenten
+#
 # Beispiele:
-#   make eval USE_CASE=uc2           # Volle Evaluation für UC2
-#   make functionality USE_CASE=uc3  # Nur Functionality für UC3
+#   make eval USE_CASE=uc2           # Alle Agenten gegen UC2, ein Vergleichs-Report
+#   make functionality USE_CASE=uc3  # Nur Functionality (alle Agenten) für UC3
 #   make eval-all                    # Alle 4 Use Cases sequenziell
 #
 # Voraussetzungen:
 #   - Node.js + npx  (für promptfoo)
 #   - Python 3.11+   (für Funktionalitäts-Eval und Scorecard)
 #   - pip install -e . (einmalig, installiert agenteval-ovb als Package)
-#   - OPENAI_API_KEY in .env oder Umgebungsvariable
+#   - .env mit AGENT_API_KEY + JUDGE_API_KEY (siehe .env.example)
 #
 # Optionale Erweiterungen:
+#   - OPENROUTER_API_KEY       → für weitere Agenten in agents.yaml (Llama etc.)
 #   - MISTRAL_API_KEY          → für make benchmark (Mistral-Provider)
-#   - GROQ_API_KEY             → für make benchmark (Open-Source-Provider)
 #   - LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY → LangSmith-Tracing
 
-.PHONY: all eval eval-all smoke security security-finance security-all \
-        compliance scorecard functionality report report-html benchmark install clean
+.PHONY: all eval eval-all smoke security compliance scorecard \
+        functionality report report-html benchmark install clean
 
 USE_CASE ?= uc1
-SEC_DIR  := evals/security/usecases/$(USE_CASE)
-COMP_DIR := evals/compliance/usecases/$(USE_CASE)
-COST_FILE := functionality_costs_$(USE_CASE).json
 
 # ── Hauptziele ────────────────────────────────────────────────────────────────
 all: eval
 
-eval: security security-finance compliance functionality report
+eval: security compliance functionality report
 	@echo ""
 	@echo "✅ Alle Evals abgeschlossen (USE_CASE=$(USE_CASE)). Report: report_$(USE_CASE).html"
 
@@ -46,61 +47,37 @@ eval-all:
 
 # ── R0: Smoke Test ────────────────────────────────────────────────────────────
 smoke:
-	npx promptfoo@latest eval --no-cache --config promptfooconfig.yaml
+	MODEL_NAME=gpt-5.4-mini npx promptfoo@latest eval --no-cache --config promptfooconfig.yaml
 
-# ── R2: Sicherheit ────────────────────────────────────────────────────────────
+# ── R2/R3: Security + Compliance für alle Agenten gegen den gewählten UC ──────
+# run_promptfoo_multi_agent.py iteriert über alle Agenten in agents.yaml
+# und erzeugt *_results_$(USE_CASE)_{agent_id}.json + Scorecards.
 security:
-	npx promptfoo@latest eval --no-cache \
-	  --config $(SEC_DIR)/security_eval.yaml \
-	  --output security_results_$(USE_CASE).json
-	node scripts/cost_report.js security_results_$(USE_CASE).json
+	USE_CASE=$(USE_CASE) python scripts/run_promptfoo_multi_agent.py
 
-security-finance:
-	@if [ -f $(SEC_DIR)/security_eval_finance.yaml ]; then \
-	  npx promptfoo@latest eval --no-cache \
-	    --config $(SEC_DIR)/security_eval_finance.yaml \
-	    --output security_finance_results_$(USE_CASE).json; \
-	  node scripts/cost_report.js security_finance_results_$(USE_CASE).json; \
-	else \
-	  echo "ℹ️  Kein security_eval_finance.yaml für $(USE_CASE) – übersprungen."; \
-	fi
-
-security-all: security security-finance
-
-# ── R3: Compliance ────────────────────────────────────────────────────────────
+# compliance ist Teil von run_promptfoo_multi_agent.py (security-Target deckt beides ab).
+# Separates Target für Kompatibilität – ruft denselben Multi-Agent-Runner.
 compliance:
-	npx promptfoo@latest eval --no-cache \
-	  --config $(COMP_DIR)/compliance_eval.yaml \
-	  --output compliance_results_$(USE_CASE).json
-	node scripts/cost_report.js compliance_results_$(USE_CASE).json
+	@echo "ℹ  Compliance wird zusammen mit 'make security' über run_promptfoo_multi_agent.py erzeugt."
 
-# ── Compliance Scorecard (EU AI Act Mapping) ──────────────────────────────────
+# ── Compliance Scorecard (wird bereits im Multi-Agent-Runner erzeugt) ─────────
 scorecard:
-	agenteval-scorecard compliance_results_$(USE_CASE).json --use-case $(USE_CASE)
+	@echo "ℹ  Scorecards werden in 'make security' pro Agent erzeugt (compliance_scorecard_$(USE_CASE)_*.json)."
 
-# ── Funktionalität: LangGraph + DeepEval ─────────────────────────────────────
+# ── Funktionalität: LangGraph + DeepEval, alle Agenten gegen den UC ───────────
+# pytest (nicht 'deepeval test run' – behebt '-n auto'-Problem, D1 war sonst leer)
 functionality:
 	cd evals/functionality && \
-	  USE_CASE=$(USE_CASE) COST_FILE=$(COST_FILE) \
-	  deepeval test run test_functionality.py -v
+	  USE_CASE=$(USE_CASE) pytest test_functionality.py -v
 
-# ── HTML-Report ───────────────────────────────────────────────────────────────
+# ── HTML-Report (Multi-Agent-Vergleich für den gewählten UC) ──────────────────
 report-html:
-	agenteval-report \
-	  --security security_results_$(USE_CASE).json \
-	  --security security_finance_results_$(USE_CASE).json \
-	  --compliance compliance_results_$(USE_CASE).json \
-	  --scorecard compliance_scorecard.json \
-	  --functionality evals/functionality/$(COST_FILE) \
-	  --use-case $(USE_CASE) \
-	  --out report_$(USE_CASE).html
+	agenteval-report --use-case $(USE_CASE) --out report_$(USE_CASE).html
 
-# ── Reporting (Scorecard + HTML) ──────────────────────────────────────────────
-report: scorecard report-html
-	@echo "📊 Reports generiert: compliance_scorecard.json, report_$(USE_CASE).html"
+report: report-html
+	@echo "📊 Report generiert: report_$(USE_CASE).html"
 
 # ── Multi-Modell-Benchmark (Vendor Neutrality) ────────────────────────────────
-# Benötigt: MISTRAL_API_KEY + GROQ_API_KEY (beide kostenlos erhältlich)
 benchmark:
 	node scripts/run_benchmark.js
 
@@ -110,5 +87,5 @@ install:
 
 # ── Aufräumen ─────────────────────────────────────────────────────────────────
 clean:
-	rm -f *_results_*.json compliance_scorecard.json report_*.html
+	rm -f *_results_*.json compliance_scorecard_*.json report_*.html
 	rm -f evals/functionality/functionality_costs_*.json

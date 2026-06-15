@@ -136,11 +136,14 @@ class CostTracker:
         print(header)
         print("  " + "─" * 60)
         for r in self.records:
+            if r.get("error"):
+                print(f"  {r['task_id']:<20}{'— API-Fehler —':<28}{'(abgebrochen)'}")
+                continue
             print(
                 f"  {r['task_id']:<20}"
-                f"{r['total_tokens']:<12,}"
-                f"${r['cost_usd']:<15.6f}"
-                f"{r['latency_ms']:,} ms"
+                f"{r.get('total_tokens', 0):<12,}"
+                f"${r.get('cost_usd', 0):<15.6f}"
+                f"{r.get('latency_ms', 0):,} ms"
             )
         avg_cost = s.get("total_cost_usd", 0) / max(len(self.records), 1)
         print(f"\n💡 HOCHRECHNUNGEN (Ø ${avg_cost:.6f} / Task)")

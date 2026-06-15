@@ -506,6 +506,20 @@ def _section_functionality(func_data: dict) -> str:
         return ("<h2>Dimension 1 – Funktionalität</h2>"
                 "<p style='color:#636e72; margin-top:12px'>Keine Task-Daten vorhanden.</p>")
 
+    # Dynamische Metrik-Spalten je nach Use Case (aus dem JSON gelesen).
+    # Fallback auf die drei Standardmetriken, falls kein metrics-Feld vorhanden.
+    _METRIC_LABELS = {
+        "tool_correctness": "Tool Correctness",
+        "task_completion":  "Task Completion",
+        "answer_relevancy": "Answer Relevancy",
+        "faithfulness":     "Faithfulness",
+        "hallucination":    "Hallucination",
+        "required_fields":  "Pflichtfelder",
+    }
+    metric_keys = func_data.get("metrics") or ["tool_correctness", "task_completion", "answer_relevancy"]
+    metric_labels = [_METRIC_LABELS.get(k, k) for k in metric_keys]
+    n_metric_cols = len(metric_keys)
+
     err_records = [r for r in records if r.get("error")]
 
     # ── Abort-Banner ──────────────────────────────────────────────────────────
@@ -538,15 +552,12 @@ def _section_functionality(func_data: dict) -> str:
                 f'<tr style="background:#fff8f8">'
                 f'<td><code>{task_id}</code></td>'
                 f'<td><span class="badge err">⚠ API-Fehler</span></td>'
-                f'<td colspan="3" style="color:#636e72;font-size:.82rem">'
+                f'<td colspan="{n_metric_cols}" style="color:#636e72;font-size:.82rem">'
                 f'{short_err}{time_info}</td>'
                 f'<td>–</td><td>–</td></tr>'
             )
         else:
             passed     = r.get("passed")
-            tool_score = r.get("tool_correctness")
-            task_score = r.get("task_completion")
-            rel_score  = r.get("answer_relevancy")
             cost       = r.get("cost_usd", 0)
             latency    = r.get("latency_ms", 0)
 
@@ -560,9 +571,10 @@ def _section_functionality(func_data: dict) -> str:
             def _fmt(v):
                 return f"{v:.2f}" if v is not None else "–"
 
+            metric_cells = "".join(f"<td>{_fmt(r.get(k))}</td>" for k in metric_keys)
             rows.append(
                 f"<tr><td>{task_id}</td><td>{badge}</td>"
-                f"<td>{_fmt(tool_score)}</td><td>{_fmt(task_score)}</td><td>{_fmt(rel_score)}</td>"
+                f"{metric_cells}"
                 f"<td>${cost:.4f}</td><td>{_fmt_int(latency)} ms</td></tr>"
             )
 
@@ -583,17 +595,20 @@ def _section_functionality(func_data: dict) -> str:
         _card(f"{_fmt_int(avg_latency)} ms", "Ø Latenz"),
     ]
 
+    total_cols = 2 + n_metric_cols + 2  # Task + Status + Metriken + Kosten + Latenz
     table_rows = ("".join(rows)
                   if rows else
-                  "<tr><td colspan='7' style='color:#636e72'>Keine Task-Daten</td></tr>")
+                  f"<tr><td colspan='{total_cols}' style='color:#636e72'>Keine Task-Daten</td></tr>")
+
+    metric_headers = "".join(f"<th>{lbl}</th>" for lbl in metric_labels)
 
     return (
         "<h2>Dimension 1 – Funktionalität</h2>"
         + banner
         + '<div class="cards">' + "".join(cards) + "</div><br>"
         + "<table><thead><tr>"
-        + "<th>Task</th><th>Status</th><th>Tool Correctness</th>"
-        + "<th>Task Completion</th><th>Answer Relevancy</th>"
+        + "<th>Task</th><th>Status</th>"
+        + metric_headers
         + "<th>Modell-Kosten (USD)</th><th>Latenz</th>"
         + "</tr></thead><tbody>" + table_rows + "</tbody></table>"
     )
@@ -948,24 +963,27 @@ def generate_multi_agent_report(
     scorecard_path: str | None = None,
     out_path: str = "report.html",
     judge_model: str | None = None,
+    use_case: str | None = None,
 ) -> Path:
     """Erzeugt einen einzelnen HTML-Report für alle Agenten in agents_config.
 
     Oben steht der Agenten-Vergleich, darunter folgen die Einzelauswertungen.
-    Security- und Compliance-Daten gelten für alle Agenten gemeinsam
-    (werden pro Agent-Block wiederholt angezeigt).
+    Wenn use_case gesetzt ist, werden die UC-spezifischen Ergebnisdateien
+    geladen (Schema: *_results_{uc}_{agent_id}.json).
     """
     security_paths = security_paths or []
     _judge = judge_model or _load_judge_model_from_config() or os.environ.get("JUDGE_MODEL_NAME", "gpt-5.4-mini")
+    uc = use_case  # Kürzel für Dateinamen-Suffix
+    _sfx = f"{uc}_" if uc else ""
 
     # Daten pro Agent laden (Security, Compliance, Funktionalität)
     agents_data = []
     for cfg in agents_config:
         agent_id = cfg["id"]
 
-        # Security – per-Agent-Dateien, Fallback auf geteilte Dateien
-        sec_path     = f"security_results_{agent_id}.json"
-        sec_fin_path = f"security_finance_results_{agent_id}.json"
+        # Security – per-(UC,Agent)-Dateien, Fallback auf geteilte Dateien
+        sec_path     = f"security_results_{_sfx}{agent_id}.json"
+        sec_fin_path = f"security_finance_results_{_sfx}{agent_id}.json"
         sec_data     = _parse_security(_promptfoo_results(
             _load_json(sec_path) or (_load_json(security_paths[0]) if security_paths else None)
         ))
@@ -973,9 +991,9 @@ def generate_multi_agent_report(
             _load_json(sec_fin_path) or (_load_json(security_paths[1]) if len(security_paths) > 1 else None)
         ))
 
-        # Compliance – per-Agent-Dateien, Fallback auf geteilte Dateien
-        comp_path      = f"compliance_results_{agent_id}.json"
-        scorecard_path_agent = f"compliance_scorecard_{agent_id}.json"
+        # Compliance – per-(UC,Agent)-Dateien, Fallback auf geteilte Dateien
+        comp_path      = f"compliance_results_{_sfx}{agent_id}.json"
+        scorecard_path_agent = f"compliance_scorecard_{_sfx}{agent_id}.json"
         comp_results   = _promptfoo_results(
             _load_json(comp_path) or _load_json(compliance_path)
         )
@@ -983,7 +1001,7 @@ def generate_multi_agent_report(
         scorecard = _load_json(scorecard_path_agent) or _load_json(scorecard_path)
 
         # Funktionalität
-        func_path = Path(functionality_dir) / f"functionality_costs_{agent_id}.json"
+        func_path = Path(functionality_dir) / f"functionality_costs_{_sfx}{agent_id}.json"
         func_data = _parse_func_costs(_load_json(str(func_path)))
 
         agents_data.append({
@@ -1000,6 +1018,7 @@ def generate_multi_agent_report(
 
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
     agent_names = ", ".join(e["label"] for e in agents_data)
+    uc_badge = f'<span class="model-badge">{uc}</span>' if uc else ""
 
     comparison_html = (
         '<div class="section-group">'
@@ -1020,7 +1039,7 @@ def generate_multi_agent_report(
 <body>
 <header>
   <div class="inner">
-    <h1>Agent-Eval@OVB – Multi-Agent Report</h1>
+    <h1>Agent-Eval@OVB – Multi-Agent Report &nbsp;{uc_badge}</h1>
     <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now} &nbsp;|&nbsp; {agent_names}</p>
   </div>
 </header>
@@ -1133,23 +1152,41 @@ def main() -> None:
     args = parser.parse_args()
 
     uc = args.use_case
+    _sfx = f"{uc}_" if uc else ""
     security_paths = args.security or [
-        f"security_results_{uc}.json" if uc else "security_results.json",
-        f"security_finance_results_{uc}.json" if uc else "security_finance_results.json",
+        f"security_results_{_sfx}".rstrip("_") + ".json",
+        f"security_finance_results_{_sfx}".rstrip("_") + ".json",
     ]
-    func_default = (
-        f"evals/functionality/functionality_costs_{uc}.json"
-        if uc else "evals/functionality/functionality_costs.json"
-    )
 
-    generate_report(
-        security_paths=security_paths,
-        compliance_path=args.compliance,
-        scorecard_path=args.scorecard,
-        functionality_path=args.functionality or func_default,
-        out_path=args.out,
-        use_case=uc,
-    )
+    # Multi-Agent-Modus: wenn agents.yaml existiert und kein expliziter
+    # Einzel-Funktionalitätspfad gesetzt ist.
+    agents_cfg_path = Path(args.agents_config)
+    if agents_cfg_path.exists() and not args.functionality:
+        with open(agents_cfg_path, encoding="utf-8") as f:
+            agents_config = _yaml.safe_load(f)["agents"]
+        generate_multi_agent_report(
+            agents_config=agents_config,
+            functionality_dir=args.functionality_dir,
+            security_paths=security_paths,
+            compliance_path=args.compliance,
+            scorecard_path=args.scorecard,
+            out_path=args.out,
+            use_case=uc,
+        )
+    else:
+        # Einzelagent-Modus (Rückwärtskompatibilität / direkter Pfad)
+        func_default = (
+            f"evals/functionality/functionality_costs_{uc}.json"
+            if uc else "evals/functionality/functionality_costs.json"
+        )
+        generate_report(
+            security_paths=security_paths,
+            compliance_path=args.compliance,
+            scorecard_path=args.scorecard,
+            functionality_path=args.functionality or func_default,
+            out_path=args.out,
+            use_case=uc,
+        )
 
 
 if __name__ == "__main__":
