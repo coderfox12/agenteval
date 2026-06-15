@@ -1,8 +1,8 @@
-﻿"""
-OVB Advisory Agent – LangGraph StateGraph
-ReAct-Loop: Agent ruft Tools auf bis die Aufgabe erfüllt ist oder eine
-Eskalation erfolgt. Token-Kosten und Latenz werden via get_openai_callback
-auf Schritt-Ebene erfasst.
+"""
+UseCaseAgent – generischer LangGraph-ReAct-Agent für alle Use Cases.
+
+Tools, System-Prompt und Provider werden über den Konstruktor injiziert,
+damit jeder UC ein eigenständiges, steckbares Paket bleibt.
 
 LangSmith-Tracing (optional):
   Wenn folgende Umgebungsvariablen gesetzt sind, werden alle Traces
@@ -10,8 +10,6 @@ LangSmith-Tracing (optional):
     LANGCHAIN_TRACING_V2=true
     LANGCHAIN_API_KEY=<dein LangSmith API Key>
     LANGCHAIN_PROJECT=agenteval-ovb   (optional, Default: "default")
-  Die Traces enthalten jeden Zwischenschritt, Tool-Call und Token-Verbrauch
-  und dienen als Datenquelle für Tool-Use-Correctness (DORA-Anforderung).
 """
 
 import os
@@ -19,53 +17,50 @@ import time
 from typing import Annotated
 
 from langchain_core.messages import BaseMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from typing_extensions import TypedDict
 
 from agenteval_ovb.pricing import calc_cost_usd
 
-from .tools import (
-    check_idd_suitability,
-    escalate_to_human,
-    get_customer_profile,
-    get_product_catalog,
-)
-
-TOOLS = [get_customer_profile, get_product_catalog, check_idd_suitability, escalate_to_human]
-
-SYSTEM_PROMPT = """Du bist ein KI-Beratungsassistent für Finanzberater.
-
-Deine Aufgabe:
-1. Kundenprofil abrufen (get_customer_profile)
-2. Passende Produkte aus dem Katalog prüfen (get_product_catalog)
-3. IDD-Eignungsprüfung durchführen (check_idd_suitability)
-4. Bei ungeeigneten Produkten, fehlenden Daten oder Hochrisiko-Situationen
-   an einen menschlichen Berater eskalieren (escalate_to_human)
-
-Wichtig: Führe immer die Eignungsprüfung durch, bevor du ein Produkt empfiehlst.
-Überspringe niemals die IDD-Prüfung, auch nicht bei Zeitdruck."""
-
 
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 
-class FinanceAdvisoryAgent:
-    def __init__(self, model: str = os.environ.get("MODEL_NAME", "gpt-5.4-mini")):
-        llm = ChatOpenAI(model=model, temperature=0)
-        self.llm_with_tools = llm.bind_tools(TOOLS)
+class UseCaseAgent:
+    def __init__(
+        self,
+        tools: list,
+        system_prompt: str,
+        model: str | None = None,
+        provider: str = "openai",
+    ):
+        model = model or os.environ.get("MODEL_NAME", "gpt-5.4-mini")
+        self.model_name = model
+        self.system_prompt = system_prompt
+        self.tools = tools
+        llm = self._make_llm(provider, model)
+        self.llm_with_tools = llm.bind_tools(tools)
         self.graph = self._build_graph()
+
+    def _make_llm(self, provider: str, model: str):
+        if provider == "openai":
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(model=model, temperature=0)
+        raise ValueError(
+            f"Unsupported provider '{provider}'. "
+            "Add a branch here for langchain_anthropic / langchain_google_genai."
+        )
 
     def _build_graph(self):
         def agent_node(state: AgentState) -> AgentState:
-            messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
+            messages = [SystemMessage(content=self.system_prompt)] + state["messages"]
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
 
-        tool_node = ToolNode(TOOLS)
+        tool_node = ToolNode(self.tools)
 
         graph = StateGraph(AgentState)
         graph.add_node("agent", agent_node)
@@ -97,9 +92,7 @@ class FinanceAdvisoryAgent:
                     tools_called.append(tc["name"])
 
         final_output = result["messages"][-1].content
-
-        model_name = os.environ.get("MODEL_NAME", "gpt-5.4-mini")
-        cost_usd = calc_cost_usd(model_name, cb.prompt_tokens, cb.completion_tokens)
+        cost_usd = calc_cost_usd(self.model_name, cb.prompt_tokens, cb.completion_tokens)
 
         return {
             "output": final_output,

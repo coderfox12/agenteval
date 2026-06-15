@@ -18,7 +18,6 @@ CLI:
 import argparse
 import json
 import os
-import sys
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -504,6 +503,7 @@ def generate_report(
     functionality_path: str | None = None,
     out_path: str = "report.html",
     model_name: str | None = None,
+    use_case: str | None = None,
 ) -> Path:
     security_paths = security_paths or []
 
@@ -521,6 +521,15 @@ def generate_report(
     judge_model = os.environ.get("JUDGE_MODEL", model)
     model_badge = f'<span class="model-badge">{model}</span>'
 
+    # UC-Badge: Arg → func_data → env → default
+    uc_id = (
+        use_case
+        or (func_data.get("use_case") if func_data else None)
+        or os.environ.get("USE_CASE")
+        or "uc1"
+    )
+    uc_badge = f'<span class="model-badge">{uc_id}</span>'
+
     html = f"""<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -532,7 +541,7 @@ def generate_report(
 <body>
 <header>
   <div class="inner">
-    <h1>Agent-Eval@OVB – Benchmark Report &nbsp;{model_badge}</h1>
+    <h1>Agent-Eval@OVB – Benchmark Report &nbsp;{model_badge}&nbsp;{uc_badge}</h1>
     <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now}</p>
   </div>
 </header>
@@ -566,16 +575,27 @@ def main() -> None:
     parser.add_argument("--functionality", metavar="FILE",
                         default="evals/functionality/functionality_costs.json")
     parser.add_argument("--out",           metavar="FILE", default="report.html")
+    parser.add_argument("--use-case",      metavar="UC",   default=os.environ.get("USE_CASE"),
+                        help="Use-Case-ID (uc1–uc4) für Header-Badge und UC-Kontext")
     args = parser.parse_args()
 
-    security_paths = args.security or ["security_results.json", "security_finance_results.json"]
+    uc = args.use_case
+    security_paths = args.security or [
+        f"security_results_{uc}.json" if uc else "security_results.json",
+        f"security_finance_results_{uc}.json" if uc else "security_finance_results.json",
+    ]
+    func_default = (
+        f"evals/functionality/functionality_costs_{uc}.json"
+        if uc else "evals/functionality/functionality_costs.json"
+    )
 
     generate_report(
         security_paths=security_paths,
         compliance_path=args.compliance,
         scorecard_path=args.scorecard,
-        functionality_path=args.functionality,
+        functionality_path=args.functionality if args.functionality != "evals/functionality/functionality_costs.json" else func_default,
         out_path=args.out,
+        use_case=uc,
     )
 
 

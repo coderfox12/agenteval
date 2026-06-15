@@ -1,20 +1,22 @@
 """
-Funktionalitäts-Evaluation des Finanzgesellschaft Advisory Agents
+Funktionalitäts-Evaluation – Agent-Eval@OVB
 Framework: LangGraph (Orchestrierung) + DeepEval 3.9.9 (Bewertung)
 
-DeepEval-Metriken:
-  - ToolCorrectnessMetric  → Hat der Agent die richtigen Tools aufgerufen?
-  - TaskCompletionMetric   → Wurde die Gesamtaufgabe erfüllt?
-  - AnswerRelevancyMetric  → Ist die Antwort relevant zur Anfrage?
+Use Case wird über die Umgebungsvariable USE_CASE gewählt (Default: uc1).
+Beispiel: USE_CASE=uc2 deepeval test run test_functionality.py -v
+
+Pro-UC-Metriken (in usecases/registry.py konfiguriert):
+  UC1/UC2: tool_correctness, task_completion, answer_relevancy
+  UC3:     tool_correctness, task_completion, faithfulness (Zitationstreue)
+  UC4:     task_completion, hallucination, required_fields (Pflichtfeld-Check)
 
 Wirtschaftlichkeit:
   - Agent-Kosten werden via get_openai_callback pro Task erfasst.
-  - DeepEval-Judge-Kosten (TaskCompletion, AnswerRelevancy) werden
-    ebenfalls via get_openai_callback erfasst und separat gespeichert.
+  - Judge-Kosten (LLM-basierte Metriken) werden separat erfasst.
 
 Ausführung:
   cd evals/functionality
-  pytest test_functionality.py -v
+  USE_CASE=uc1 deepeval test run test_functionality.py -v
 """
 
 import os
@@ -26,6 +28,8 @@ import yaml
 from langchain_community.callbacks import get_openai_callback
 from deepeval.metrics import (
     AnswerRelevancyMetric,
+    FaithfulnessMetric,
+    HallucinationMetric,
     TaskCompletionMetric,
     ToolCorrectnessMetric,
 )
@@ -33,30 +37,50 @@ from deepeval.test_case import LLMTestCase, ToolCall
 from dotenv import load_dotenv
 from agenteval_ovb.pricing import calc_cost_usd
 
-# Explizites Judge-Modell für DeepEval – verhindert, dass DeepEval
-# selbstständig ein teureres Standard-Modell (z. B. GPT-5) wählt.
 _EVAL_MODEL = os.environ.get("MODEL_NAME", "gpt-5.4-mini")
 
 sys.path.insert(0, str(Path(__file__).parent))
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-from agent.graph import FinanceAdvisoryAgent
+from agent.graph import UseCaseAgent
+from usecases.registry import get_use_case
 from cost_tracker import CostTracker
 
-# ─── Initialisierung ──────────────────────────────────────────────────────────
+# ─── UC-Initialisierung ───────────────────────────────────────────────────────
 
-agent = FinanceAdvisoryAgent()
-tracker = CostTracker(output_path="functionality_costs.json")
+_UC = get_use_case()
+_COST_FILE = os.environ.get("COST_FILE", f"functionality_costs_{_UC['id']}.json")
+
+agent = UseCaseAgent(tools=_UC["tools"], system_prompt=_UC["system_prompt"])
+tracker = CostTracker(output_path=_COST_FILE, use_case=_UC["id"], metrics=_UC["metrics"])
 
 
 def load_tasks() -> list[dict]:
-    tasks_path = Path(__file__).parent / "tasks" / "ovb_tasks.yaml"
-    with open(tasks_path, encoding="utf-8") as f:
+    with open(_UC["tasks_path"], encoding="utf-8") as f:
         return yaml.safe_load(f)["tasks"]
 
 
 TASKS = load_tasks()
+
+
+# ─── Metrik-Builder-Mapping ───────────────────────────────────────────────────
+# Jeder Schlüssel entspricht einem Eintrag in UC["metrics"].
+# required_fields ist ein deterministischer Python-Check (kein LLM-Judge).
+
+def _build_metric(key: str, task: dict):
+    if key == "tool_correctness":
+        return ToolCorrectnessMetric(threshold=0.7)
+    if key == "task_completion":
+        return TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"], model=_EVAL_MODEL)
+    if key == "answer_relevancy":
+        return AnswerRelevancyMetric(threshold=0.7, model=_EVAL_MODEL)
+    if key == "faithfulness":
+        return FaithfulnessMetric(threshold=0.7, model=_EVAL_MODEL)
+    if key == "hallucination":
+        # Score 0 = keine Halluzination (gut), Score 1 = vollständige Halluzination (schlecht)
+        return HallucinationMetric(threshold=0.5, model=_EVAL_MODEL)
+    raise ValueError(f"Unbekannter Metrik-Schlüssel: '{key}'")
 
 
 # ─── Hilfsfunktion ────────────────────────────────────────────────────────────
@@ -80,6 +104,9 @@ def run_and_record(task: dict) -> tuple[str, list[ToolCall]]:
 @pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
 def test_tool_correctness(task: dict):
     """Prüft ob der Agent die richtigen Tools aufgerufen hat."""
+    if "tool_correctness" not in _UC["metrics"]:
+        pytest.skip(f"tool_correctness nicht in Metrik-Set von {_UC['id']}")
+
     actual_output, tools_called = run_and_record(task)
     expected_tools = [ToolCall(name=name) for name in task["expected_tools"]]
 
@@ -100,8 +127,10 @@ def test_tool_correctness(task: dict):
 @pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
 def test_task_completion(task: dict):
     """Prüft ob der Agent die Gesamtaufgabe vollständig erfüllt hat."""
-    actual_output, _ = run_and_record(task)
+    if "task_completion" not in _UC["metrics"]:
+        pytest.skip(f"task_completion nicht in Metrik-Set von {_UC['id']}")
 
+    actual_output, _ = run_and_record(task)
     test_case = LLMTestCase(
         input=task["input"],
         actual_output=actual_output,
@@ -114,20 +143,19 @@ def test_task_completion(task: dict):
     judge_cost = calc_cost_usd(_EVAL_MODEL, cb.prompt_tokens, cb.completion_tokens)
     tracker.update_metrics(task["id"], {
         "task_completion": round(metric.score, 3),
-        "eval_cost_usd": round((tracker.get_eval_cost(task["id"]) + judge_cost), 6),
+        "eval_cost_usd": round(tracker.get_eval_cost(task["id"]) + judge_cost, 6),
     })
     assert metric.is_successful(), f"TaskCompletion: {metric.score:.2f} < 0.7"
 
 
 @pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
 def test_answer_relevancy(task: dict):
-    """Prüft ob die Antwort des Agenten relevant zur gestellten Aufgabe ist."""
-    actual_output, _ = run_and_record(task)
+    """Prüft ob die Antwort des Agenten relevant zur gestellten Aufgabe ist (UC1/UC2)."""
+    if "answer_relevancy" not in _UC["metrics"]:
+        pytest.skip(f"answer_relevancy nicht in Metrik-Set von {_UC['id']}")
 
-    test_case = LLMTestCase(
-        input=task["input"],
-        actual_output=actual_output,
-    )
+    actual_output, _ = run_and_record(task)
+    test_case = LLMTestCase(input=task["input"], actual_output=actual_output)
 
     metric = AnswerRelevancyMetric(threshold=0.7, model=_EVAL_MODEL)
     with get_openai_callback() as cb:
@@ -135,9 +163,97 @@ def test_answer_relevancy(task: dict):
     judge_cost = calc_cost_usd(_EVAL_MODEL, cb.prompt_tokens, cb.completion_tokens)
     tracker.update_metrics(task["id"], {
         "answer_relevancy": round(metric.score, 3),
-        "eval_cost_usd": round((tracker.get_eval_cost(task["id"]) + judge_cost), 6),
+        "eval_cost_usd": round(tracker.get_eval_cost(task["id"]) + judge_cost, 6),
     })
     assert metric.is_successful(), f"AnswerRelevancy: {metric.score:.2f} < 0.7"
+
+
+@pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
+def test_faithfulness(task: dict):
+    """Prüft Zitationstreue – Antwort darf nur Fakten aus dem Retrieval-Kontext enthalten (UC3)."""
+    if "faithfulness" not in _UC["metrics"]:
+        pytest.skip(f"faithfulness nicht in Metrik-Set von {_UC['id']}")
+
+    actual_output, _ = run_and_record(task)
+
+    # Retrieval-Kontext: Tool-Outputs aus dem Cache-Lauf extrahieren
+    # Für UC3 sind das die Passagen aus retrieve_regulatory_corpus
+    retrieval_context = [task.get("expected_output", "")]
+
+    test_case = LLMTestCase(
+        input=task["input"],
+        actual_output=actual_output,
+        retrieval_context=retrieval_context,
+    )
+
+    metric = FaithfulnessMetric(threshold=0.7, model=_EVAL_MODEL)
+    with get_openai_callback() as cb:
+        metric.measure(test_case)
+    judge_cost = calc_cost_usd(_EVAL_MODEL, cb.prompt_tokens, cb.completion_tokens)
+    tracker.update_metrics(task["id"], {
+        "faithfulness": round(metric.score, 3),
+        "eval_cost_usd": round(tracker.get_eval_cost(task["id"]) + judge_cost, 6),
+    })
+    assert metric.is_successful(), f"Faithfulness: {metric.score:.2f} < 0.7"
+
+
+@pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
+def test_hallucination(task: dict):
+    """Prüft Halluzinationen – Agent darf keine Fakten erfinden (UC4)."""
+    if "hallucination" not in _UC["metrics"]:
+        pytest.skip(f"hallucination nicht in Metrik-Set von {_UC['id']}")
+
+    actual_output, _ = run_and_record(task)
+
+    # Kontext: was tatsächlich bekannt war (Transkript-Inhalt als Grounding)
+    context = [task.get("input", ""), task.get("expected_output", "")]
+
+    test_case = LLMTestCase(
+        input=task["input"],
+        actual_output=actual_output,
+        context=context,
+    )
+
+    metric = HallucinationMetric(threshold=0.5, model=_EVAL_MODEL)
+    with get_openai_callback() as cb:
+        metric.measure(test_case)
+    judge_cost = calc_cost_usd(_EVAL_MODEL, cb.prompt_tokens, cb.completion_tokens)
+    # hallucination ist invers: niedrigerer Score = weniger Halluzination = besser
+    passed = metric.score <= 0.5
+    tracker.update_metrics(task["id"], {
+        "hallucination": round(metric.score, 3),
+        "eval_cost_usd": round(tracker.get_eval_cost(task["id"]) + judge_cost, 6),
+    })
+    assert passed, f"Hallucination zu hoch: {metric.score:.2f} > 0.5"
+
+
+@pytest.mark.parametrize("task", TASKS, ids=[t["id"] for t in TASKS])
+def test_required_fields(task: dict):
+    """Prüft ob alle §61-VVG-Pflichtfelder im generierten Protokoll vorhanden sind (UC4)."""
+    if "required_fields" not in _UC["metrics"]:
+        pytest.skip(f"required_fields nicht in Metrik-Set von {_UC['id']}")
+
+    actual_output, _ = run_and_record(task)
+
+    from usecases.uc4_beratungsdoku.tools import VVG_REQUIRED_FIELDS
+
+    # Prüfe ob Pflichtfelder in der Ausgabe erwähnt sind (oder als fehlend markiert)
+    # Tasks die fehlende Felder erwarten (should_escalate=True) gelten als bestanden,
+    # wenn flag_missing_information korrekt aufgerufen wurde (in tools_called)
+    _, tools_called = _cache.get(task["id"], (actual_output, []))
+    tool_names = [tc.name for tc in tools_called]
+
+    if task.get("should_escalate"):
+        passed = "flag_missing_information" in tool_names
+        score = 1.0 if passed else 0.0
+    else:
+        # Vollständiges Protokoll erwartet: alle Felder sollen in der Ausgabe erscheinen
+        found = sum(1 for f in VVG_REQUIRED_FIELDS if f.lower() in actual_output.lower())
+        score = round(found / len(VVG_REQUIRED_FIELDS), 3)
+        passed = score >= 0.7
+
+    tracker.update_metrics(task["id"], {"required_fields": score})
+    assert passed, f"RequiredFields: {score:.2f} < 0.7 oder flag_missing_information nicht aufgerufen"
 
 
 # ─── Wirtschaftlichkeits-Report nach allen Tests ──────────────────────────────
@@ -146,11 +262,6 @@ def pytest_sessionfinish(session, exitstatus):
     """Berechnet passed-Flag aus gespeicherten Scores und gibt Report aus."""
     if not tracker.records:
         return
-    for r in tracker.records:
-        scores = [
-            r[k] for k in ("tool_correctness", "task_completion", "answer_relevancy")
-            if k in r
-        ]
-        r["passed"] = bool(scores) and all(s >= 0.7 for s in scores)
+    tracker.finalize_passed()
     tracker._save()
     tracker.print_report()

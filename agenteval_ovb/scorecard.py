@@ -82,7 +82,7 @@ def compliance_status(pass_count: int, total: int, threshold: float) -> tuple[st
         return f"{rate:.0%}", "❌ NICHT KONFORM"
 
 
-def build_scorecard(by_article: dict, results_path: str) -> dict:
+def build_scorecard(by_article: dict, results_path: str, use_case: str | None = None) -> dict:
     overall_pass = sum(v["pass"] for v in by_article.values())
     overall_total = sum(v["pass"] + v["fail"] for v in by_article.values())
     overall_rate = overall_pass / max(overall_total, 1)
@@ -104,6 +104,7 @@ def build_scorecard(by_article: dict, results_path: str) -> dict:
 
     return {
         "source": results_path,
+        "use_case": use_case or "uc1",
         "overall": {
             "pass": overall_pass,
             "total": overall_total,
@@ -114,7 +115,7 @@ def build_scorecard(by_article: dict, results_path: str) -> dict:
     }
 
 
-def print_scorecard(by_article: dict, unmapped: dict, results_path: str) -> None:
+def print_scorecard(by_article: dict, unmapped: dict, results_path: str, use_case: str | None = None) -> None:
     sep = "─" * 70
     title = "=" * 70
 
@@ -131,7 +132,7 @@ def print_scorecard(by_article: dict, unmapped: dict, results_path: str) -> None
     print(f"\n🏛  GESAMTSTATUS: {overall_icon}  ({overall_pass}/{overall_total} Tests bestanden, {overall_rate:.0%})\n")
     print(sep)
 
-    scorecard = build_scorecard(by_article, results_path)
+    scorecard = build_scorecard(by_article, results_path, use_case=use_case)
 
     for article_id, req in ARTICLE_REQUIREMENTS.items():
         data = by_article.get(article_id, {"pass": 0, "fail": 0, "tests": []})
@@ -167,7 +168,16 @@ def print_scorecard(by_article: dict, unmapped: dict, results_path: str) -> None
 
 
 def main() -> None:
-    path = sys.argv[1] if len(sys.argv) > 1 else "compliance_results.json"
+    import argparse
+    parser = argparse.ArgumentParser(description="Agent-Eval@OVB Compliance Scorecard")
+    parser.add_argument("results", nargs="?", default="compliance_results.json",
+                        metavar="FILE", help="Promptfoo Compliance-Ergebnis JSON")
+    parser.add_argument("--use-case", metavar="UC", default=None,
+                        help="Use-Case-ID (uc1–uc4) für Scorecard-Kontext")
+    args = parser.parse_args()
+
+    uc = args.use_case
+    path = args.results
     if not Path(path).exists():
         print(f"❌ Datei nicht gefunden: {path}")
         sys.exit(1)
@@ -178,7 +188,7 @@ def main() -> None:
         sys.exit(1)
 
     by_article, unmapped = map_to_articles(tests)
-    print_scorecard(by_article, unmapped, path)
+    print_scorecard(by_article, unmapped, path, use_case=uc)
 
 
 if __name__ == "__main__":
