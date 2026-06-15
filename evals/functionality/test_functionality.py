@@ -41,6 +41,7 @@ _EVAL_MODEL = os.environ.get("MODEL_NAME", "gpt-5.4-mini")
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+# .env laden bevor Env-Variablen ausgelesen werden
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 from agent.graph import UseCaseAgent
@@ -65,8 +66,6 @@ TASKS = load_tasks()
 
 
 # ─── Metrik-Builder-Mapping ───────────────────────────────────────────────────
-# Jeder Schlüssel entspricht einem Eintrag in UC["metrics"].
-# required_fields ist ein deterministischer Python-Check (kein LLM-Judge).
 
 def _build_metric(key: str, task: dict):
     if key == "tool_correctness":
@@ -78,25 +77,38 @@ def _build_metric(key: str, task: dict):
     if key == "faithfulness":
         return FaithfulnessMetric(threshold=0.7, model=_EVAL_MODEL)
     if key == "hallucination":
-        # Score 0 = keine Halluzination (gut), Score 1 = vollständige Halluzination (schlecht)
         return HallucinationMetric(threshold=0.5, model=_EVAL_MODEL)
     raise ValueError(f"Unbekannter Metrik-Schlüssel: '{key}'")
 
 
-# ─── Hilfsfunktion ────────────────────────────────────────────────────────────
+# ─── Ergebnis-Cache ───────────────────────────────────────────────────────────
 
-_cache: dict[str, tuple[str, list[ToolCall]]] = {}
+_cache: dict[str, tuple[str, list[ToolCall]] | None] = {}
+_errors: dict[str, str] = {}
 
 
-def run_and_record(task: dict) -> tuple[str, list[ToolCall]]:
-    """Führt den Agenten aus, erfasst Kosten und gibt Output + ToolCall-Objekte zurück.
-    Ergebnis wird pro Task-ID gecacht, damit der Agent nur einmal pro Task läuft."""
+def run_and_record(task: dict) -> tuple[str, list[ToolCall]] | None:
+    """Führt den Agenten aus, erfasst Kosten und cached das Ergebnis.
+    Gibt None zurück wenn der Agent fehlschlägt (Quota, Timeout, Auth-Fehler)."""
     task_id = task["id"]
     if task_id not in _cache:
-        result = agent.run(task["input"])
-        tracker.record(task_id, result["cost"])
-        _cache[task_id] = (result["output"], [ToolCall(name=name) for name in result["tools_called"]])
+        try:
+            result = agent.run(task["input"])
+            tracker.record(task_id, result["cost"])
+            _cache[task_id] = (result["output"], [ToolCall(name=name) for name in result["tools_called"]])
+        except Exception as exc:
+            err_str = str(exc)
+            tracker.record_error(task_id, err_str)
+            _cache[task_id] = None
+            _errors[task_id] = err_str
     return _cache[task_id]
+
+
+def _skip_if_error(task: dict) -> None:
+    task_id = task["id"]
+    if _cache.get(task_id) is None and task_id in _errors:
+        short = _errors[task_id][:160].replace("\n", " ")
+        pytest.skip(f"Agent fehlgeschlagen – {short}")
 
 
 # ─── Tests ────────────────────────────────────────────────────────────────────
@@ -107,7 +119,9 @@ def test_tool_correctness(task: dict):
     if "tool_correctness" not in _UC["metrics"]:
         pytest.skip(f"tool_correctness nicht in Metrik-Set von {_UC['id']}")
 
-    actual_output, tools_called = run_and_record(task)
+    run_and_record(task)
+    _skip_if_error(task)
+    actual_output, tools_called = _cache[task["id"]]
     expected_tools = [ToolCall(name=name) for name in task["expected_tools"]]
 
     test_case = LLMTestCase(
@@ -130,7 +144,10 @@ def test_task_completion(task: dict):
     if "task_completion" not in _UC["metrics"]:
         pytest.skip(f"task_completion nicht in Metrik-Set von {_UC['id']}")
 
-    actual_output, _ = run_and_record(task)
+    run_and_record(task)
+    _skip_if_error(task)
+    actual_output, _ = _cache[task["id"]]
+
     test_case = LLMTestCase(
         input=task["input"],
         actual_output=actual_output,
@@ -154,7 +171,10 @@ def test_answer_relevancy(task: dict):
     if "answer_relevancy" not in _UC["metrics"]:
         pytest.skip(f"answer_relevancy nicht in Metrik-Set von {_UC['id']}")
 
-    actual_output, _ = run_and_record(task)
+    run_and_record(task)
+    _skip_if_error(task)
+    actual_output, _ = _cache[task["id"]]
+
     test_case = LLMTestCase(input=task["input"], actual_output=actual_output)
 
     metric = AnswerRelevancyMetric(threshold=0.7, model=_EVAL_MODEL)
@@ -174,12 +194,11 @@ def test_faithfulness(task: dict):
     if "faithfulness" not in _UC["metrics"]:
         pytest.skip(f"faithfulness nicht in Metrik-Set von {_UC['id']}")
 
-    actual_output, _ = run_and_record(task)
+    run_and_record(task)
+    _skip_if_error(task)
+    actual_output, _ = _cache[task["id"]]
 
-    # Retrieval-Kontext: Tool-Outputs aus dem Cache-Lauf extrahieren
-    # Für UC3 sind das die Passagen aus retrieve_regulatory_corpus
     retrieval_context = [task.get("expected_output", "")]
-
     test_case = LLMTestCase(
         input=task["input"],
         actual_output=actual_output,
@@ -203,11 +222,11 @@ def test_hallucination(task: dict):
     if "hallucination" not in _UC["metrics"]:
         pytest.skip(f"hallucination nicht in Metrik-Set von {_UC['id']}")
 
-    actual_output, _ = run_and_record(task)
+    run_and_record(task)
+    _skip_if_error(task)
+    actual_output, _ = _cache[task["id"]]
 
-    # Kontext: was tatsächlich bekannt war (Transkript-Inhalt als Grounding)
     context = [task.get("input", ""), task.get("expected_output", "")]
-
     test_case = LLMTestCase(
         input=task["input"],
         actual_output=actual_output,
@@ -218,7 +237,6 @@ def test_hallucination(task: dict):
     with get_openai_callback() as cb:
         metric.measure(test_case)
     judge_cost = calc_cost_usd(_EVAL_MODEL, cb.prompt_tokens, cb.completion_tokens)
-    # hallucination ist invers: niedrigerer Score = weniger Halluzination = besser
     passed = metric.score <= 0.5
     tracker.update_metrics(task["id"], {
         "hallucination": round(metric.score, 3),
@@ -233,21 +251,18 @@ def test_required_fields(task: dict):
     if "required_fields" not in _UC["metrics"]:
         pytest.skip(f"required_fields nicht in Metrik-Set von {_UC['id']}")
 
-    actual_output, _ = run_and_record(task)
+    run_and_record(task)
+    _skip_if_error(task)
+    actual_output, tools_called = _cache[task["id"]]
 
     from usecases.uc4_beratungsdoku.tools import VVG_REQUIRED_FIELDS
 
-    # Prüfe ob Pflichtfelder in der Ausgabe erwähnt sind (oder als fehlend markiert)
-    # Tasks die fehlende Felder erwarten (should_escalate=True) gelten als bestanden,
-    # wenn flag_missing_information korrekt aufgerufen wurde (in tools_called)
-    _, tools_called = _cache.get(task["id"], (actual_output, []))
     tool_names = [tc.name for tc in tools_called]
 
     if task.get("should_escalate"):
         passed = "flag_missing_information" in tool_names
         score = 1.0 if passed else 0.0
     else:
-        # Vollständiges Protokoll erwartet: alle Felder sollen in der Ausgabe erscheinen
         found = sum(1 for f in VVG_REQUIRED_FIELDS if f.lower() in actual_output.lower())
         score = round(found / len(VVG_REQUIRED_FIELDS), 3)
         passed = score >= 0.7
@@ -262,6 +277,10 @@ def pytest_sessionfinish(session, exitstatus):
     """Berechnet passed-Flag aus gespeicherten Scores und gibt Report aus."""
     if not tracker.records:
         return
+    for r in tracker.records:
+        if r.get("error"):
+            r["passed"] = False
+            continue
     tracker.finalize_passed()
     tracker._save()
     tracker.print_report()

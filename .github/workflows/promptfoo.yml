@@ -8,7 +8,6 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  MODEL_NAME: ${{ vars.MODEL_NAME || 'gpt-5.4-mini' }}
 
 jobs:
   eval:
@@ -28,65 +27,37 @@ jobs:
         with:
           python-version: "3.11"
 
-      # ── Package installieren ──────────────────────────────────────────────
       - name: agenteval-ovb installieren (pip install -e .)
         run: pip install -e .
 
-      # ── Funktionalitäts-Abhängigkeiten (deepeval etc.) ────────────────────
       - name: Funktionalität – Python-Abhängigkeiten installieren
         run: pip install -r evals/functionality/requirements.txt
 
       # ── R0: Smoke Test ────────────────────────────────────────────────────
       - name: R0 – Hello-World Smoke Test
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.AGENT_API_KEY }}
+          MODEL_NAME: gpt-5.4-mini
         run: npx promptfoo@latest eval --no-cache --config promptfooconfig.yaml
 
-      # ── R2: Sicherheit ────────────────────────────────────────────────────
-      - name: R2 – Sicherheits-Taxonomie (AgentDojo / InjecAgent)
+      # ── R2 + R3: Security & Compliance – alle Agenten ─────────────────────
+      - name: R2/R3 – Security & Compliance (alle Agenten aus agents.yaml)
         continue-on-error: true
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: npx promptfoo@latest eval --no-cache --config evals/security/security_eval.yaml --output security_results.json
+          AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: python scripts/run_promptfoo_multi_agent.py
 
-      - name: R2 – Wirtschaftlichkeits-Report (Token-Kosten & Latenz)
-        continue-on-error: true
-        run: node scripts/cost_report.js security_results.json
-
-      # ── R2: Sicherheit Finance-Kontext ────────────────────────────────────
-      - name: R2 – Sicherheits-Taxonomie Finance-Kontext (manuell kuratiert)
-        continue-on-error: true
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: npx promptfoo@latest eval --no-cache --config evals/security/security_eval_finance.yaml --output security_finance_results.json
-
-      - name: R2 – Wirtschaftlichkeits-Report Finance-Kontext
-        continue-on-error: true
-        run: node scripts/cost_report.js security_finance_results.json
-
-      # ── R3: Compliance ────────────────────────────────────────────────────
-      - name: R3 – EU AI Act Compliance
-        continue-on-error: true
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: npx promptfoo@latest eval --no-cache --config evals/compliance/compliance_eval.yaml --output compliance_results.json
-
-      - name: R3 – Wirtschaftlichkeits-Report (Token-Kosten & Latenz)
-        continue-on-error: true
-        run: node scripts/cost_report.js compliance_results.json
-
-      - name: R3 – Compliance Scorecard (EU AI Act Mapping)
-        continue-on-error: true
-        run: agenteval-scorecard compliance_results.json
-
-      # ── Funktionalität: LangGraph + DeepEval ─────────────────────────────
+      # ── Funktionalität: LangGraph + DeepEval – alle Agenten ───────────────
       - name: Funktionalität – Multi-Step Agent Eval (LangGraph + DeepEval)
         continue-on-error: true
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
           DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
           DEEPEVAL_DISABLE_DOTENV: "1"
-        run: cd evals/functionality && deepeval test run test_functionality.py -v
+        run: cd evals/functionality && pytest test_functionality.py -v -n auto --dist=loadgroup
 
       # ── HTML-Report ───────────────────────────────────────────────────────
       - name: Benchmark-Report HTML generieren
@@ -100,9 +71,7 @@ jobs:
         with:
           name: eval-results
           path: |
-            security_results.json
-            security_finance_results.json
-            compliance_results.json
-            compliance_scorecard.json
-            evals/functionality/functionality_costs.json
+            *_results_*.json
+            *_scorecard_*.json
+            evals/functionality/functionality_costs_*.json
             report.html

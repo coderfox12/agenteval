@@ -1,0 +1,33 @@
+# Agent-Konfigurationen für Agent-Eval@OVB
+#
+# Jeder Eintrag definiert einen zu testenden KI-Agenten.
+# Das Framework führt alle Tests für jeden Agenten durch und
+# erzeugt am Ende einen gemeinsamen HTML-Report.
+#
+# api_key_env: Name der Umgebungsvariable in .env, die den API-Key enthält.
+# api_base:    Nur setzen für nicht-OpenAI-Endpunkte (z. B. OpenRouter).
+#              Weglassen → Standard-OpenAI-Endpunkt wird verwendet.
+#
+# Für Anthropic/Gemini/Llama etc.: OpenRouter als Proxy nutzen.
+#   model:    anthropic/claude-3-haiku  |  google/gemini-flash-1.5  |  meta-llama/...
+#   api_base: https://openrouter.ai/api/v1
+#   api_key_env: OPENROUTER_API_KEY
+
+# ── Judge (LLM-as-Judge für alle Evaluationen) ────────────────────────────────
+judge:
+  model: gpt-5.4-mini
+  api_key_env: JUDGE_API_KEY
+  # api_base: optional, z.B. https://openrouter.ai/api/v1 für OpenRouter als Judge
+
+agents:
+  - id: gpt-5-4-mini
+    label: "GPT-5.4-mini (OpenAI)"
+    model: gpt-5.4-mini
+    api_key_env: AGENT_API_KEY
+    # api_base nicht gesetzt → OpenAI-Standard
+
+  - id: llama-3-openrouter
+    label: "Llama 3.1 8B (OpenRouter, kostenlos)"
+    model: meta-llama/llama-3.1-8b-instruct:free
+    api_key_env: OPENROUTER_API_KEY
+    api_base: https://openrouter.ai/api/v1

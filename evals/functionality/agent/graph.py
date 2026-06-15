@@ -4,6 +4,10 @@ UseCaseAgent – generischer LangGraph-ReAct-Agent für alle Use Cases.
 Tools, System-Prompt und Provider werden über den Konstruktor injiziert,
 damit jeder UC ein eigenständiges, steckbares Paket bleibt.
 
+Unterstützte API-Anbieter: alle OpenAI-kompatiblen Endpunkte.
+Für Anthropic/Gemini etc. einfach OpenRouter als Proxy nutzen
+(api_base=https://openrouter.ai/api/v1, Modellname z.B. anthropic/claude-3-haiku).
+
 LangSmith-Tracing (optional):
   Wenn folgende Umgebungsvariablen gesetzt sind, werden alle Traces
   automatisch an LangSmith übertragen – kein Code-Änderung nötig:
@@ -36,19 +40,21 @@ class UseCaseAgent:
         system_prompt: str,
         model: str | None = None,
         provider: str = "openai",
+        api_key: str | None = None,
+        api_base: str | None = None,
     ):
-        model = model or os.environ.get("MODEL_NAME", "gpt-5.4-mini")
+        model = model or os.environ.get("AGENT_MODEL_NAME") or os.environ.get("MODEL_NAME", "gpt-5.4-mini")
         self.model_name = model
         self.system_prompt = system_prompt
         self.tools = tools
-        llm = self._make_llm(provider, model)
+        llm = self._make_llm(provider, model, api_key=api_key, api_base=api_base)
         self.llm_with_tools = llm.bind_tools(tools)
         self.graph = self._build_graph()
 
-    def _make_llm(self, provider: str, model: str):
+    def _make_llm(self, provider: str, model: str, api_key: str | None = None, api_base: str | None = None):
         if provider == "openai":
             from langchain_openai import ChatOpenAI
-            return ChatOpenAI(model=model, temperature=0)
+            return ChatOpenAI(model=model, temperature=0, api_key=api_key, base_url=api_base)
         raise ValueError(
             f"Unsupported provider '{provider}'. "
             "Add a branch here for langchain_anthropic / langchain_google_genai."

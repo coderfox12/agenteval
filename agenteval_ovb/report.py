@@ -43,14 +43,43 @@ def _promptfoo_results(data: dict | None) -> list[dict]:
     return data.get("results", {}).get("results", data.get("results", []))
 
 
+def _is_provider_error(r: dict) -> bool:
+    """Erkennt ob ein Promptfoo-Ergebnis ein Provider-/API-Fehler war
+    (z. B. Quota erschöpft, Timeout) und keine echte Agenten-Antwort enthält."""
+    resp   = r.get("response") or {}
+    output = str(resp.get("output", "") or "")
+    # Explizites Fehlerfeld im Response-Objekt
+    if resp.get("error"):
+        return True
+    # Promptfoo-Fehlerpräfix im Output (tritt bei 429 / Provider-Down auf)
+    if output.lstrip().startswith("[ERROR]"):
+        return True
+    return False
+
+
+def _api_error_banner(count: int, context: str) -> str:
+    """Gibt ein gelbes Warning-Banner zurück, das Provider-/API-Fehler anzeigt."""
+    return (
+        '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;'
+        'padding:14px 18px;margin:16px 0 20px;font-size:.88rem;line-height:1.6">'
+        f'⚠️ <strong>{count} Test(s) durch API-Fehler nicht auswertbar</strong> – '
+        f'{context} '
+        'Mögliche Ursache: API-Kontingent erschöpft oder Anbieter überlastet. '
+        'Diese Tests zählen als nicht bestanden.'
+        '</div>'
+    )
+
+
 def _parse_security(results: list[dict]) -> dict:
     by_class: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
-    total_pass = total_fail = 0
+    total_pass = total_fail = provider_errors = 0
     token_total = cost_total = latency_sum = latency_count = judge_calls = 0
 
     for r in results:
         if not r:
             continue
+        if _is_provider_error(r):
+            provider_errors += 1
         success = r.get("success", r.get("pass", False))
         meta = r.get("testCase", {}).get("metadata", {})
         attack_class = meta.get("attack_class", "Unbekannt")
@@ -78,23 +107,26 @@ def _parse_security(results: list[dict]) -> dict:
                 judge_calls += 1
 
     return {
-        "total_pass": total_pass,
-        "total_fail": total_fail,
-        "by_class": dict(by_class),
-        "token_total": token_total,
-        "cost_usd": round(cost_total, 6),
-        "latency_p50_ms": round(latency_sum / max(latency_count, 1)),
-        "judge_calls": judge_calls,
+        "total_pass":      total_pass,
+        "total_fail":      total_fail,
+        "by_class":        dict(by_class),
+        "token_total":     token_total,
+        "cost_usd":        round(cost_total, 6),
+        "latency_p50_ms":  round(latency_sum / max(latency_count, 1)),
+        "judge_calls":     judge_calls,
+        "provider_errors": provider_errors,
     }
 
 
 def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
     """Gibt (by_article, stats) zurück. stats enthält cost_usd, token_total, latency_p50_ms."""
     by_article: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
-    token_total = cost_total = latency_sum = latency_count = judge_calls = 0
+    token_total = cost_total = latency_sum = latency_count = judge_calls = provider_errors = 0
     for r in results:
         if not r:
             continue
+        if _is_provider_error(r):
+            provider_errors += 1
         success = r.get("success", r.get("pass", False))
         meta = r.get("testCase", {}).get("metadata", {})
         article_raw = meta.get("article", "")
@@ -120,8 +152,23 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
         "cost_usd":        round(cost_total, 6),
         "latency_p50_ms":  round(latency_sum / max(latency_count, 1)),
         "judge_calls":     judge_calls,
+        "provider_errors": provider_errors,
     }
     return dict(by_article), stats
+
+
+def _load_judge_model_from_config() -> str | None:
+    """Liest das Judge-Modell aus agents.yaml, falls die Datei existiert."""
+    try:
+        import yaml as _yaml
+        candidates = [Path("agents.yaml"), Path(__file__).parent.parent / "agents.yaml"]
+        for p in candidates:
+            if p.exists():
+                cfg = _yaml.safe_load(p.read_text(encoding="utf-8"))
+                return cfg.get("judge", {}).get("model")
+    except Exception:
+        pass
+    return None
 
 
 def _parse_func_costs(data: dict | None) -> dict:
@@ -182,6 +229,37 @@ tr:hover td { background: #f7f9fc; }
 .bar.ok   { background: #00b894; }
 .bar.err  { background: #d63031; }
 .section  { margin-bottom: 8px; }
+.section-group { background: #fff; border-radius: 14px;
+                 box-shadow: 0 3px 18px rgba(0,0,0,.10);
+                 margin-bottom: 52px; overflow: hidden; }
+.section-group-body { padding: 28px 32px; }
+.section-group-body > h2:first-child { margin-top: 0; }
+.agent-divider { margin: 0; padding: 20px 28px;
+                 background: linear-gradient(135deg, #1a2744 0%, #2d4880 100%);
+                 color: #fff; font-size: 1.05rem; font-weight: 700; }
+.agent-divider .agent-model { font-size: .82rem; font-weight: 400;
+                               opacity: .7; margin-left: 10px; }
+.chart-wrap { background: #fff; border-radius: 10px; padding: 24px 28px;
+              box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 16px; }
+.chart-title { font-size: .82rem; font-weight: 700; color: #636e72;
+               text-transform: uppercase; letter-spacing: .05em; margin-bottom: 18px; }
+.chart-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.chart-label { width: 180px; font-size: .85rem; font-weight: 600;
+               color: #2d3436; flex-shrink: 0; white-space: nowrap;
+               overflow: hidden; text-overflow: ellipsis; }
+.chart-bar-track { flex: 1; background: #f0f0f0; border-radius: 6px; height: 22px;
+                   position: relative; overflow: hidden; }
+.chart-bar-fill { height: 100%; border-radius: 6px; transition: width .3s;
+                  display: flex; align-items: center; padding-left: 8px;
+                  font-size: .75rem; font-weight: 700; color: #fff; white-space: nowrap; }
+.chart-bar-fill.ok   { background: #00b894; }
+.chart-bar-fill.warn { background: #fdcb6e; color: #856404; }
+.chart-bar-fill.err  { background: #d63031; }
+.chart-legend { display: flex; gap: 20px; margin-top: 6px; flex-wrap: wrap; }
+.chart-legend-item { display: flex; align-items: center; gap: 6px;
+                     font-size: .78rem; color: #636e72; }
+.chart-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.charts-grid { display: flex; flex-direction: column; gap: 16px; margin-bottom: 4px; }
 footer { text-align: center; color: #b2bec3; font-size: .78rem; padding: 32px 0; }
 """
 
@@ -260,13 +338,35 @@ def _section_summary(sec_data: dict, sec_fin_data: dict, comp_data: dict,
     cost_total = (sec_data.get("cost_usd", 0) + sec_fin_data.get("cost_usd", 0)
                   + comp_stats.get("cost_usd", 0) + func_model_cost)
 
+    # Gesamt-API-Fehler über alle Dimensionen
+    total_api_errors = (
+        func_summary.get("error_count", 0)
+        + sec_data.get("provider_errors", 0)
+        + sec_fin_data.get("provider_errors", 0)
+        + comp_stats.get("provider_errors", 0)
+    )
+    summary_banner = ""
+    if total_api_errors:
+        summary_banner = (
+            '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;'
+            'padding:12px 18px;margin:0 0 18px;font-size:.86rem;line-height:1.6">'
+            f'⚠️ <strong>Achtung – {total_api_errors} Test(s) in mindestens einer Dimension '
+            'durch API-Fehler nicht auswertbar.</strong> '
+            'Details sind in den jeweiligen Dimensionsabschnitten vermerkt.'
+            '</div>'
+        )
+
     cards = [
         _card_summary("Funktions-Tasks bestanden", func_pass, func_total, 0.8),
         _card_summary("Security-Tests bestanden",  sec_pass,  sec_total,  0.9),
         _card_summary("Compliance-Tests bestanden", comp_pass, comp_total, 0.8),
         _card(f"${cost_total:.3f}", "Modell-Kosten gesamt (USD)"),
     ]
-    return '<h2>Übersicht</h2><div class="cards">' + "".join(cards) + "</div>"
+    return (
+        '<h2>Übersicht</h2>'
+        + summary_banner
+        + '<div class="cards">' + "".join(cards) + "</div>"
+    )
 
 
 _ATTACK_CLASS_LABELS: dict[str, str] = {
@@ -312,6 +412,11 @@ def _section_security(sec_data: dict, sec_fin_data: dict) -> str:
     cost       = sec_data.get("cost_usd", 0) + sec_fin_data.get("cost_usd", 0)
     tokens     = sec_data.get("token_total", 0) + sec_fin_data.get("token_total", 0)
     lat        = sec_data.get("latency_p50_ms") or sec_fin_data.get("latency_p50_ms") or 0
+    prov_err   = sec_data.get("provider_errors", 0) + sec_fin_data.get("provider_errors", 0)
+
+    banner = (_api_error_banner(prov_err,
+              "Der Anbieter hat auf einen Teil der Anfragen nicht geantwortet.")
+              if prov_err else "")
 
     cards = [
         _card(f"{total_pass}/{total_all}", "Tests bestanden",
@@ -320,14 +425,17 @@ def _section_security(sec_data: dict, sec_fin_data: dict) -> str:
         _card(f"${cost:.3f}", "Modell-Kosten (USD)"),
         _card(f"{_fmt_int(lat)} ms", "Ø Latenz"),
     ]
+    if prov_err:
+        cards.append(_card(str(prov_err), "Nicht auswertbar (API-Fehler)", "err"))
 
     return (
         "<h2>Dimension 2 – Sicherheit</h2>"
-        '<div class="cards">' + "".join(cards) + "</div>"
-        "<br>"
-        "<table><thead><tr>"
-        "<th>Angriffsklasse</th><th>Bestanden</th><th>Rate</th><th>Verteilung</th>"
-        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        + banner
+        + '<div class="cards">' + "".join(cards) + "</div>"
+        + "<br>"
+        + "<table><thead><tr>"
+        + "<th>Angriffsklasse</th><th>Bestanden</th><th>Rate</th><th>Verteilung</th>"
+        + "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
     )
 
 
@@ -357,9 +465,14 @@ def _section_compliance(comp_data: dict, comp_stats: dict, scorecard: dict | Non
     overall_str = f"{overall_rate:.0%}" if overall_rate is not None else "–"
     overall_cls = "ok" if (overall_rate or 0) >= 0.8 else ("warn" if (overall_rate or 0) >= 0.6 else "err")
 
-    cost    = comp_stats.get("cost_usd", 0)
-    tokens  = comp_stats.get("token_total", 0)
-    lat     = comp_stats.get("latency_p50_ms", 0)
+    cost      = comp_stats.get("cost_usd", 0)
+    tokens    = comp_stats.get("token_total", 0)
+    lat       = comp_stats.get("latency_p50_ms", 0)
+    prov_err  = comp_stats.get("provider_errors", 0)
+
+    banner = (_api_error_banner(prov_err,
+              "Der Anbieter hat auf einen Teil der Compliance-Anfragen nicht geantwortet.")
+              if prov_err else "")
 
     cards = [
         _card(overall_str, "Compliance-Gesamtrate",
@@ -368,73 +481,121 @@ def _section_compliance(comp_data: dict, comp_stats: dict, scorecard: dict | Non
         _card(f"${cost:.3f}", "Modell-Kosten (USD)"),
         _card(f"{_fmt_int(lat)} ms", "Ø Latenz"),
     ]
+    if prov_err:
+        cards.append(_card(str(prov_err), "Nicht auswertbar (API-Fehler)", "err"))
 
     return (
         "<h2>Dimension 3 – Compliance</h2>"
-        '<div class="cards">' + "".join(cards) + "</div><br>"
-        "<table><thead><tr>"
-        "<th>Artikel</th><th>Bestanden</th><th>Rate</th><th>Verteilung</th><th>Status</th>"
-        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        + banner
+        + '<div class="cards">' + "".join(cards) + "</div><br>"
+        + "<table><thead><tr>"
+        + "<th>Artikel</th><th>Bestanden</th><th>Rate</th><th>Verteilung</th><th>Status</th>"
+        + "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
     )
 
 
 def _section_functionality(func_data: dict) -> str:
     if not func_data:
-        return "<h2>Dimension 1 – Funktionalität</h2><p style='color:#636e72; margin-top:12px'>Keine Daten vorhanden.</p>"
+        return ("<h2>Dimension 1 – Funktionalität</h2>"
+                "<p style='color:#636e72; margin-top:12px'>Keine Daten vorhanden.</p>")
 
     records = func_data.get("records", [])
     summary = func_data.get("summary", {})
 
-    rows = []
-    for r in records:
-        task_id = r.get("task_id", "–")
-        passed = r.get("passed")
-        tool_score = r.get("tool_correctness")
-        task_score = r.get("task_completion")
-        rel_score = r.get("answer_relevancy")
-        cost = r.get("cost_usd", 0)
-        latency = r.get("latency_ms", 0)
+    if not records:
+        return ("<h2>Dimension 1 – Funktionalität</h2>"
+                "<p style='color:#636e72; margin-top:12px'>Keine Task-Daten vorhanden.</p>")
 
-        if passed is None:
-            badge = '<span class="badge warn">–</span>'
-        elif passed:
-            badge = '<span class="badge ok">✓ OK</span>'
-        else:
-            badge = '<span class="badge err">✗ Fail</span>'
+    err_records = [r for r in records if r.get("error")]
 
-        def _fmt(v):
-            return f"{v:.2f}" if v is not None else "–"
-
-        rows.append(
-            f"<tr><td>{task_id}</td><td>{badge}</td>"
-            f"<td>{_fmt(tool_score)}</td><td>{_fmt(task_score)}</td><td>{_fmt(rel_score)}</td>"
-            f"<td>${cost:.4f}</td><td>{_fmt_int(latency)} ms</td></tr>"
+    # ── Abort-Banner ──────────────────────────────────────────────────────────
+    banner = ""
+    if err_records:
+        first_err = err_records[0]
+        at_str = f" um {first_err['aborted_at']}" if first_err.get("aborted_at") else ""
+        banner = (
+            '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;'
+            'padding:14px 18px;margin:16px 0 20px;font-size:.88rem;line-height:1.6">'
+            f'⚠️ <strong>{len(err_records)} Task(s) durch API-Fehler abgebrochen</strong> – '
+            f'Erste Unterbrechung bei Task <code>{first_err["task_id"]}</code>{at_str}. '
+            'Mögliche Ursache: API-Kontingent erschöpft oder Anbieter überlastet. '
+            'Übersprungene Tasks zählen als nicht bestanden.'
+            '</div>'
         )
 
-    total_tasks = len(records)
-    passed_tasks = sum(1 for r in records if r.get("passed"))
-    model_cost = summary.get("agent_cost_usd", summary.get("total_cost_usd", 0))
-    avg_latency = summary.get("avg_latency_ms", 0)
+    # ── Tabellenzeilen ────────────────────────────────────────────────────────
+    rows = []
+    for r in records:
+        task_id   = r.get("task_id", "–")
+        error_msg = r.get("error")
+
+        if error_msg:
+            short_err  = (error_msg[:180] + "…") if len(error_msg) > 180 else error_msg
+            aborted_at = r.get("aborted_at", "")
+            time_info  = (f"<br><small style='color:#b2bec3'>Abgebrochen: {aborted_at}</small>"
+                          if aborted_at else "")
+            rows.append(
+                f'<tr style="background:#fff8f8">'
+                f'<td><code>{task_id}</code></td>'
+                f'<td><span class="badge err">⚠ API-Fehler</span></td>'
+                f'<td colspan="3" style="color:#636e72;font-size:.82rem">'
+                f'{short_err}{time_info}</td>'
+                f'<td>–</td><td>–</td></tr>'
+            )
+        else:
+            passed     = r.get("passed")
+            tool_score = r.get("tool_correctness")
+            task_score = r.get("task_completion")
+            rel_score  = r.get("answer_relevancy")
+            cost       = r.get("cost_usd", 0)
+            latency    = r.get("latency_ms", 0)
+
+            if passed is None:
+                badge = '<span class="badge warn">–</span>'
+            elif passed:
+                badge = '<span class="badge ok">✓ OK</span>'
+            else:
+                badge = '<span class="badge err">✗ Fail</span>'
+
+            def _fmt(v):
+                return f"{v:.2f}" if v is not None else "–"
+
+            rows.append(
+                f"<tr><td>{task_id}</td><td>{badge}</td>"
+                f"<td>{_fmt(tool_score)}</td><td>{_fmt(task_score)}</td><td>{_fmt(rel_score)}</td>"
+                f"<td>${cost:.4f}</td><td>{_fmt_int(latency)} ms</td></tr>"
+            )
+
+    # ── Kennzahlen-Karten ─────────────────────────────────────────────────────
+    total_tasks  = len(records)
+    passed_tasks = sum(1 for r in records if r.get("passed") and not r.get("error"))
+    error_count  = len(err_records)
+    model_cost   = summary.get("agent_cost_usd", summary.get("total_cost_usd", 0))
+    avg_latency  = summary.get("avg_latency_ms", 0)
     total_tokens = summary.get("total_tokens", 0)
 
-    func_cls = _classify(passed_tasks / total_tasks, 0.8) if total_tasks else ""
-    cards = [
-        _card(f"{passed_tasks}/{total_tasks}", "Tasks bestanden", func_cls),
+    cards = [_card_summary("Tasks bestanden", passed_tasks, total_tasks, 0.8)]
+    if error_count:
+        cards.append(_card(str(error_count), "Abgebrochen (API-Fehler)", "err"))
+    cards += [
         _card(f"{_fmt_int(total_tokens)}", "Tokens gesamt"),
         _card(f"${model_cost:.4f}", "Modell-Kosten (USD)"),
         _card(f"{_fmt_int(avg_latency)} ms", "Ø Latenz"),
     ]
 
-    table_rows = "".join(rows) if rows else "<tr><td colspan='7' style='color:#636e72'>Keine Task-Daten</td></tr>"
+    table_rows = ("".join(rows)
+                  if rows else
+                  "<tr><td colspan='7' style='color:#636e72'>Keine Task-Daten</td></tr>")
 
     return (
         "<h2>Dimension 1 – Funktionalität</h2>"
-        '<div class="cards">' + "".join(cards) + "</div><br>"
-        "<table><thead><tr>"
-        "<th>Task</th><th>Status</th><th>Tool Correctness</th>"
-        "<th>Task Completion</th><th>Answer Relevancy</th>"
-        "<th>Modell-Kosten (USD)</th><th>Latenz</th>"
-        "</tr></thead><tbody>" + table_rows + "</tbody></table>"
+        + banner
+        + '<div class="cards">' + "".join(cards) + "</div><br>"
+        + "<table><thead><tr>"
+        + "<th>Task</th><th>Status</th><th>Tool Correctness</th>"
+        + "<th>Task Completion</th><th>Answer Relevancy</th>"
+        + "<th>Modell-Kosten (USD)</th><th>Latenz</th>"
+        + "</tr></thead><tbody>" + table_rows + "</tbody></table>"
     )
 
 
@@ -493,6 +654,391 @@ def _section_eval_overhead(
 
 
 # ---------------------------------------------------------------------------
+# Multi-Agent-Vergleich
+# ---------------------------------------------------------------------------
+
+def _radar_svg(entries: list[dict]) -> str:
+    """Inline SVG Radar/Spider-Chart (5 Achsen, kein JS, kein CDN)."""
+    import math
+
+    W, H = 660, 420
+    cx, cy, r = 270, 205, 130
+
+    AXES = [
+        ("D1 Funktionalität", "func_rate"),
+        ("D2 Sicherheit",     "sec_rate"),
+        ("Geschwindigkeit",   "speed_rate"),
+        ("Kosteneffizienz",   "cost_rate"),
+        ("D3 Compliance",     "comp_rate"),
+    ]
+    n_axes = len(AXES)
+    angles = [-math.pi / 2 + i * 2 * math.pi / n_axes for i in range(n_axes)]
+    COLORS = ["#0984e3", "#00b894", "#e17055", "#6c5ce7", "#fd79a8"]
+
+    def pt(axis_i: int, frac: float) -> tuple[float, float]:
+        a = angles[axis_i]
+        return cx + frac * r * math.cos(a), cy + frac * r * math.sin(a)
+
+    svg: list[str] = [
+        f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" '
+        f'style="width:100%;max-width:{W}px;height:auto;display:block">'
+    ]
+
+    # Grid-Pentagone
+    for lvl in [0.2, 0.4, 0.6, 0.8, 1.0]:
+        pts = " ".join(f"{pt(i, lvl)[0]:.1f},{pt(i, lvl)[1]:.1f}" for i in range(n_axes))
+        color = "#b2bec3" if lvl == 1.0 else "#dfe6e9"
+        sw    = "1.2"    if lvl == 1.0 else "0.7"
+        svg.append(f'<polygon points="{pts}" fill="none" stroke="{color}" stroke-width="{sw}"/>')
+
+    # Achsenlinien
+    for i in range(n_axes):
+        x2, y2 = pt(i, 1.0)
+        svg.append(f'<line x1="{cx}" y1="{cy}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="#dfe6e9" stroke-width="0.7"/>')
+
+    # Prozent-Labels an der ersten Achse
+    for lvl in [0.2, 0.4, 0.6, 0.8, 1.0]:
+        lx, ly = pt(0, lvl)
+        svg.append(
+            f'<text x="{lx + 4:.0f}" y="{ly:.0f}" font-size="9" fill="#b2bec3" '
+            f'dominant-baseline="middle">{int(lvl * 100)}%</text>'
+        )
+
+    # Achsen-Beschriftungen
+    label_scale = 1.30
+    for i, (label, _) in enumerate(AXES):
+        lx, ly = pt(i, label_scale)
+        if lx < cx - 8:
+            anchor, dx = "end", -2
+        elif lx > cx + 8:
+            anchor, dx = "start", 2
+        else:
+            anchor, dx = "middle", 0
+        svg.append(
+            f'<text x="{lx + dx:.0f}" y="{ly:.0f}" font-size="11" font-weight="600" '
+            f'fill="#1a2744" text-anchor="{anchor}" dominant-baseline="middle">{label}</text>'
+        )
+
+    # Agent-Polygone (Fläche + Umriss)
+    for idx, entry in enumerate(entries):
+        color  = COLORS[idx % len(COLORS)]
+        scores = [max(0.0, min(1.0, entry.get(key, 0.0))) for _, key in AXES]
+        pts    = " ".join(f"{pt(i, scores[i])[0]:.1f},{pt(i, scores[i])[1]:.1f}" for i in range(n_axes))
+        svg.append(
+            f'<polygon points="{pts}" fill="{color}" fill-opacity="0.13" '
+            f'stroke="{color}" stroke-width="2.2" stroke-linejoin="round"/>'
+        )
+        for i in range(n_axes):
+            dx2, dy2 = pt(i, scores[i])
+            svg.append(
+                f'<circle cx="{dx2:.1f}" cy="{dy2:.1f}" r="4.5" '
+                f'fill="{color}" stroke="#fff" stroke-width="1.5"/>'
+            )
+
+    # Legende
+    leg_x, leg_y = 440, 52
+    leg_row_h = 28
+    leg_h = len(entries) * leg_row_h + 18
+    leg_w = 208
+    svg.append(
+        f'<rect x="{leg_x - 10}" y="{leg_y - 10}" width="{leg_w}" height="{leg_h}" '
+        f'rx="7" fill="#f8f9fa" stroke="#dfe6e9" stroke-width="0.9"/>'
+    )
+    for idx, entry in enumerate(entries):
+        color = COLORS[idx % len(COLORS)]
+        ey    = leg_y + idx * leg_row_h
+        svg.append(f'<rect x="{leg_x}" y="{ey}" width="13" height="13" rx="3" fill="{color}"/>')
+        lbl = entry["label"][:26] + ("…" if len(entry["label"]) > 26 else "")
+        svg.append(f'<text x="{leg_x + 19}" y="{ey + 10}" font-size="10.5" fill="#2d3436">{lbl}</text>')
+
+    svg.append("</svg>")
+    return "".join(svg)
+
+
+def _chart_bar(label: str, pct: float, cls: str, value_str: str) -> str:
+    """Einzelne horizontale Balkenzeile für den Vergleichs-Chart."""
+    width = round(pct * 100)
+    return (
+        f'<div class="chart-row">'
+        f'<div class="chart-label" title="{label}">{label}</div>'
+        f'<div class="chart-bar-track">'
+        f'<div class="chart-bar-fill {cls}" style="width:{width}%">'
+        f'{value_str if width > 15 else ""}'
+        f'</div>'
+        f'</div>'
+        f'<span style="font-size:.78rem;color:#636e72;width:48px;text-align:right">{value_str}</span>'
+        f'</div>'
+    )
+
+
+def _section_comparison(agents_data: list[dict]) -> str:
+    """Vergleich aller getesteten Agenten: Balkendiagramme + Tabelle."""
+    if len(agents_data) <= 1:
+        return ""
+
+    # ── Daten pro Agent berechnen ─────────────────────────────────────────
+    entries = []
+    for e in agents_data:
+        func        = e.get("func_data") or {}
+        records     = func.get("records", [])
+        summary     = func.get("summary", {})
+        sec         = e.get("sec_data") or {}
+        sec_fin     = e.get("sec_fin_data") or {}
+        comp_d      = e.get("comp_data") or {}
+        comp_stats_e = e.get("comp_stats") or {}
+
+        func_total  = len(records)
+        func_passed = sum(1 for r in records if r.get("passed"))
+        func_rate   = func_passed / func_total if func_total else 0.0
+
+        sec_pass  = sec.get("total_pass", 0) + sec_fin.get("total_pass", 0)
+        sec_total = sec_pass + sec.get("total_fail", 0) + sec_fin.get("total_fail", 0)
+        sec_rate  = sec_pass / sec_total if sec_total else 0.0
+
+        comp_pass  = sum(v["pass"] for v in comp_d.values()) if comp_d else 0
+        comp_total = comp_pass + sum(v["fail"] for v in comp_d.values()) if comp_d else 0
+        comp_rate  = comp_pass / comp_total if comp_total else 0.0
+
+        # Kosten: Summe aus Funktionalität + Security + Compliance
+        func_cost = summary.get("agent_cost_usd", summary.get("total_cost_usd", 0))
+        sec_cost  = sec.get("cost_usd", 0) + sec_fin.get("cost_usd", 0)
+        comp_cost = comp_stats_e.get("cost_usd", 0)
+        cost      = func_cost + sec_cost + comp_cost
+
+        # Latenz: bevorzuge Funktionalität, Fallback auf Security
+        latency = (summary.get("avg_latency_ms") or
+                   sec.get("latency_p50_ms") or
+                   sec_fin.get("latency_p50_ms") or 0)
+
+        func_errors = sum(1 for r in records if r.get("error"))
+
+        entries.append({
+            "label":       e["label"],
+            "model":       e["model"],
+            "func_rate":   func_rate,  "func_pass":   func_passed,  "func_total":   func_total,
+            "func_errors": func_errors,
+            "sec_rate":    sec_rate,   "sec_pass":    sec_pass,     "sec_total":    sec_total,
+            "comp_rate":   comp_rate,  "comp_pass":   comp_pass,    "comp_total":   comp_total,
+            "cost":        cost,
+            "latency":     latency,
+        })
+
+    # Kosteneffizienz + Geschwindigkeit normalisieren (bester Agent = 1.0)
+    max_cost = max((e["cost"]    for e in entries), default=1) or 1
+    max_lat  = max((e["latency"] for e in entries), default=1) or 1
+    for e in entries:
+        e["cost_rate"]  = 1.0 - e["cost"]    / max_cost
+        e["speed_rate"] = 1.0 - e["latency"] / max_lat
+
+    # ── Radar-Chart ───────────────────────────────────────────────────────
+    radar = (
+        '<div class="chart-wrap" style="margin-bottom:16px">'
+        '<div class="chart-title">Gesamtprofil – alle Dimensionen im Vergleich</div>'
+        + _radar_svg(entries)
+        + '<p style="font-size:.78rem;color:#b2bec3;margin-top:8px">'
+        'Kosteneffizienz und Geschwindigkeit sind relativ normalisiert: '
+        'der günstigste/schnellste Agent erhält 100 %.</p>'
+        + '</div>'
+    )
+
+    # ── Balkendiagramme (eine Kachel pro Dimension) ───────────────────────
+    def _chart(title: str, rate_key: str, pass_key: str, total_key: str, threshold: float) -> str:
+        bars = "".join(
+            _chart_bar(
+                label=e["label"],
+                pct=e[rate_key],
+                cls=_classify(e[rate_key], threshold) if e[total_key] else "warn",
+                value_str=f"{e[pass_key]}/{e[total_key]}" if e[total_key] else "–",
+            )
+            for e in entries
+        )
+        return (
+            f'<div class="chart-wrap">'
+            f'<div class="chart-title">{title}</div>'
+            f'{bars}'
+            f'</div>'
+        )
+
+    charts = (
+        '<div class="charts-grid">'
+        + _chart("D1 – Funktionalität",  "func_rate", "func_pass", "func_total", 0.8)
+        + _chart("D2 – Sicherheit",       "sec_rate",  "sec_pass",  "sec_total",  0.9)
+        + _chart("D3 – Compliance",       "comp_rate", "comp_pass", "comp_total", 0.8)
+        + '</div>'
+    )
+
+    # ── Vergleichstabelle ─────────────────────────────────────────────────
+    rows = []
+    for e in entries:
+        # D1-Zelle: Prozentzahl + optionales Abbruch-Symbol
+        func_badge = _pct_badge(e["func_pass"], e["func_total"], 0.8)
+        if e.get("func_errors", 0):
+            func_badge += (
+                f' <span title="{e["func_errors"]} Task(s) durch API-Fehler abgebrochen" '
+                f'style="color:#e17055;font-weight:700;cursor:help">⚠</span>'
+            )
+        rows.append(
+            f"<tr>"
+            f"<td><strong>{e['label']}</strong><br>"
+            f"<small style='color:#636e72'>{e['model']}</small></td>"
+            f"<td>{func_badge}</td>"
+            f"<td>{_pct_badge(e['sec_pass'],  e['sec_total'],  0.9)}</td>"
+            f"<td>{_pct_badge(e['comp_pass'], e['comp_total'], 0.8)}</td>"
+            f"<td>${e['cost']:.4f}</td>"
+            f"<td>{_fmt_int(e['latency'])} ms</td>"
+            f"</tr>"
+        )
+
+    table = (
+        "<table><thead><tr>"
+        "<th>Agent / Modell</th>"
+        "<th>D1 Funktionalität</th>"
+        "<th>D2 Sicherheit</th>"
+        "<th>D3 Compliance</th>"
+        "<th>Agent-Kosten (USD)</th>"
+        "<th>Ø Latenz</th>"
+        "</tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+
+    return "<h2>Agenten-Vergleich</h2>" + radar + charts + "<br>" + table
+
+
+def _agent_block(entry: dict, judge_model: str) -> str:
+    """Erzeugt den vollständigen HTML-Block für einen einzelnen Agenten.
+    Alle Daten (Security, Compliance, Funktionalität) kommen aus entry."""
+    label        = entry["label"]
+    model        = entry["model"]
+    func_data    = entry.get("func_data") or {}
+    sec_data     = entry.get("sec_data") or {}
+    sec_fin_data = entry.get("sec_fin_data") or {}
+    comp_data    = entry.get("comp_data") or {}
+    comp_stats   = entry.get("comp_stats") or {}
+    scorecard    = entry.get("scorecard")
+
+    divider = (
+        f'<div class="agent-divider">'
+        f'{label}'
+        f'<span class="agent-model">{model}</span>'
+        f'</div>'
+    )
+
+    body = (
+        _section_summary(sec_data, sec_fin_data, comp_data, comp_stats, scorecard, func_data)
+        + _section_functionality(func_data)
+        + _section_security(sec_data, sec_fin_data)
+        + _section_compliance(comp_data, comp_stats, scorecard)
+        + _section_eval_overhead(sec_data, sec_fin_data, comp_stats, func_data, judge_model)
+    )
+
+    return (
+        '<div class="section-group">'
+        + divider
+        + '<div class="section-group-body">' + body + '</div>'
+        + '</div>'
+    )
+
+
+def generate_multi_agent_report(
+    agents_config: list[dict],
+    functionality_dir: str = "evals/functionality",
+    security_paths: list[str] | None = None,
+    compliance_path: str | None = None,
+    scorecard_path: str | None = None,
+    out_path: str = "report.html",
+    judge_model: str | None = None,
+) -> Path:
+    """Erzeugt einen einzelnen HTML-Report für alle Agenten in agents_config.
+
+    Oben steht der Agenten-Vergleich, darunter folgen die Einzelauswertungen.
+    Security- und Compliance-Daten gelten für alle Agenten gemeinsam
+    (werden pro Agent-Block wiederholt angezeigt).
+    """
+    security_paths = security_paths or []
+    _judge = judge_model or _load_judge_model_from_config() or os.environ.get("JUDGE_MODEL_NAME", "gpt-5.4-mini")
+
+    # Daten pro Agent laden (Security, Compliance, Funktionalität)
+    agents_data = []
+    for cfg in agents_config:
+        agent_id = cfg["id"]
+
+        # Security – per-Agent-Dateien, Fallback auf geteilte Dateien
+        sec_path     = f"security_results_{agent_id}.json"
+        sec_fin_path = f"security_finance_results_{agent_id}.json"
+        sec_data     = _parse_security(_promptfoo_results(
+            _load_json(sec_path) or (_load_json(security_paths[0]) if security_paths else None)
+        ))
+        sec_fin_data = _parse_security(_promptfoo_results(
+            _load_json(sec_fin_path) or (_load_json(security_paths[1]) if len(security_paths) > 1 else None)
+        ))
+
+        # Compliance – per-Agent-Dateien, Fallback auf geteilte Dateien
+        comp_path      = f"compliance_results_{agent_id}.json"
+        scorecard_path_agent = f"compliance_scorecard_{agent_id}.json"
+        comp_results   = _promptfoo_results(
+            _load_json(comp_path) or _load_json(compliance_path)
+        )
+        comp_data, comp_stats = _parse_compliance(comp_results)
+        scorecard = _load_json(scorecard_path_agent) or _load_json(scorecard_path)
+
+        # Funktionalität
+        func_path = Path(functionality_dir) / f"functionality_costs_{agent_id}.json"
+        func_data = _parse_func_costs(_load_json(str(func_path)))
+
+        agents_data.append({
+            "id":           agent_id,
+            "label":        cfg.get("label", agent_id),
+            "model":        cfg.get("model", ""),
+            "func_data":    func_data,
+            "sec_data":     sec_data,
+            "sec_fin_data": sec_fin_data,
+            "comp_data":    comp_data,
+            "comp_stats":   comp_stats,
+            "scorecard":    scorecard,
+        })
+
+    now = datetime.now().strftime("%d.%m.%Y %H:%M")
+    agent_names = ", ".join(e["label"] for e in agents_data)
+
+    comparison_html = (
+        '<div class="section-group">'
+        '<div class="section-group-body">'
+        + _section_comparison(agents_data)
+        + '</div></div>'
+    )
+    blocks = "".join(_agent_block(e, _judge) for e in agents_data)
+
+    html = f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent-Eval@OVB – Multi-Agent Report</title>
+<style>{_CSS}</style>
+</head>
+<body>
+<header>
+  <div class="inner">
+    <h1>Agent-Eval@OVB – Multi-Agent Report</h1>
+    <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now} &nbsp;|&nbsp; {agent_names}</p>
+  </div>
+</header>
+<div class="container">
+  {comparison_html}
+  {blocks}
+</div>
+<footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>
+</body>
+</html>"""
+
+    out = Path(out_path)
+    out.write_text(html, encoding="utf-8")
+    print(f"✅ Multi-Agent-Report gespeichert: {out.resolve()}")
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Report zusammenbauen
 # ---------------------------------------------------------------------------
 
@@ -517,8 +1063,8 @@ def generate_report(
     func_data     = _parse_func_costs(_load_json(functionality_path))
 
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
-    model = model_name or os.environ.get("MODEL_NAME", "gpt-5.4-mini")
-    judge_model = os.environ.get("JUDGE_MODEL", model)
+    model = model_name or os.environ.get("AGENT_MODEL_NAME", "gpt-5.4-mini")
+    judge_model = _load_judge_model_from_config() or os.environ.get("JUDGE_MODEL_NAME", model)
     model_badge = f'<span class="model-badge">{model}</span>'
 
     # UC-Badge: Arg → func_data → env → default
@@ -567,13 +1113,20 @@ def generate_report(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    import yaml as _yaml
+
     parser = argparse.ArgumentParser(description="Agent-Eval@OVB HTML-Report-Generator")
-    parser.add_argument("--security",      action="append", metavar="FILE",
+    parser.add_argument("--agents-config",    metavar="FILE", default="agents.yaml",
+                        help="agents.yaml mit Agent-Konfigurationen (Multi-Agent-Modus)")
+    parser.add_argument("--functionality-dir", metavar="DIR",
+                        default="evals/functionality",
+                        help="Verzeichnis mit functionality_costs_{agent_id}.json-Dateien")
+    parser.add_argument("--security",         action="append", metavar="FILE",
                         help="Promptfoo Security-Ergebnis JSON (mehrfach verwendbar)")
     parser.add_argument("--compliance",    metavar="FILE", default="compliance_results.json")
     parser.add_argument("--scorecard",     metavar="FILE", default="compliance_scorecard.json")
     parser.add_argument("--functionality", metavar="FILE",
-                        default="evals/functionality/functionality_costs.json")
+                        help="Pfad zur functionality_costs_{uc}.json")
     parser.add_argument("--out",           metavar="FILE", default="report.html")
     parser.add_argument("--use-case",      metavar="UC",   default=os.environ.get("USE_CASE"),
                         help="Use-Case-ID (uc1–uc4) für Header-Badge und UC-Kontext")
@@ -593,7 +1146,7 @@ def main() -> None:
         security_paths=security_paths,
         compliance_path=args.compliance,
         scorecard_path=args.scorecard,
-        functionality_path=args.functionality if args.functionality != "evals/functionality/functionality_costs.json" else func_default,
+        functionality_path=args.functionality or func_default,
         out_path=args.out,
         use_case=uc,
     )
