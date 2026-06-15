@@ -165,6 +165,15 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
+# Agent-Eval@OVB – generierte Eval-Artefakte (werden bei jedem Lauf neu erzeugt)
+.deepeval/
+**/.deepeval/
+.deepeval_telemetry.txt
+functionality_costs*.json
+*_results_*.json
+compliance_scorecard*.json
+report*.html
+
 # mkdocs documentation
 /site
 
