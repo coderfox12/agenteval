@@ -1147,8 +1147,8 @@ def main() -> None:
     parser.add_argument("--functionality", metavar="FILE",
                         help="Pfad zur functionality_costs_{uc}.json")
     parser.add_argument("--out",           metavar="FILE", default="report.html")
-    parser.add_argument("--use-case",      metavar="UC",   default=os.environ.get("USE_CASE"),
-                        help="Use-Case-ID (uc1–uc4) für Header-Badge und UC-Kontext")
+    parser.add_argument("--use-case",      metavar="UC",   default=os.environ.get("USE_CASE", "uc1"),
+                        help="Use-Case-ID (uc1–uc4) für Header-Badge und UC-Kontext (Default: uc1)")
     args = parser.parse_args()
 
     uc = args.use_case

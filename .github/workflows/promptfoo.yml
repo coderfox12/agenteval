@@ -8,6 +8,9 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Ausgewählter Use Case für die gesamte Pipeline (Producer + Report).
+  # Hier festsetzen, um einen anderen Use Case zu evaluieren (uc1–uc4).
+  USE_CASE: uc1
 
 jobs:
   eval:

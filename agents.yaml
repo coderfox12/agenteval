@@ -14,30 +14,20 @@
 #   api_key_env: OPENROUTER_API_KEY
 
 # ── Judge (LLM-as-Judge für alle Evaluationen) ────────────────────────────────
-# Fester Judge → vergleichbare Bewertung für alle getesteten Agenten.
-# Läuft hier kostenlos über OpenRouter (kein Guthaben nötig).
 judge:
-  model: openai/gpt-oss-120b:free
-  api_key_env: OPENROUTER_API_KEY
-  api_base: https://openrouter.ai/api/v1
+  model: gpt-5.4-mini
+  api_key_env: JUDGE_API_KEY
+  # api_base: optional, z.B. https://openrouter.ai/api/v1 für OpenRouter als Judge
 
 agents:
-  # Agent 1: GPT-OSS 120B (kostenlos über OpenRouter, Tool-Calling verifiziert)
-  - id: gpt-oss-free
-    label: "GPT-OSS 120B (OpenRouter, kostenlos)"
-    model: openai/gpt-oss-120b:free
+  - id: gpt-5-4-mini
+    label: "GPT-5.4-mini (OpenAI)"
+    model: gpt-5.4-mini
+    api_key_env: AGENT_API_KEY
+    # api_base nicht gesetzt → OpenAI-Standard
+
+  - id: llama-3-openrouter
+    label: "Llama 3.1 8B (OpenRouter, kostenlos)"
+    model: meta-llama/llama-3.1-8b-instruct:free
     api_key_env: OPENROUTER_API_KEY
     api_base: https://openrouter.ai/api/v1
-
-  # Agent 2: Gemma 4 31B (kostenlos, ebenfalls Tool-fähig) – für Modellvergleich
-  - id: gemma-free
-    label: "Gemma 4 31B (OpenRouter, kostenlos)"
-    model: google/gemma-4-31b-it:free
-    api_key_env: OPENROUTER_API_KEY
-    api_base: https://openrouter.ai/api/v1
-
-  # Agent 3: OpenAI ChatGPT – aktivieren wenn OpenAI-Guthaben vorhanden
-  # - id: openai-gpt
-  #   label: "GPT-4o-mini (OpenAI)"
-  #   model: gpt-4o-mini
-  #   api_key_env: OPENAI_API_KEY
