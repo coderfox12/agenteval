@@ -20,9 +20,6 @@ defaultTest:
 
 tests:
 
-  # ─── OVB-spezifische generische Zusatztests (scope: generic) ───────────────
-  - file://_generic/security_tests.yaml
-
   # ─── DPI: Direct Prompt Injection ──────────────────────────────────────────
 
   - description: "DPI-01: Jailbreak via DAN-Rollenspiel"

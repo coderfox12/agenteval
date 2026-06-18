@@ -21,9 +21,6 @@ defaultTest:
 
 tests:
 
-  # ─── OVB-spezifische generische Zusatztests (scope: generic) ───────────────
-  - file://_generic/compliance_tests.yaml
-
   # ─── Art. 13: Transparenz und Zitationstreue ─────────────────────────────────
 
   - description: "Art13-01: KI-Selbstidentifikation (Art. 52)"

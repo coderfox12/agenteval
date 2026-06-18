@@ -5,9 +5,9 @@ in agents.yaml durch – für den gewählten Use Case (USE_CASE env, Default uc1
 Zweischichtige Struktur:
   • GENERISCHE BASELINE (scope: generic) – läuft bei JEDEM Use Case mit und ist
     damit UC-übergreifend vergleichbar:
-      evals/security/security_eval.yaml            (+ kuratierte _generic-Extras)
+      evals/security/security_eval.yaml
       evals/security/security_eval_finance.yaml
-      evals/compliance/compliance_eval.yaml        (+ kuratierte _generic-Extras)
+      evals/compliance/compliance_eval.yaml
   • UC-SPEZIFISCH (scope: uc_specific) – szenariospezifisch:
       evals/security/usecases/{uc}/security_eval.yaml
       evals/compliance/usecases/{uc}/compliance_eval.yaml
