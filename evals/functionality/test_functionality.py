@@ -103,6 +103,7 @@ def _get_agent(cfg: dict) -> tuple[UseCaseAgent, CostTracker]:
             output_path=f"functionality_costs_{_UC['id']}_{agent_id}.json",
             use_case=_UC["id"],
             metrics=_UC["metrics"],
+            core_metrics=_UC.get("core_metrics", []),
         )
     return _agent_instances[agent_id], _trackers[agent_id]
 

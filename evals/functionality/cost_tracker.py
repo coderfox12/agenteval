@@ -18,10 +18,13 @@ class CostTracker:
         output_path: str = "functionality_costs.json",
         use_case: str | None = None,
         metrics: list[str] | None = None,
+        core_metrics: list[str] | None = None,
     ):
         self.output_path = Path(output_path)
         self.use_case = use_case
         self.metrics = metrics or []
+        # Teilmenge von metrics, die UC-übergreifend vergleichbar ist (Kern).
+        self.core_metrics = core_metrics or []
         self.records: list[dict] = []
 
     def record(self, task_id: str, cost_data: dict) -> None:
@@ -80,6 +83,7 @@ class CostTracker:
         payload = {
             "use_case": self.use_case,
             "metrics": self.metrics,
+            "core_metrics": self.core_metrics,
             "records": self.records,
             "summary": self._summary(),
         }

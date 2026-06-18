@@ -550,7 +550,7 @@ def _section_functionality(func_data: dict) -> str:
         "required_fields":  "Pflichtfelder",
     }
     metric_keys = func_data.get("metrics") or ["tool_correctness", "task_completion", "answer_relevancy"]
-    metric_labels = [_METRIC_LABELS.get(k, k) for k in metric_keys]
+    core_keys = set(func_data.get("core_metrics") or [])
     n_metric_cols = len(metric_keys)
 
     err_records = [r for r in records if r.get("error")]
@@ -633,11 +633,23 @@ def _section_functionality(func_data: dict) -> str:
                   if rows else
                   f"<tr><td colspan='{total_cols}' style='color:#636e72'>Keine Task-Daten</td></tr>")
 
-    metric_headers = "".join(f"<th>{lbl}</th>" for lbl in metric_labels)
+    def _metric_th(key: str) -> str:
+        lbl = _METRIC_LABELS.get(key, key)
+        if key in core_keys:
+            lbl += ' <span style="font-size:.7rem;font-weight:400;color:#0984e3">Kern</span>'
+        return f"<th>{lbl}</th>"
+    metric_headers = "".join(_metric_th(k) for k in metric_keys)
+
+    core_note = ""
+    if core_keys:
+        core_note = ('<p style="margin:2px 0 12px;font-size:.82rem;color:#636e72">'
+                     'Metrik-Logik: <strong>Kern</strong> = UC-übergreifend vergleichbar; '
+                     'übrige Metriken sind UC-spezifisch gewählt.</p>')
 
     return (
         "<h2>Dimension 1 – Funktionalität</h2>"
         + banner
+        + core_note
         + '<div class="cards">' + "".join(cards) + "</div><br>"
         + "<table><thead><tr>"
         + "<th>Task</th><th>Status</th>"
