@@ -187,6 +187,18 @@ def _parse_func_costs(data: dict | None) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Use-Case-Namen (lesbare Bezeichnungen für den Report-Header)
+# ---------------------------------------------------------------------------
+
+_UC_NAMES: dict[str, str] = {
+    "uc0": "Generische Baseline",
+    "uc1": "Suitability-Check (IDD Art. 30)",
+    "uc2": "Onboarding (KYC / GwG §10)",
+    "uc3": "Compliance-Triage (EU AI Act)",
+    "uc4": "Beratungsdokumentation (§ 61 VVG)",
+}
+
+# ---------------------------------------------------------------------------
 # HTML-Bausteine
 # ---------------------------------------------------------------------------
 
@@ -803,7 +815,7 @@ def _radar_svg(entries: list[dict]) -> str:
     """Inline SVG Radar/Spider-Chart (5 Achsen, kein JS, kein CDN)."""
     import math
 
-    W, H = 660, 420
+    W, H = 740, 420
     cx, cy, r = 270, 205, 130
 
     AXES = [
@@ -877,20 +889,23 @@ def _radar_svg(entries: list[dict]) -> str:
                 f'fill="{color}" stroke="#fff" stroke-width="1.5"/>'
             )
 
-    # Legende
-    leg_x, leg_y = 440, 52
-    leg_row_h = 28
-    leg_h = len(entries) * leg_row_h + 18
-    leg_w = 208
+    # Legende – Breite dynamisch nach längstem Label berechnen
+    leg_x, leg_y = 450, 52
+    leg_row_h    = 28
+    leg_h        = len(entries) * leg_row_h + 18
+    max_chars    = max((len(e["label"]) for e in entries), default=10)
+    leg_w        = min(max(180, max_chars * 7 + 36), W - leg_x - 10)
     svg.append(
         f'<rect x="{leg_x - 10}" y="{leg_y - 10}" width="{leg_w}" height="{leg_h}" '
         f'rx="7" fill="#f8f9fa" stroke="#dfe6e9" stroke-width="0.9"/>'
     )
+    max_label_px = leg_w - 36
+    max_label_chars = max(10, int(max_label_px / 6.5))
     for idx, entry in enumerate(entries):
         color = COLORS[idx % len(COLORS)]
         ey    = leg_y + idx * leg_row_h
         svg.append(f'<rect x="{leg_x}" y="{ey}" width="13" height="13" rx="3" fill="{color}"/>')
-        lbl = entry["label"][:26] + ("…" if len(entry["label"]) > 26 else "")
+        lbl = entry["label"][:max_label_chars] + ("…" if len(entry["label"]) > max_label_chars else "")
         svg.append(f'<text x="{leg_x + 19}" y="{ey + 10}" font-size="10.5" fill="#2d3436">{lbl}</text>')
 
     svg.append("</svg>")
@@ -1310,8 +1325,12 @@ def generate_multi_agent_report(
         })
 
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
-    agent_names = ", ".join(e["label"] for e in agents_data)
-    uc_badge = f'<span class="model-badge">{uc}</span>' if uc else ""
+    n_agents = len(agents_data)
+    uc_name  = _UC_NAMES.get(uc, uc) if uc else ""
+    uc_badge = (
+        f'<span class="model-badge">{uc}</span>'
+        f'&nbsp;<span style="font-size:.95rem;font-weight:400;opacity:.85">{uc_name}</span>'
+    ) if uc else ""
 
     comparison_html = (
         '<div class="section-group">'
@@ -1346,7 +1365,7 @@ def generate_multi_agent_report(
 <header>
   <div class="inner">
     <h1>Agent-Eval@OVB – Multi-Agent Report &nbsp;{uc_badge}</h1>
-    <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now} &nbsp;|&nbsp; {agent_names}</p>
+    <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now} &nbsp;|&nbsp; {n_agents} Agenten getestet</p>
   </div>
 </header>
 <div class="container">
