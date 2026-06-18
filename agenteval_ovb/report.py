@@ -245,9 +245,17 @@ tr:hover td { background: #f7f9fc; }
 .section-group-body > h2:first-child { margin-top: 0; }
 .agent-divider { margin: 0; padding: 20px 28px;
                  background: linear-gradient(135deg, #1a2744 0%, #2d4880 100%);
-                 color: #fff; font-size: 1.05rem; font-weight: 700; }
+                 color: #fff; font-size: 1.05rem; font-weight: 700;
+                 cursor: pointer; user-select: none; }
 .agent-divider .agent-model { font-size: .82rem; font-weight: 400;
                                opacity: .7; margin-left: 10px; }
+.agent-divider .toggle-arrow { float: right; font-size: .85rem; opacity: .6;
+                                 transition: transform .25s; display: inline-block; }
+.section-group.collapsed .toggle-arrow { transform: rotate(-180deg); }
+.section-group.collapsed .section-group-body { display: none; }
+.ovb-collapse-bar { display: flex; gap: 16px; margin: 0 0 20px; }
+.ovb-collapse-btn { font-size: .8rem; color: #0984e3; cursor: pointer;
+                    background: none; border: none; padding: 0; text-decoration: underline; }
 .chart-wrap { background: #fff; border-radius: 10px; padding: 24px 28px;
               box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 16px; }
 .chart-title { font-size: .82rem; font-weight: 700; color: #636e72;
@@ -978,9 +986,10 @@ def _agent_block(entry: dict, judge_model: str) -> str:
     scorecard    = entry.get("scorecard")
 
     divider = (
-        f'<div class="agent-divider">'
+        f'<div class="agent-divider" onclick="ovbToggle(this)">'
         f'{label}'
         f'<span class="agent-model">{model}</span>'
+        f'<span class="toggle-arrow">▲</span>'
         f'</div>'
     )
 
@@ -993,7 +1002,7 @@ def _agent_block(entry: dict, judge_model: str) -> str:
     )
 
     return (
-        '<div class="section-group">'
+        '<div class="section-group agent-section">'
         + divider
         + '<div class="section-group-body">' + body + '</div>'
         + '</div>'
@@ -1241,6 +1250,12 @@ def generate_multi_agent_report(
         + '</div></div>'
     )
     overall_html = _section_overall_score(agents_data)
+    collapse_bar = (
+        "<div class='ovb-collapse-bar'>"
+        "<button class='ovb-collapse-btn' onclick='ovbCollapseAll()'>Alle einklappen</button>"
+        "<button class='ovb-collapse-btn' onclick='ovbExpandAll()'>Alle ausklappen</button>"
+        "</div>"
+    )
     blocks = "".join(_agent_block(e, _judge) for e in agents_data)
 
     html = f"""<!DOCTYPE html>
@@ -1261,9 +1276,15 @@ def generate_multi_agent_report(
 <div class="container">
   {comparison_html}
   {overall_html}
+  {collapse_bar}
   {blocks}
 </div>
 <footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>
+<script>
+function ovbToggle(el){{el.closest('.section-group').classList.toggle('collapsed');}}
+function ovbCollapseAll(){{document.querySelectorAll('.section-group.agent-section').forEach(g=>g.classList.add('collapsed'));}}
+function ovbExpandAll(){{document.querySelectorAll('.section-group.agent-section').forEach(g=>g.classList.remove('collapsed'));}}
+</script>
 </body>
 </html>"""
 
