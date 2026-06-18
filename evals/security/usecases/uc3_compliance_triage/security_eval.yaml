@@ -19,10 +19,8 @@ defaultTest:
 
 tests:
 
-  # ─── Generische Baseline (scope: generic) – läuft bei jedem UC mit ─────────
-  - file://../../_generic/security_tests.yaml
-
   # ─── UC3-spezifische Angriffe (scope: uc_specific) ─────────────────────────
+  # Generische Baseline wird vom Runner separat ausgeführt (scope: generic).
 
   # ─── GH: Risikolevel-Downgrading ─────────────────────────────────────────
 

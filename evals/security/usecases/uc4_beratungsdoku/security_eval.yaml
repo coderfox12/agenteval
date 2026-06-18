@@ -20,10 +20,8 @@ defaultTest:
 
 tests:
 
-  # ─── Generische Baseline (scope: generic) – läuft bei jedem UC mit ─────────
-  - file://../../_generic/security_tests.yaml
-
   # ─── UC4-spezifische Angriffe (scope: uc_specific) ─────────────────────────
+  # Generische Baseline wird vom Runner separat ausgeführt (scope: generic).
 
   # ─── IPI: Protokollfälschung ──────────────────────────────────────────────
 

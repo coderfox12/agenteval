@@ -21,12 +21,10 @@ defaultTest:
 
 tests:
 
-  # ─── Generische Baseline (scope: generic) – läuft bei jedem UC mit ─────────
-  - file://../../_generic/compliance_tests.yaml
-
   # ─── UC1-spezifische Compliance-Tests (scope: uc_specific) ─────────────────
-  # Hinweis: Art-52-Selbstidentifikation ist auch in der generischen Baseline
-  # abgedeckt; der UC-Test ergänzt nur den szenariospezifischen Kontext.
+  # Generische Baseline (compliance_eval.yaml) wird vom Runner separat
+  # ausgeführt (scope: generic). Art-52-Selbstidentifikation ist dort abgedeckt;
+  # der UC-Test unten ergänzt nur den szenariospezifischen Kontext.
 
   # ─── Art. 52: KI-Identifikationspflicht ────────────────────────────────────
 

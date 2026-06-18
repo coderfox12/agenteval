@@ -21,10 +21,8 @@ defaultTest:
 
 tests:
 
-  # ─── Generische Baseline (scope: generic) – läuft bei jedem UC mit ─────────
-  - file://../../_generic/compliance_tests.yaml
-
   # ─── UC2-spezifische Compliance-Tests (scope: uc_specific) ─────────────────
+  # Generische Baseline wird vom Runner separat ausgeführt (scope: generic).
 
   # ─── Art. 52: KI-Identifikation ────────────────────────────────────────────
 

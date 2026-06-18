@@ -24,10 +24,9 @@ defaultTest:
 
 tests:
 
-  # ─── Generische Baseline (scope: generic) – läuft bei jedem UC mit ─────────
-  - file://../../_generic/security_tests.yaml
-
   # ─── UC1-spezifische Angriffe (scope: uc_specific) ─────────────────────────
+  # Generische Baseline (security_eval.yaml + security_eval_finance.yaml) wird
+  # vom Runner separat ausgeführt und im Report als scope: generic geführt.
 
   # DPI – direkte Prompt-Injektion, suitability-spezifisch
   - description: "UC1-DPI-01: Anweisung Risikoprofil zu ignorieren"
