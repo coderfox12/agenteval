@@ -22,7 +22,7 @@
 #   - MISTRAL_API_KEY          → für make benchmark (Mistral-Provider)
 #   - LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY → LangSmith-Tracing
 
-.PHONY: all eval eval-all smoke security compliance scorecard \
+.PHONY: all eval eval-all smoke security compliance \
         functionality report report-html benchmark install clean
 
 USE_CASE ?= uc1
@@ -30,7 +30,7 @@ USE_CASE ?= uc1
 # ── Hauptziele ────────────────────────────────────────────────────────────────
 all: eval
 
-eval: security compliance functionality report
+eval: security functionality report
 	@echo ""
 	@echo "✅ Alle Evals abgeschlossen (USE_CASE=$(USE_CASE)). Report: report_$(USE_CASE).html"
 
@@ -55,14 +55,8 @@ smoke:
 security:
 	USE_CASE=$(USE_CASE) python scripts/run_promptfoo_multi_agent.py
 
-# compliance ist Teil von run_promptfoo_multi_agent.py (security-Target deckt beides ab).
-# Separates Target für Kompatibilität – ruft denselben Multi-Agent-Runner.
-compliance:
-	@echo "ℹ  Compliance wird zusammen mit 'make security' über run_promptfoo_multi_agent.py erzeugt."
-
-# ── Compliance Scorecard (wird bereits im Multi-Agent-Runner erzeugt) ─────────
-scorecard:
-	@echo "ℹ  Scorecards werden in 'make security' pro Agent erzeugt (compliance_scorecard_$(USE_CASE)_*.json)."
+# compliance ist ein Alias für security – der Runner erzeugt beides in einem Lauf.
+compliance: security
 
 # ── Funktionalität: LangGraph + DeepEval, alle Agenten gegen den UC ───────────
 # pytest (nicht 'deepeval test run' – behebt '-n auto'-Problem, D1 war sonst leer)

@@ -6,10 +6,11 @@ mit eingebettetem CSS (kein Internet nötig zum Anzeigen).
 
 CLI:
     agenteval-report --out report.html
-    agenteval-report --security security_results.json --security security_finance_results.json
-                     --compliance compliance_results.json
-                     --scorecard compliance_scorecard.json
-                     --functionality evals/functionality/functionality_costs.json
+    agenteval-report --security security_results_uc1_gpt.json
+                     --compliance compliance_results_uc1_gpt.json
+                     --scorecard compliance_scorecard_uc1_gpt.json
+                     --functionality evals/functionality/functionality_costs_uc1_gpt.json
+                     --use-case uc1
                      --out report.html
 
     python -m agenteval_ovb.report --out report.html
@@ -329,10 +330,10 @@ def _fmt_int(n: int | float) -> str:
 # Sections
 # ---------------------------------------------------------------------------
 
-def _section_summary(sec_data: dict, sec_fin_data: dict, comp_data: dict,
+def _section_summary(sec_data: dict, comp_data: dict,
                       comp_stats: dict, scorecard: dict | None, func_data: dict) -> str:
-    sec_pass = sec_data.get("total_pass", 0) + sec_fin_data.get("total_pass", 0)
-    sec_total = sec_pass + sec_data.get("total_fail", 0) + sec_fin_data.get("total_fail", 0)
+    sec_pass = sec_data.get("total_pass", 0)
+    sec_total = sec_pass + sec_data.get("total_fail", 0)
 
     comp_pass = sum(v["pass"] for v in comp_data.values()) if comp_data else 0
     comp_total = comp_pass + sum(v["fail"] for v in comp_data.values()) if comp_data else 0
@@ -343,14 +344,13 @@ def _section_summary(sec_data: dict, sec_fin_data: dict, comp_data: dict,
 
     func_summary = func_data.get("summary", {}) if func_data else {}
     func_model_cost = func_summary.get("agent_cost_usd", func_summary.get("total_cost_usd", 0))
-    cost_total = (sec_data.get("cost_usd", 0) + sec_fin_data.get("cost_usd", 0)
+    cost_total = (sec_data.get("cost_usd", 0)
                   + comp_stats.get("cost_usd", 0) + func_model_cost)
 
     # Gesamt-API-Fehler über alle Dimensionen
     total_api_errors = (
         func_summary.get("error_count", 0)
         + sec_data.get("provider_errors", 0)
-        + sec_fin_data.get("provider_errors", 0)
         + comp_stats.get("provider_errors", 0)
     )
     summary_banner = ""
@@ -414,18 +414,17 @@ def _scope_summary(by_scope: dict) -> str:
             'Herkunft der Tests: ' + " &nbsp; ".join(parts) + '</p>')
 
 
-def _section_security(sec_data: dict, sec_fin_data: dict) -> str:
+def _section_security(sec_data: dict) -> str:
     rows = []
     all_classes: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
     all_scope: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
 
-    for label, data in [("Allgemein", sec_data), ("Finance-Kontext", sec_fin_data)]:
-        for cls, counts in data.get("by_class", {}).items():
-            all_classes[cls]["pass"] += counts["pass"]
-            all_classes[cls]["fail"] += counts["fail"]
-        for sc, counts in data.get("by_scope", {}).items():
-            all_scope[sc]["pass"] += counts["pass"]
-            all_scope[sc]["fail"] += counts["fail"]
+    for cls, counts in sec_data.get("by_class", {}).items():
+        all_classes[cls]["pass"] += counts["pass"]
+        all_classes[cls]["fail"] += counts["fail"]
+    for sc, counts in sec_data.get("by_scope", {}).items():
+        all_scope[sc]["pass"] += counts["pass"]
+        all_scope[sc]["fail"] += counts["fail"]
 
     for cls, counts in sorted(all_classes.items()):
         p, f = counts["pass"], counts["fail"]
@@ -438,12 +437,12 @@ def _section_security(sec_data: dict, sec_fin_data: dict) -> str:
             f"<td>{_bar(p, total, 0.9)}</td></tr>"
         )
 
-    total_pass = sec_data.get("total_pass", 0) + sec_fin_data.get("total_pass", 0)
-    total_all  = total_pass + sec_data.get("total_fail", 0) + sec_fin_data.get("total_fail", 0)
-    cost       = sec_data.get("cost_usd", 0) + sec_fin_data.get("cost_usd", 0)
-    tokens     = sec_data.get("token_total", 0) + sec_fin_data.get("token_total", 0)
-    lat        = sec_data.get("latency_p50_ms") or sec_fin_data.get("latency_p50_ms") or 0
-    prov_err   = sec_data.get("provider_errors", 0) + sec_fin_data.get("provider_errors", 0)
+    total_pass = sec_data.get("total_pass", 0)
+    total_all  = total_pass + sec_data.get("total_fail", 0)
+    cost       = sec_data.get("cost_usd", 0)
+    tokens     = sec_data.get("token_total", 0)
+    lat        = sec_data.get("latency_p50_ms") or 0
+    prov_err   = sec_data.get("provider_errors", 0)
 
     banner = (_api_error_banner(prov_err,
               "Der Anbieter hat auf einen Teil der Anfragen nicht geantwortet.")
@@ -660,7 +659,7 @@ def _section_functionality(func_data: dict) -> str:
 
 
 def _section_eval_overhead(
-    sec_data: dict, sec_fin_data: dict,
+    sec_data: dict,
     comp_stats: dict,
     func_data: dict,
     judge_model: str,
@@ -669,7 +668,7 @@ def _section_eval_overhead(
     d1_judge = (func_data.get("summary", {}).get("eval_cost_usd", 0) if func_data else 0)
 
     # D2/D3: geschätzt aus Anzahl llm-rubric-Aufrufe × ~600/150 Tokens
-    sec_judge_calls = sec_data.get("judge_calls", 0) + sec_fin_data.get("judge_calls", 0)
+    sec_judge_calls = sec_data.get("judge_calls", 0)
     d2_judge = sec_judge_calls * calc_cost_usd(judge_model, 600, 150)
 
     comp_judge_calls = comp_stats.get("judge_calls", 0)
@@ -677,7 +676,11 @@ def _section_eval_overhead(
 
     total_judge = d1_judge + d2_judge + d3_judge
 
-    d1_judge_calls = len((func_data or {}).get("records", [])) * 2  # TaskCompletion + AnswerRelevancy
+    # LLM-basierte Metriken aus dem gespeicherten metrics-Feld (required_fields ist regelbasiert)
+    records     = (func_data or {}).get("records", [])
+    metrics     = (func_data or {}).get("metrics", ["task_completion", "answer_relevancy"])
+    llm_metrics = [m for m in metrics if m != "required_fields"]
+    d1_judge_calls = len(records) * len(llm_metrics)
 
     rows = [
         f"<tr><td>D1 – Funktionalität</td>"
@@ -843,7 +846,6 @@ def _section_comparison(agents_data: list[dict]) -> str:
         records     = func.get("records", [])
         summary     = func.get("summary", {})
         sec         = e.get("sec_data") or {}
-        sec_fin     = e.get("sec_fin_data") or {}
         comp_d      = e.get("comp_data") or {}
         comp_stats_e = e.get("comp_stats") or {}
 
@@ -851,8 +853,8 @@ def _section_comparison(agents_data: list[dict]) -> str:
         func_passed = sum(1 for r in records if r.get("passed"))
         func_rate   = func_passed / func_total if func_total else 0.0
 
-        sec_pass  = sec.get("total_pass", 0) + sec_fin.get("total_pass", 0)
-        sec_total = sec_pass + sec.get("total_fail", 0) + sec_fin.get("total_fail", 0)
+        sec_pass  = sec.get("total_pass", 0)
+        sec_total = sec_pass + sec.get("total_fail", 0)
         sec_rate  = sec_pass / sec_total if sec_total else 0.0
 
         comp_pass  = sum(v["pass"] for v in comp_d.values()) if comp_d else 0
@@ -861,14 +863,13 @@ def _section_comparison(agents_data: list[dict]) -> str:
 
         # Kosten: Summe aus Funktionalität + Security + Compliance
         func_cost = summary.get("agent_cost_usd", summary.get("total_cost_usd", 0))
-        sec_cost  = sec.get("cost_usd", 0) + sec_fin.get("cost_usd", 0)
+        sec_cost  = sec.get("cost_usd", 0)
         comp_cost = comp_stats_e.get("cost_usd", 0)
         cost      = func_cost + sec_cost + comp_cost
 
         # Latenz: bevorzuge Funktionalität, Fallback auf Security
         latency = (summary.get("avg_latency_ms") or
-                   sec.get("latency_p50_ms") or
-                   sec_fin.get("latency_p50_ms") or 0)
+                   sec.get("latency_p50_ms") or 0)
 
         func_errors = sum(1 for r in records if r.get("error"))
 
@@ -972,7 +973,6 @@ def _agent_block(entry: dict, judge_model: str) -> str:
     model        = entry["model"]
     func_data    = entry.get("func_data") or {}
     sec_data     = entry.get("sec_data") or {}
-    sec_fin_data = entry.get("sec_fin_data") or {}
     comp_data    = entry.get("comp_data") or {}
     comp_stats   = entry.get("comp_stats") or {}
     scorecard    = entry.get("scorecard")
@@ -985,11 +985,11 @@ def _agent_block(entry: dict, judge_model: str) -> str:
     )
 
     body = (
-        _section_summary(sec_data, sec_fin_data, comp_data, comp_stats, scorecard, func_data)
+        _section_summary(sec_data, comp_data, comp_stats, scorecard, func_data)
         + _section_functionality(func_data)
-        + _section_security(sec_data, sec_fin_data)
+        + _section_security(sec_data)
         + _section_compliance(comp_data, comp_stats, scorecard)
-        + _section_eval_overhead(sec_data, sec_fin_data, comp_stats, func_data, judge_model)
+        + _section_eval_overhead(sec_data, comp_stats, func_data, judge_model)
     )
 
     return (
@@ -1026,14 +1026,10 @@ def generate_multi_agent_report(
     for cfg in agents_config:
         agent_id = cfg["id"]
 
-        # Security – per-(UC,Agent)-Dateien, Fallback auf geteilte Dateien
-        sec_path     = f"security_results_{_sfx}{agent_id}.json"
-        sec_fin_path = f"security_finance_results_{_sfx}{agent_id}.json"
-        sec_data     = _parse_security(_promptfoo_results(
+        # Security – per-(UC,Agent)-Datei; Finance-Tests sind vom Runner bereits eingemergt
+        sec_path = f"security_results_{_sfx}{agent_id}.json"
+        sec_data = _parse_security(_promptfoo_results(
             _load_json(sec_path) or (_load_json(security_paths[0]) if security_paths else None)
-        ))
-        sec_fin_data = _parse_security(_promptfoo_results(
-            _load_json(sec_fin_path) or (_load_json(security_paths[1]) if len(security_paths) > 1 else None)
         ))
 
         # Compliance – per-(UC,Agent)-Dateien, Fallback auf geteilte Dateien
@@ -1050,15 +1046,14 @@ def generate_multi_agent_report(
         func_data = _parse_func_costs(_load_json(str(func_path)))
 
         agents_data.append({
-            "id":           agent_id,
-            "label":        cfg.get("label", agent_id),
-            "model":        cfg.get("model", ""),
-            "func_data":    func_data,
-            "sec_data":     sec_data,
-            "sec_fin_data": sec_fin_data,
-            "comp_data":    comp_data,
-            "comp_stats":   comp_stats,
-            "scorecard":    scorecard,
+            "id":         agent_id,
+            "label":      cfg.get("label", agent_id),
+            "model":      cfg.get("model", ""),
+            "func_data":  func_data,
+            "sec_data":   sec_data,
+            "comp_data":  comp_data,
+            "comp_stats": comp_stats,
+            "scorecard":  scorecard,
         })
 
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
@@ -1117,9 +1112,36 @@ def generate_report(
 ) -> Path:
     security_paths = security_paths or []
 
+    # Alle übergebenen Security-Dateien zu einem Datensatz zusammenführen
+    # (Rückwärtskompatibilität: Aufrufer kann mehrere --security-Dateien übergeben)
     sec_datasets = [_parse_security(_promptfoo_results(_load_json(p))) for p in security_paths]
-    sec_data     = sec_datasets[0] if sec_datasets else {}
-    sec_fin_data = sec_datasets[1] if len(sec_datasets) > 1 else {}
+    if not sec_datasets:
+        sec_data: dict = {}
+    elif len(sec_datasets) == 1:
+        sec_data = sec_datasets[0]
+    else:
+        mc: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
+        ms: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
+        tp = tf = tok = jc = pe = 0
+        costs: list[float] = []
+        lats:  list[float] = []
+        for d in sec_datasets:
+            for k, v in d.get("by_class", {}).items():
+                mc[k]["pass"] += v["pass"]; mc[k]["fail"] += v["fail"]
+            for k, v in d.get("by_scope", {}).items():
+                ms[k]["pass"] += v["pass"]; ms[k]["fail"] += v["fail"]
+            tp  += d.get("total_pass", 0);  tf  += d.get("total_fail", 0)
+            tok += d.get("token_total", 0); jc  += d.get("judge_calls", 0)
+            pe  += d.get("provider_errors", 0)
+            if d.get("cost_usd"):        costs.append(d["cost_usd"])
+            if d.get("latency_p50_ms"):  lats.append(d["latency_p50_ms"])
+        sec_data = {
+            "total_pass": tp, "total_fail": tf,
+            "by_class": dict(mc), "by_scope": dict(ms),
+            "token_total": tok, "cost_usd": round(sum(costs), 6),
+            "latency_p50_ms": round(sum(lats) / len(lats)) if lats else 0,
+            "judge_calls": jc, "provider_errors": pe,
+        }
 
     comp_results  = _promptfoo_results(_load_json(compliance_path))
     comp_data, comp_stats = _parse_compliance(comp_results)
@@ -1156,11 +1178,11 @@ def generate_report(
   </div>
 </header>
 <div class="container">
-  {_section_summary(sec_data, sec_fin_data, comp_data, comp_stats, scorecard, func_data)}
+  {_section_summary(sec_data, comp_data, comp_stats, scorecard, func_data)}
   {_section_functionality(func_data)}
-  {_section_security(sec_data, sec_fin_data)}
+  {_section_security(sec_data)}
   {_section_compliance(comp_data, comp_stats, scorecard)}
-  {_section_eval_overhead(sec_data, sec_fin_data, comp_stats, func_data, judge_model)}
+  {_section_eval_overhead(sec_data, comp_stats, func_data, judge_model)}
 </div>
 <footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>
 </body>
@@ -1198,10 +1220,7 @@ def main() -> None:
 
     uc = args.use_case
     _sfx = f"{uc}_" if uc else ""
-    security_paths = args.security or [
-        f"security_results_{_sfx}".rstrip("_") + ".json",
-        f"security_finance_results_{_sfx}".rstrip("_") + ".json",
-    ]
+    security_paths = args.security or [f"security_results_{_sfx}".rstrip("_") + ".json"]
 
     # Multi-Agent-Modus: wenn agents.yaml existiert und kein expliziter
     # Einzel-Funktionalitätspfad gesetzt ist.
