@@ -72,6 +72,7 @@ def _api_error_banner(count: int, context: str) -> str:
 
 def _parse_security(results: list[dict]) -> dict:
     by_class: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
+    by_scope: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
     total_pass = total_fail = provider_errors = 0
     token_total = cost_total = latency_sum = latency_count = judge_calls = 0
 
@@ -83,12 +84,15 @@ def _parse_security(results: list[dict]) -> dict:
         success = r.get("success", r.get("pass", False))
         meta = r.get("testCase", {}).get("metadata", {})
         attack_class = meta.get("attack_class", "Unbekannt")
+        scope = meta.get("scope", "uc_specific")
 
         if success:
             by_class[attack_class]["pass"] += 1
+            by_scope[scope]["pass"] += 1
             total_pass += 1
         else:
             by_class[attack_class]["fail"] += 1
+            by_scope[scope]["fail"] += 1
             total_fail += 1
 
         usage = r.get("response", {}).get("tokenUsage", {})
@@ -110,6 +114,7 @@ def _parse_security(results: list[dict]) -> dict:
         "total_pass":      total_pass,
         "total_fail":      total_fail,
         "by_class":        dict(by_class),
+        "by_scope":        dict(by_scope),
         "token_total":     token_total,
         "cost_usd":        round(cost_total, 6),
         "latency_p50_ms":  round(latency_sum / max(latency_count, 1)),
@@ -121,6 +126,7 @@ def _parse_security(results: list[dict]) -> dict:
 def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
     """Gibt (by_article, stats) zurück. stats enthält cost_usd, token_total, latency_p50_ms."""
     by_article: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
+    by_scope: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
     token_total = cost_total = latency_sum = latency_count = judge_calls = provider_errors = 0
     for r in results:
         if not r:
@@ -133,6 +139,7 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
         articles = [a.strip() for a in article_raw.split("/")] if article_raw else ["Nicht zugeordnet"]
         for art in articles:
             by_article[art]["pass" if success else "fail"] += 1
+        by_scope[meta.get("scope", "uc_specific")]["pass" if success else "fail"] += 1
         usage = r.get("response", {}).get("tokenUsage", {})
         inp  = usage.get("prompt", 0)
         out  = usage.get("completion", 0)
@@ -153,6 +160,7 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
         "latency_p50_ms":  round(latency_sum / max(latency_count, 1)),
         "judge_calls":     judge_calls,
         "provider_errors": provider_errors,
+        "by_scope":        dict(by_scope),
     }
     return dict(by_article), stats
 
@@ -387,14 +395,37 @@ _ATTACK_CLASS_LABELS: dict[str, str] = {
 }
 
 
+def _scope_summary(by_scope: dict) -> str:
+    """Zeigt, wie viele Tests aus der generischen Baseline (UC-übergreifend
+    vergleichbar) bzw. UC-spezifisch stammen – als kleine Badge-Zeile."""
+    def _badge(label: str, d: dict, cls: str) -> str:
+        p = d.get("pass", 0)
+        t = p + d.get("fail", 0)
+        return f'<span class="badge {cls}">{label}: {p}/{t}</span>' if t else ""
+
+    parts = [
+        _badge("Generische Baseline", by_scope.get("generic", {}), "ok"),
+        _badge("UC-spezifisch", by_scope.get("uc_specific", {}), "warn"),
+    ]
+    parts = [p for p in parts if p]
+    if not parts:
+        return ""
+    return ('<p style="margin:2px 0 12px;font-size:.82rem;color:#636e72">'
+            'Herkunft der Tests: ' + " &nbsp; ".join(parts) + '</p>')
+
+
 def _section_security(sec_data: dict, sec_fin_data: dict) -> str:
     rows = []
     all_classes: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
+    all_scope: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
 
     for label, data in [("Allgemein", sec_data), ("Finance-Kontext", sec_fin_data)]:
         for cls, counts in data.get("by_class", {}).items():
             all_classes[cls]["pass"] += counts["pass"]
             all_classes[cls]["fail"] += counts["fail"]
+        for sc, counts in data.get("by_scope", {}).items():
+            all_scope[sc]["pass"] += counts["pass"]
+            all_scope[sc]["fail"] += counts["fail"]
 
     for cls, counts in sorted(all_classes.items()):
         p, f = counts["pass"], counts["fail"]
@@ -433,6 +464,7 @@ def _section_security(sec_data: dict, sec_fin_data: dict) -> str:
         + banner
         + '<div class="cards">' + "".join(cards) + "</div>"
         + "<br>"
+        + _scope_summary(dict(all_scope))
         + "<table><thead><tr>"
         + "<th>Angriffsklasse</th><th>Bestanden</th><th>Rate</th><th>Verteilung</th>"
         + "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
@@ -488,6 +520,7 @@ def _section_compliance(comp_data: dict, comp_stats: dict, scorecard: dict | Non
         "<h2>Dimension 3 – Compliance</h2>"
         + banner
         + '<div class="cards">' + "".join(cards) + "</div><br>"
+        + _scope_summary(comp_stats.get("by_scope", {}))
         + "<table><thead><tr>"
         + "<th>Artikel</th><th>Bestanden</th><th>Rate</th><th>Verteilung</th><th>Status</th>"
         + "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
