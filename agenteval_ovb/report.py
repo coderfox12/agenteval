@@ -684,11 +684,12 @@ def _section_eval_overhead(
 
     total_judge = d1_judge + d2_judge + d3_judge
 
-    # LLM-basierte Metriken aus dem gespeicherten metrics-Feld (required_fields ist regelbasiert)
+    # LLM-basierte Metriken – nur erfolgreiche Records (required_fields ist regelbasiert)
     records     = (func_data or {}).get("records", [])
     metrics     = (func_data or {}).get("metrics", ["task_completion", "answer_relevancy"])
     llm_metrics = [m for m in metrics if m != "required_fields"]
-    d1_judge_calls = len(records) * len(llm_metrics)
+    ok_records  = [r for r in records if not r.get("error")]
+    d1_judge_calls = len(ok_records) * len(llm_metrics)
 
     rows = [
         f"<tr><td>D1 – Funktionalität</td>"
@@ -721,6 +722,76 @@ def _section_eval_overhead(
         "<table><thead><tr>"
         "<th>Dimension</th><th>Judge-Kosten (USD)</th><th>Judge-Aufrufe</th><th>Genauigkeit</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+    )
+
+
+def _section_eval_overhead_all(agents_data: list[dict], judge_model: str) -> str:
+    """Aggregierter Evaluierungs-Overhead (Judge-Zusammenfassung) über alle Agenten."""
+    cpc = calc_cost_usd(judge_model, 600, 150)
+
+    rows: list[str] = []
+    sum_d1_cost = sum_d1_calls = sum_d2_calls = sum_d3_calls = 0.0
+
+    for e in agents_data:
+        func       = e.get("func_data") or {}
+        d1_cost    = (func.get("summary") or {}).get("eval_cost_usd", 0) or 0
+        records    = func.get("records", [])
+        metrics    = func.get("metrics", ["task_completion", "answer_relevancy"])
+        llm_m      = [m for m in metrics if m != "required_fields"]
+        ok_records = [r for r in records if not r.get("error")]
+        d1_calls   = len(ok_records) * len(llm_m)
+
+        sec        = e.get("sec_data") or {}
+        d2_calls   = sec.get("judge_calls", 0) or 0
+
+        comp       = e.get("comp_stats") or {}
+        d3_calls   = comp.get("judge_calls", 0) or 0
+
+        d2_cost    = d2_calls * cpc
+        d3_cost    = d3_calls * cpc
+        row_total  = d1_cost + d2_cost + d3_cost
+
+        sum_d1_cost  += d1_cost
+        sum_d1_calls += d1_calls
+        sum_d2_calls += d2_calls
+        sum_d3_calls += d3_calls
+
+        err_count = sum(1 for r in records if r.get("error"))
+        err_note  = f' <span style="color:#e17055;font-size:.75rem">({err_count} Fehler)</span>' if err_count else ""
+
+        rows.append(
+            f"<tr>"
+            f"<td>{e['label']}{err_note}</td>"
+            f"<td>${d1_cost:.4f}&thinsp;<small>({d1_calls} Aufrufe)</small></td>"
+            f"<td>${d2_cost:.4f}&thinsp;<small>({d2_calls})</small></td>"
+            f"<td>${d3_cost:.4f}&thinsp;<small>({d3_calls})</small></td>"
+            f"<td style='font-weight:700'>${row_total:.4f}</td>"
+            f"</tr>"
+        )
+
+    grand = sum_d1_cost + sum_d2_calls * cpc + sum_d3_calls * cpc
+    rows.append(
+        f"<tr style='font-weight:700;border-top:2px solid #dfe6e9'>"
+        f"<td>Gesamt</td>"
+        f"<td>${sum_d1_cost:.4f}&thinsp;<small>({int(sum_d1_calls)} Aufrufe)</small></td>"
+        f"<td>${sum_d2_calls * cpc:.4f}&thinsp;<small>({int(sum_d2_calls)})</small></td>"
+        f"<td>${sum_d3_calls * cpc:.4f}&thinsp;<small>({int(sum_d3_calls)})</small></td>"
+        f"<td style='font-weight:700'>${grand:.4f}</td>"
+        f"</tr>"
+    )
+
+    return (
+        "<h2>Judge-Zusammenfassung – alle Agenten</h2>"
+        f"<p style='color:#636e72;font-size:.85rem;margin-bottom:16px'>"
+        f"Kumulierte Judge-Kosten über alle Agenten. Judge-Modell: <strong>{judge_model}</strong>. "
+        f"D1 exakt (DeepEval-Callback), D2/D3 geschätzt (~600&thinsp;/&thinsp;150 Tokens je Aufruf). "
+        f"Error-Einträge fließen nicht in D1-Aufrufe ein.</p>"
+        "<table><thead><tr>"
+        "<th>Agent</th><th>D1 Funktionalität</th><th>D2 Sicherheit</th>"
+        "<th>D3 Compliance</th><th>Gesamt</th>"
+        "</tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
     )
 
 
@@ -1127,7 +1198,6 @@ def _section_overall_score(agents_data: list[dict]) -> str:
         f"(function(){{"
         f"  const AGENTS={data_js};"
         f"  const COLS=['#00b894','#0984e3','#fdcb6e','#e17055','#a29bfe','#636e72'];"
-        f"  // D4: invertierte Kostennormalisierung – günstigster Agent = 1.0"
         f"  const validCosts=AGENTS.map(a=>a.cost_raw).filter(c=>c>0);"
         f"  const minCost=validCosts.length?Math.min(...validCosts):0;"
         f"  AGENTS.forEach(a=>{{a.d4=(a.cost_raw>0&&minCost>0)?+(minCost/a.cost_raw).toFixed(4):null;}});"
@@ -1249,7 +1319,13 @@ def generate_multi_agent_report(
         + _section_comparison(agents_data)
         + '</div></div>'
     )
-    overall_html = _section_overall_score(agents_data)
+    overall_html   = _section_overall_score(agents_data)
+    overhead_all   = (
+        '<div class="section-group">'
+        '<div class="section-group-body">'
+        + _section_eval_overhead_all(agents_data, _judge)
+        + '</div></div>'
+    )
     collapse_bar = (
         "<div class='ovb-collapse-bar'>"
         "<button class='ovb-collapse-btn' onclick='ovbCollapseAll()'>Alle einklappen</button>"
@@ -1276,6 +1352,7 @@ def generate_multi_agent_report(
 <div class="container">
   {comparison_html}
   {overall_html}
+  {overhead_all}
   {collapse_bar}
   {blocks}
 </div>
