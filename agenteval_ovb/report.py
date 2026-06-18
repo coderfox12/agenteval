@@ -796,7 +796,7 @@ def _radar_svg(entries: list[dict]) -> str:
         scores = [max(0.0, min(1.0, entry.get(key, 0.0))) for _, key in AXES]
         pts    = " ".join(f"{pt(i, scores[i])[0]:.1f},{pt(i, scores[i])[1]:.1f}" for i in range(n_axes))
         svg.append(
-            f'<polygon points="{pts}" fill="{color}" fill-opacity="0.13" '
+            f'<polygon points="{pts}" fill="none" '
             f'stroke="{color}" stroke-width="2.2" stroke-linejoin="round"/>'
         )
         for i in range(n_axes):
