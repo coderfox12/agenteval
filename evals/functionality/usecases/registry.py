@@ -18,6 +18,12 @@ from pathlib import Path
 _HERE = Path(__file__).parent
 
 
+def _uc0():
+    from .uc0_generic.tools import TOOLS
+    from .uc0_generic.prompt import SYSTEM_PROMPT
+    return TOOLS, SYSTEM_PROMPT
+
+
 def _uc1():
     from .uc1_suitability.tools import TOOLS
     from .uc1_suitability.prompt import SYSTEM_PROMPT
@@ -43,6 +49,12 @@ def _uc4():
 
 
 USE_CASES: dict = {
+    "uc0": {
+        "name": "Allgemeine Funktionalität (Baseline, kein fachlicher Use Case)",
+        "loader": _uc0,
+        "tasks_path": _HERE / "uc0_generic" / "tasks.yaml",
+        "uc_metrics": ["tool_correctness", "answer_relevancy"],  # + Kern: task_completion
+    },
     "uc1": {
         "name": "Suitability-Check (IDD Art. 30 / §7 VersVermV)",
         "loader": _uc1,
