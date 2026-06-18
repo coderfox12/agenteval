@@ -60,7 +60,7 @@ jobs:
           JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
           DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
           DEEPEVAL_DISABLE_DOTENV: "1"
-        run: cd evals/functionality && pytest test_functionality.py -v
+        run: cd evals/functionality && pytest test_functionality.py -v -n auto --dist=loadgroup
 
       # ── HTML-Report ───────────────────────────────────────────────────────
       - name: Benchmark-Report HTML generieren

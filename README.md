@@ -74,13 +74,13 @@ UC-SPEZIFISCH (scope: uc_specific)     – nur für den gewählten UC
 ## Make-Targets
 
 ```bash
-make eval [USE_CASE=uc1]  # D2+D3+D1 + HTML-Report (Standard: uc1)
+make eval [USE_CASE=uc1]  # D2+D3+D1 + HTML-Report → report.html (Standard: uc1)
 make eval-all             # Alle 4 Use Cases sequenziell
 make smoke                # R0: Hello-World Smoke Test
 make security             # D2+D3: Security & Compliance für alle Agenten
 make compliance           # Alias für 'make security' (Runner deckt beides ab)
-make functionality        # D1: LangGraph + DeepEval für alle Agenten
-make report               # HTML-Report erzeugen
+make functionality        # D1: LangGraph + DeepEval, Agenten parallel (-n auto)
+make report               # HTML-Report erzeugen → report.html
 make benchmark            # Multi-Modell-Vergleich
 make install              # pip install -e .
 make clean                # Generierte Ergebnisdateien löschen

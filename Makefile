@@ -32,7 +32,7 @@ all: eval
 
 eval: security functionality report
 	@echo ""
-	@echo "✅ Alle Evals abgeschlossen (USE_CASE=$(USE_CASE)). Report: report_$(USE_CASE).html"
+	@echo "✅ Alle Evals abgeschlossen (USE_CASE=$(USE_CASE)). Report: report.html"
 
 eval-all:
 	@for uc in uc1 uc2 uc3 uc4; do \
@@ -59,17 +59,19 @@ security:
 compliance: security
 
 # ── Funktionalität: LangGraph + DeepEval, alle Agenten gegen den UC ───────────
-# pytest (nicht 'deepeval test run' – behebt '-n auto'-Problem, D1 war sonst leer)
+# -n auto --dist=loadgroup: Agenten laufen parallel auf getrennten Workern.
+# pytest_collection_modifyitems in test_functionality.py gruppiert alle Tests
+# eines Agenten auf denselben Worker → Cache und CostTracker bleiben konsistent.
 functionality:
 	cd evals/functionality && \
-	  USE_CASE=$(USE_CASE) pytest test_functionality.py -v
+	  USE_CASE=$(USE_CASE) pytest test_functionality.py -v -n auto --dist=loadgroup
 
 # ── HTML-Report (Multi-Agent-Vergleich für den gewählten UC) ──────────────────
 report-html:
-	agenteval-report --use-case $(USE_CASE) --out report_$(USE_CASE).html
+	agenteval-report --use-case $(USE_CASE) --out report.html
 
 report: report-html
-	@echo "📊 Report generiert: report_$(USE_CASE).html"
+	@echo "📊 Report generiert: report.html"
 
 # ── Multi-Modell-Benchmark (Vendor Neutrality) ────────────────────────────────
 benchmark:
@@ -81,5 +83,5 @@ install:
 
 # ── Aufräumen ─────────────────────────────────────────────────────────────────
 clean:
-	rm -f *_results_*.json compliance_scorecard_*.json report_*.html
+	rm -f *_results_*.json compliance_scorecard_*.json report.html
 	rm -f evals/functionality/functionality_costs_*.json
