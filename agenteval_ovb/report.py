@@ -1000,6 +1000,152 @@ def _agent_block(entry: dict, judge_model: str) -> str:
     )
 
 
+def _section_overall_score(agents_data: list[dict]) -> str:
+    """Interaktive Gesamtbewertung mit gewichteten Schiebereglern je Dimension."""
+    import json as _json
+
+    scores = []
+    for e in agents_data:
+        func    = e.get("func_data") or {}
+        records = func.get("records", [])
+        ft      = len(records)
+        fp      = sum(1 for r in records if r.get("passed"))
+        d1      = round(fp / ft, 4) if ft else None
+
+        sec     = e.get("sec_data") or {}
+        sp      = sec.get("total_pass", 0)
+        st      = sp + sec.get("total_fail", 0)
+        d2      = round(sp / st, 4) if st else None
+
+        comp    = e.get("comp_data") or {}
+        cp      = sum(v["pass"] for v in comp.values()) if comp else 0
+        ct      = cp + sum(v["fail"] for v in comp.values()) if comp else 0
+        d3      = round(cp / ct, 4) if ct else None
+
+        scores.append({"label": e["label"], "model": e["model"],
+                        "d1": d1, "d2": d2, "d3": d3})
+
+    data_js = _json.dumps(scores, ensure_ascii=False)
+
+    return (
+        "<h2>Gesamtbewertung</h2>"
+        "<p style='color:#636e72;font-size:.85rem;margin-bottom:20px'>"
+        "Passe die Gewichtung der drei Dimensionen an dein Evaluationsziel an. "
+        "Mittlere Position entspricht gleicher Gewichtung (je 33&thinsp;%). "
+        "Die Gesamtnote aktualisiert sich sofort beim Ziehen der Regler.</p>"
+        "<style>"
+        ".ovb-weight-row{display:flex;align-items:center;gap:12px;margin:12px 0}"
+        ".ovb-wlabel{width:200px;font-size:.85rem;color:#2d3436;flex-shrink:0}"
+        ".ovb-slider-wrap{position:relative;flex:1;padding-bottom:20px}"
+        ".ovb-slider-wrap input[type=range]{"
+          "width:100%;-webkit-appearance:none;appearance:none;"
+          "height:6px;border-radius:3px;background:#dfe6e9;outline:none;cursor:pointer}"
+        ".ovb-slider-wrap input[type=range]::-webkit-slider-thumb{"
+          "-webkit-appearance:none;appearance:none;"
+          "width:20px;height:20px;border-radius:50%;"
+          "background:#0984e3;cursor:pointer;border:2px solid #fff;"
+          "box-shadow:0 1px 4px rgba(0,0,0,.3)}"
+        ".ovb-slider-wrap input[type=range]::-moz-range-thumb{"
+          "width:20px;height:20px;border-radius:50%;"
+          "background:#0984e3;cursor:pointer;border:2px solid #fff;"
+          "box-shadow:0 1px 4px rgba(0,0,0,.3)}"
+        ".ovb-ctick{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);"
+          "display:flex;flex-direction:column;align-items:center;pointer-events:none}"
+        ".ovb-ctick-line{width:1px;height:6px;background:#b2bec3}"
+        ".ovb-ctick-lbl{font-size:.65rem;color:#b2bec3;white-space:nowrap;margin-top:1px}"
+        ".ovb-wpct{width:40px;text-align:right;font-size:.9rem;font-weight:700;color:#0984e3;flex-shrink:0}"
+        ".ovb-cards{display:flex;flex-wrap:wrap;gap:14px;margin-top:20px}"
+        ".ovb-card{background:#fff;border:1px solid #e0e0e0;border-radius:10px;"
+          "padding:16px 20px;min-width:160px;flex:1}"
+        ".ovb-card .oc-lbl{font-size:.78rem;color:#636e72;margin-bottom:2px}"
+        ".ovb-card .oc-mdl{font-size:.72rem;color:#b2bec3;margin-bottom:10px}"
+        ".ovb-card .oc-score{font-size:2.2rem;font-weight:700;line-height:1}"
+        ".ovb-card .oc-dim{font-size:.72rem;color:#636e72;margin-top:6px}"
+        ".ovb-card .oc-bar-bg{background:#f1f2f6;border-radius:4px;height:8px;margin-top:10px;overflow:hidden}"
+        ".ovb-card .oc-bar{height:100%;border-radius:4px;transition:width .25s}"
+        ".ovb-reset{margin-top:10px;font-size:.78rem;color:#0984e3;cursor:pointer;"
+          "background:none;border:none;padding:0;text-decoration:underline}"
+        "</style>"
+        "<div class='ovb-weight-row'>"
+          "<span class='ovb-wlabel'>D1 – Funktionalität</span>"
+          "<div class='ovb-slider-wrap'>"
+            "<input type='range' id='ovb-w1' min='0' max='100' value='50'>"
+            "<div class='ovb-ctick'><div class='ovb-ctick-line'></div>"
+            "<span class='ovb-ctick-lbl'>Standard</span></div>"
+          "</div>"
+          "<span class='ovb-wpct' id='ovb-p1'>33%</span>"
+        "</div>"
+        "<div class='ovb-weight-row'>"
+          "<span class='ovb-wlabel'>D2 – Sicherheit</span>"
+          "<div class='ovb-slider-wrap'>"
+            "<input type='range' id='ovb-w2' min='0' max='100' value='50'>"
+            "<div class='ovb-ctick'><div class='ovb-ctick-line'></div>"
+            "<span class='ovb-ctick-lbl'>Standard</span></div>"
+          "</div>"
+          "<span class='ovb-wpct' id='ovb-p2'>33%</span>"
+        "</div>"
+        "<div class='ovb-weight-row'>"
+          "<span class='ovb-wlabel'>D3 – Compliance</span>"
+          "<div class='ovb-slider-wrap'>"
+            "<input type='range' id='ovb-w3' min='0' max='100' value='50'>"
+            "<div class='ovb-ctick'><div class='ovb-ctick-line'></div>"
+            "<span class='ovb-ctick-lbl'>Standard</span></div>"
+          "</div>"
+          "<span class='ovb-wpct' id='ovb-p3'>34%</span>"
+        "</div>"
+        "<button class='ovb-reset' onclick='ovbReset()'>↺ Auf Standard zurücksetzen</button>"
+        "<div class='ovb-cards' id='ovb-cards'></div>"
+        f"<script>"
+        f"(function(){{"
+        f"  const AGENTS={data_js};"
+        f"  const COLS=['#00b894','#0984e3','#fdcb6e','#e17055','#a29bfe','#636e72'];"
+        f"  function ovbRecalc(){{"
+        f"    const v1=+document.getElementById('ovb-w1').value;"
+        f"    const v2=+document.getElementById('ovb-w2').value;"
+        f"    const v3=+document.getElementById('ovb-w3').value;"
+        f"    const s=v1+v2+v3||1;"
+        f"    const w1=v1/s,w2=v2/s,w3=v3/s;"
+        f"    document.getElementById('ovb-p1').textContent=Math.round(w1*100)+'%';"
+        f"    document.getElementById('ovb-p2').textContent=Math.round(w2*100)+'%';"
+        f"    document.getElementById('ovb-p3').textContent=Math.round(w3*100)+'%';"
+        f"    const scored=AGENTS.map(a=>{{"
+        f"      let ws=0,sc=0;"
+        f"      if(a.d1!=null){{ws+=w1;sc+=w1*a.d1;}}"
+        f"      if(a.d2!=null){{ws+=w2;sc+=w2*a.d2;}}"
+        f"      if(a.d3!=null){{ws+=w3;sc+=w3*a.d3;}}"
+        f"      return{{...a,score:ws?sc/ws:0}};"
+        f"    }}).sort((a,b)=>b.score-a.score);"
+        f"    const best=scored[0]?.score||1;"
+        f"    const medals=['🥇','🥈','🥉'];"
+        f"    document.getElementById('ovb-cards').innerHTML=scored.map((a,i)=>{{"
+        f"      const pct=Math.round(a.score*100);"
+        f"      const bar=Math.round(a.score/best*100);"
+        f"      const col=COLS[i%COLS.length];"
+        f"      const medal=medals[i]||'';"
+        f"      const d1s=a.d1!=null?Math.round(a.d1*100)+'%':'–';"
+        f"      const d2s=a.d2!=null?Math.round(a.d2*100)+'%':'–';"
+        f"      const d3s=a.d3!=null?Math.round(a.d3*100)+'%':'–';"
+        f"      return `<div class='ovb-card'>`"
+        f"        +`<div class='oc-lbl'>${{medal}} ${{a.label}}</div>`"
+        f"        +`<div class='oc-mdl'>${{a.model}}</div>`"
+        f"        +`<div class='oc-score' style='color:${{col}}'>${{pct}}&thinsp;%</div>`"
+        f"        +`<div class='oc-dim'>D1&thinsp;${{d1s}}&nbsp;&nbsp;D2&thinsp;${{d2s}}&nbsp;&nbsp;D3&thinsp;${{d3s}}</div>`"
+        f"        +`<div class='oc-bar-bg'><div class='oc-bar' style='width:${{bar}}%;background:${{col}}'></div></div>`"
+        f"        +`</div>`;"
+        f"    }}).join('');"
+        f"  }}"
+        f"  window.ovbReset=function(){{"
+        f"    ['ovb-w1','ovb-w2','ovb-w3'].forEach(id=>document.getElementById(id).value=50);"
+        f"    ovbRecalc();"
+        f"  }};"
+        f"  ['ovb-w1','ovb-w2','ovb-w3'].forEach(id=>"
+        f"    document.getElementById(id).addEventListener('input',ovbRecalc));"
+        f"  ovbRecalc();"
+        f"}})();"
+        f"</script>"
+    )
+
+
 def generate_multi_agent_report(
     agents_config: list[dict],
     functionality_dir: str = "evals/functionality",
@@ -1066,6 +1212,7 @@ def generate_multi_agent_report(
         + _section_comparison(agents_data)
         + '</div></div>'
     )
+    overall_html = _section_overall_score(agents_data)
     blocks = "".join(_agent_block(e, _judge) for e in agents_data)
 
     html = f"""<!DOCTYPE html>
@@ -1085,6 +1232,7 @@ def generate_multi_agent_report(
 </header>
 <div class="container">
   {comparison_html}
+  {overall_html}
   {blocks}
 </div>
 <footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>
