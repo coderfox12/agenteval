@@ -26,7 +26,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from langchain_community.callbacks import get_openai_callback
 from deepeval.metrics import (
     AnswerRelevancyMetric,
     FaithfulnessMetric,
@@ -36,7 +35,7 @@ from deepeval.metrics import (
 )
 from deepeval.test_case import LLMTestCase, ToolCall
 from dotenv import load_dotenv
-from agenteval_ovb.pricing import calc_cost_usd, validate_agents_config
+from agenteval_ovb.pricing import price_per_token, validate_agents_config
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -88,6 +87,15 @@ validate_agents_config(_CONFIG)
 if _JUDGE_API_KEY:
     os.environ["OPENAI_API_KEY"] = _JUDGE_API_KEY
 os.environ["OPENAI_BASE_URL"] = _JUDGE_API_BASE
+
+# DeepEval berechnet Kosten selbst aus den echten Tokens der API-Antwort
+# (completion.usage), aber mit einem eigenen, oft falschen Preis für
+# unbekannte Modellnamen wie OpenRouter-Slugs. Mit OPENAI_COST_PER_*_TOKEN
+# erzwingen wir unseren eigenen, korrekten Preis aus pricing.py – das Ergebnis
+# in metric.evaluation_cost ist dann exakt (echte Tokens × unser Preis).
+_judge_in_price, _judge_out_price = price_per_token(_JUDGE_MODEL)
+os.environ["OPENAI_COST_PER_INPUT_TOKEN"]  = str(_judge_in_price)
+os.environ["OPENAI_COST_PER_OUTPUT_TOKEN"] = str(_judge_out_price)
 
 
 # ─── Agent- und Tracker-Instanzen (lazy, gecacht) ─────────────────────────────
@@ -203,9 +211,12 @@ def test_task_completion(agent_cfg, task):
     )
 
     metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"], model=_JUDGE_MODEL)
-    with get_openai_callback() as cb:
-        metric.measure(test_case)
-    judge_cost = calc_cost_usd(_JUDGE_MODEL, cb.prompt_tokens, cb.completion_tokens)
+    metric.measure(test_case)
+    # metric.evaluation_cost: DeepEval berechnet das selbst aus den echten
+    # Tokens der API-Antwort × OPENAI_COST_PER_*_TOKEN (oben auf unseren
+    # Judge-Preis gesetzt) – exakt, kein get_openai_callback() nötig (der
+    # faengt DeepEvals eigene Client-Calls ohnehin nicht ab).
+    judge_cost = metric.evaluation_cost or 0.0
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
         "task_completion": round(metric.score, 3),
@@ -227,9 +238,12 @@ def test_answer_relevancy(agent_cfg, task):
     test_case = LLMTestCase(input=task["input"], actual_output=actual_output)
 
     metric = AnswerRelevancyMetric(threshold=0.7, model=_JUDGE_MODEL)
-    with get_openai_callback() as cb:
-        metric.measure(test_case)
-    judge_cost = calc_cost_usd(_JUDGE_MODEL, cb.prompt_tokens, cb.completion_tokens)
+    metric.measure(test_case)
+    # metric.evaluation_cost: DeepEval berechnet das selbst aus den echten
+    # Tokens der API-Antwort × OPENAI_COST_PER_*_TOKEN (oben auf unseren
+    # Judge-Preis gesetzt) – exakt, kein get_openai_callback() nötig (der
+    # faengt DeepEvals eigene Client-Calls ohnehin nicht ab).
+    judge_cost = metric.evaluation_cost or 0.0
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
         "answer_relevancy": round(metric.score, 3),
@@ -256,9 +270,12 @@ def test_faithfulness(agent_cfg, task):
     )
 
     metric = FaithfulnessMetric(threshold=0.7, model=_JUDGE_MODEL)
-    with get_openai_callback() as cb:
-        metric.measure(test_case)
-    judge_cost = calc_cost_usd(_JUDGE_MODEL, cb.prompt_tokens, cb.completion_tokens)
+    metric.measure(test_case)
+    # metric.evaluation_cost: DeepEval berechnet das selbst aus den echten
+    # Tokens der API-Antwort × OPENAI_COST_PER_*_TOKEN (oben auf unseren
+    # Judge-Preis gesetzt) – exakt, kein get_openai_callback() nötig (der
+    # faengt DeepEvals eigene Client-Calls ohnehin nicht ab).
+    judge_cost = metric.evaluation_cost or 0.0
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
         "faithfulness": round(metric.score, 3),
@@ -285,9 +302,12 @@ def test_hallucination(agent_cfg, task):
     )
 
     metric = HallucinationMetric(threshold=0.5, model=_JUDGE_MODEL)
-    with get_openai_callback() as cb:
-        metric.measure(test_case)
-    judge_cost = calc_cost_usd(_JUDGE_MODEL, cb.prompt_tokens, cb.completion_tokens)
+    metric.measure(test_case)
+    # metric.evaluation_cost: DeepEval berechnet das selbst aus den echten
+    # Tokens der API-Antwort × OPENAI_COST_PER_*_TOKEN (oben auf unseren
+    # Judge-Preis gesetzt) – exakt, kein get_openai_callback() nötig (der
+    # faengt DeepEvals eigene Client-Calls ohnehin nicht ab).
+    judge_cost = metric.evaluation_cost or 0.0
     passed = metric.score <= 0.5
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {

@@ -71,11 +71,27 @@ def _api_error_banner(count: int, context: str) -> str:
     )
 
 
-def _parse_security(results: list[dict]) -> dict:
+# OpenRouter-Routing-Suffixe (steuern NUR den Provider, kein Bestandteil des
+# Preis-Tiers). Andere Suffixe wie ":free" gehören zum Modellnamen selbst und
+# duerfen nicht abgeschnitten werden – sonst findet pricing.py keinen Preis
+# mehr (z. B. "meta-llama/llama-3.1-8b-instruct:free" != "...instruct").
+_OPENROUTER_ROUTING_SUFFIXES = (":floor", ":nitro")
+
+
+def _strip_routing_suffix(model: str) -> str:
+    """Entfernt nur bekannte OpenRouter-Routing-Suffixe vom Modellnamen."""
+    for suffix in _OPENROUTER_ROUTING_SUFFIXES:
+        if model.endswith(suffix):
+            return model[: -len(suffix)]
+    return model
+
+
+def _parse_security(results: list[dict], judge_model: str = "default") -> dict:
     by_class: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
     by_scope: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
     total_pass = total_fail = provider_errors = 0
     token_total = cost_total = latency_sum = latency_count = judge_calls = 0
+    judge_in = judge_out = 0
 
     for r in results:
         if not r:
@@ -101,15 +117,24 @@ def _parse_security(results: list[dict]) -> dict:
         out  = usage.get("completion", 0)
         token_total += usage.get("total", inp + out)
         provider_id = r.get("provider", {}).get("id", "") or ""
-        model = provider_id.replace("openai:", "").split(":")[0]
+        model = _strip_routing_suffix(provider_id.replace("openai:", ""))
         cost_total += calc_cost_usd(model, inp, out)
         latency = r.get("latencyMs", 0) or 0
         if latency:
             latency_sum += latency
             latency_count += 1
+        # promptfoo liefert exakte Token-Zahlen je Grading-Call in
+        # componentResults[].tokensUsed – nicht schätzen, sondern aufsummieren.
+        # defaultTest.options.provider in den Eval-YAMLs zeigt jetzt auf den
+        # Judge (JUDGE_MODEL_NAME), daher mit judge_model bepreisen.
         for a in (r.get("gradingResult") or {}).get("componentResults", []):
             if a.get("assertion", {}).get("type") == "llm-rubric":
                 judge_calls += 1
+                tu = a.get("tokensUsed") or {}
+                judge_in  += tu.get("prompt", 0)
+                judge_out += tu.get("completion", 0)
+
+    judge_cost_usd = calc_cost_usd(judge_model, judge_in, judge_out) if judge_calls else 0.0
 
     return {
         "total_pass":      total_pass,
@@ -118,17 +143,27 @@ def _parse_security(results: list[dict]) -> dict:
         "by_scope":        dict(by_scope),
         "token_total":     token_total,
         "cost_usd":        round(cost_total, 6),
-        "latency_p50_ms":  round(latency_sum / max(latency_count, 1)),
+        "latency_avg_ms":  round(latency_sum / max(latency_count, 1)),
         "judge_calls":     judge_calls,
+        "judge_cost_usd":  round(judge_cost_usd, 6),
         "provider_errors": provider_errors,
     }
 
 
-def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
-    """Gibt (by_article, stats) zurück. stats enthält cost_usd, token_total, latency_p50_ms."""
+def _parse_compliance(results: list[dict], judge_model: str = "default") -> tuple[dict, dict]:
+    """Gibt (by_article, stats) zurück. stats enthält cost_usd, token_total, latency_avg_ms.
+
+    by_article zählt einen Test in JEDEM zugeordneten Artikel mit (ein Test mit
+    "Art. 13 / Art. 52" zählt absichtlich in beiden Zeilen). total_pass/total_fail
+    in stats zählen dagegen jeden Testfall genau einmal – Gesamtraten (Vergleichs-
+    tabelle, Scorecard) müssen darauf basieren, sonst werden Mehrfach-Artikel-Tests
+    doppelt gezählt und die Gesamtrate verzerrt.
+    """
     by_article: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
     by_scope: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
+    total_pass = total_fail = 0
     token_total = cost_total = latency_sum = latency_count = judge_calls = provider_errors = 0
+    judge_in = judge_out = 0
     for r in results:
         if not r:
             continue
@@ -136,6 +171,10 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
             provider_errors += 1
         success = r.get("success", r.get("pass", False))
         meta = r.get("testCase", {}).get("metadata", {})
+        if success:
+            total_pass += 1
+        else:
+            total_fail += 1
         article_raw = meta.get("article", "")
         articles = [a.strip() for a in article_raw.split("/")] if article_raw else ["Nicht zugeordnet"]
         for art in articles:
@@ -146,20 +185,31 @@ def _parse_compliance(results: list[dict]) -> tuple[dict, dict]:
         out  = usage.get("completion", 0)
         token_total += usage.get("total", inp + out)
         provider_id = r.get("provider", {}).get("id", "") or ""
-        model = provider_id.replace("openai:", "").split(":")[0]
+        model = _strip_routing_suffix(provider_id.replace("openai:", ""))
         cost_total  += calc_cost_usd(model, inp, out)
         latency = r.get("latencyMs", 0) or 0
         if latency:
             latency_sum   += latency
             latency_count += 1
+        # promptfoo liefert exakte Token-Zahlen je Grading-Call in
+        # componentResults[].tokensUsed – nicht schätzen, sondern aufsummieren.
+        # defaultTest.options.provider zeigt jetzt auf den Judge
+        # (JUDGE_MODEL_NAME), daher mit judge_model bepreisen.
         for a in (r.get("gradingResult") or {}).get("componentResults", []):
             if a.get("assertion", {}).get("type") == "llm-rubric":
                 judge_calls += 1
+                tu = a.get("tokensUsed") or {}
+                judge_in  += tu.get("prompt", 0)
+                judge_out += tu.get("completion", 0)
+    judge_cost_usd = calc_cost_usd(judge_model, judge_in, judge_out) if judge_calls else 0.0
     stats = {
+        "total_pass":      total_pass,
+        "total_fail":      total_fail,
         "token_total":     token_total,
         "cost_usd":        round(cost_total, 6),
-        "latency_p50_ms":  round(latency_sum / max(latency_count, 1)),
+        "latency_avg_ms":  round(latency_sum / max(latency_count, 1)),
         "judge_calls":     judge_calls,
+        "judge_cost_usd":  round(judge_cost_usd, 6),
         "provider_errors": provider_errors,
         "by_scope":        dict(by_scope),
     }
@@ -355,8 +405,12 @@ def _section_summary(sec_data: dict, comp_data: dict,
     sec_pass = sec_data.get("total_pass", 0)
     sec_total = sec_pass + sec_data.get("total_fail", 0)
 
-    comp_pass = sum(v["pass"] for v in comp_data.values()) if comp_data else 0
-    comp_total = comp_pass + sum(v["fail"] for v in comp_data.values()) if comp_data else 0
+    # total_pass/total_fail aus comp_stats statt comp_data (by_article) summieren –
+    # Tests mit Mehrfach-Artikel-Tags ("Art. 13 / Art. 52") zählen in comp_data
+    # absichtlich in jedem Artikel, würden hier aber doppelt in die Gesamtrate
+    # einfließen.
+    comp_pass = comp_stats.get("total_pass", 0)
+    comp_total = comp_pass + comp_stats.get("total_fail", 0)
 
     records = func_data.get("records", []) if func_data else []
     func_pass = sum(1 for r in records if r.get("passed"))
@@ -461,7 +515,7 @@ def _section_security(sec_data: dict) -> str:
     total_all  = total_pass + sec_data.get("total_fail", 0)
     cost       = sec_data.get("cost_usd", 0)
     tokens     = sec_data.get("token_total", 0)
-    lat        = sec_data.get("latency_p50_ms") or 0
+    lat        = sec_data.get("latency_avg_ms") or 0
     prov_err   = sec_data.get("provider_errors", 0)
 
     banner = (_api_error_banner(prov_err,
@@ -518,7 +572,7 @@ def _section_compliance(comp_data: dict, comp_stats: dict, scorecard: dict | Non
 
     cost      = comp_stats.get("cost_usd", 0)
     tokens    = comp_stats.get("token_total", 0)
-    lat       = comp_stats.get("latency_p50_ms", 0)
+    lat       = comp_stats.get("latency_avg_ms", 0)
     prov_err  = comp_stats.get("provider_errors", 0)
 
     banner = (_api_error_banner(prov_err,
@@ -678,46 +732,52 @@ def _section_functionality(func_data: dict) -> str:
     )
 
 
+# DeepEval-Metriken ohne LLM-Judge-Aufruf (deterministischer Vergleich,
+# kein model=-Parameter an die Metric-Klasse übergeben).
+_RULE_BASED_METRICS = {"required_fields", "tool_correctness"}
+
+
 def _section_eval_overhead(
     sec_data: dict,
     comp_stats: dict,
     func_data: dict,
     judge_model: str,
 ) -> str:
-    # D1: exakt aus functionality_costs.json
+    # D1: exakt aus functionality_costs.json – DeepEval berechnet
+    # eval_cost_usd selbst aus echten Tokens × OPENAI_COST_PER_*_TOKEN
+    # (test_functionality.py setzt das auf unseren Judge-Preis aus pricing.py).
     d1_judge = (func_data.get("summary", {}).get("eval_cost_usd", 0) if func_data else 0)
-
-    # D2/D3: geschätzt aus Anzahl llm-rubric-Aufrufe × ~600/150 Tokens
-    sec_judge_calls = sec_data.get("judge_calls", 0)
-    d2_judge = sec_judge_calls * calc_cost_usd(judge_model, 600, 150)
-
-    comp_judge_calls = comp_stats.get("judge_calls", 0)
-    d3_judge = comp_judge_calls * calc_cost_usd(judge_model, 600, 150)
-
-    total_judge = d1_judge + d2_judge + d3_judge
-
-    # LLM-basierte Metriken – nur erfolgreiche Records (required_fields ist regelbasiert)
     records     = (func_data or {}).get("records", [])
     metrics     = (func_data or {}).get("metrics", ["task_completion", "answer_relevancy"])
-    llm_metrics = [m for m in metrics if m != "required_fields"]
+    llm_metrics = [m for m in metrics if m not in _RULE_BASED_METRICS]
     ok_records  = [r for r in records if not r.get("error")]
     d1_judge_calls = len(ok_records) * len(llm_metrics)
+
+    # D2/D3: exakt aus promptfoo componentResults[].tokensUsed (von
+    # _parse_security/_parse_compliance bereits aufsummiert und bepreist).
+    sec_judge_calls = sec_data.get("judge_calls", 0)
+    d2_judge = sec_data.get("judge_cost_usd", 0.0)
+
+    comp_judge_calls = comp_stats.get("judge_calls", 0)
+    d3_judge = comp_stats.get("judge_cost_usd", 0.0)
+
+    total_judge = d1_judge + d2_judge + d3_judge
 
     rows = [
         f"<tr><td>D1 – Funktionalität</td>"
         f"<td>${d1_judge:.4f}</td>"
         f"<td>{d1_judge_calls}</td>"
-        f"<td><small>exakt (DeepEval-Callback)</small></td></tr>",
+        f"<td><small>exakt (DeepEval evaluation_cost)</small></td></tr>",
 
         f"<tr><td>D2 – Sicherheit</td>"
         f"<td>${d2_judge:.4f}</td>"
         f"<td>{sec_judge_calls}</td>"
-        f"<td><small>geschätzt (~600&thinsp;/&thinsp;150 Tokens je Aufruf)</small></td></tr>",
+        f"<td><small>exakt (promptfoo tokensUsed)</small></td></tr>",
 
         f"<tr><td>D3 – Compliance</td>"
         f"<td>${d3_judge:.4f}</td>"
         f"<td>{comp_judge_calls}</td>"
-        f"<td><small>geschätzt (~600&thinsp;/&thinsp;150 Tokens je Aufruf)</small></td></tr>",
+        f"<td><small>exakt (promptfoo tokensUsed)</small></td></tr>",
 
         f"<tr style='font-weight:700'><td>Gesamt</td>"
         f"<td>${total_judge:.4f}</td><td></td><td></td></tr>",
@@ -730,7 +790,8 @@ def _section_eval_overhead(
         f"Das Judge-Modell ist unabhängig vom getesteten Modell fest auf "
         f"<strong>{judge_model}</strong> fixiert, um Vergleichbarkeit zwischen "
         f"verschiedenen getesteten Modellen zu gewährleisten. "
-        f"D2/D3-Werte sind Schätzungen basierend auf der Anzahl erkannter Judge-Aufrufe.</p>"
+        f"Alle Werte sind exakt aus den tatsächlichen Token-Zahlen je Judge-Aufruf "
+        f"berechnet (D1: DeepEval evaluation_cost, D2/D3: promptfoo tokensUsed).</p>"
         "<table><thead><tr>"
         "<th>Dimension</th><th>Judge-Kosten (USD)</th><th>Judge-Aufrufe</th><th>Genauigkeit</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
@@ -739,34 +800,35 @@ def _section_eval_overhead(
 
 def _section_eval_overhead_all(agents_data: list[dict], judge_model: str) -> str:
     """Aggregierter Evaluierungs-Overhead (Judge-Zusammenfassung) über alle Agenten."""
-    cpc = calc_cost_usd(judge_model, 600, 150)
-
     rows: list[str] = []
-    sum_d1_cost = sum_d1_calls = sum_d2_calls = sum_d3_calls = 0.0
+    sum_d1_cost = sum_d1_calls = 0.0
+    sum_d2_cost = sum_d2_calls = 0.0
+    sum_d3_cost = sum_d3_calls = 0.0
 
     for e in agents_data:
         func       = e.get("func_data") or {}
-        d1_cost    = (func.get("summary") or {}).get("eval_cost_usd", 0) or 0
         records    = func.get("records", [])
         metrics    = func.get("metrics", ["task_completion", "answer_relevancy"])
-        llm_m      = [m for m in metrics if m != "required_fields"]
+        llm_m      = [m for m in metrics if m not in _RULE_BASED_METRICS]
         ok_records = [r for r in records if not r.get("error")]
         d1_calls   = len(ok_records) * len(llm_m)
+        # exakt: DeepEval berechnet eval_cost_usd selbst aus echten Tokens ×
+        # OPENAI_COST_PER_*_TOKEN (auf unseren Judge-Preis gesetzt).
+        d1_cost    = (func.get("summary") or {}).get("eval_cost_usd", 0) or 0
 
         sec        = e.get("sec_data") or {}
         d2_calls   = sec.get("judge_calls", 0) or 0
+        d2_cost    = sec.get("judge_cost_usd", 0.0) or 0.0  # exakt (tokensUsed)
 
         comp       = e.get("comp_stats") or {}
         d3_calls   = comp.get("judge_calls", 0) or 0
+        d3_cost    = comp.get("judge_cost_usd", 0.0) or 0.0  # exakt (tokensUsed)
 
-        d2_cost    = d2_calls * cpc
-        d3_cost    = d3_calls * cpc
         row_total  = d1_cost + d2_cost + d3_cost
 
-        sum_d1_cost  += d1_cost
-        sum_d1_calls += d1_calls
-        sum_d2_calls += d2_calls
-        sum_d3_calls += d3_calls
+        sum_d1_cost  += d1_cost;  sum_d1_calls += d1_calls
+        sum_d2_cost  += d2_cost;  sum_d2_calls += d2_calls
+        sum_d3_cost  += d3_cost;  sum_d3_calls += d3_calls
 
         err_count = sum(1 for r in records if r.get("error"))
         err_note  = f' <span style="color:#e17055;font-size:.75rem">({err_count} Fehler)</span>' if err_count else ""
@@ -781,22 +843,22 @@ def _section_eval_overhead_all(agents_data: list[dict], judge_model: str) -> str
             f"</tr>"
         )
 
-    grand = sum_d1_cost + sum_d2_calls * cpc + sum_d3_calls * cpc
+    grand = sum_d1_cost + sum_d2_cost + sum_d3_cost
     rows.append(
         f"<tr style='font-weight:700;border-top:2px solid #dfe6e9'>"
         f"<td>Gesamt</td>"
         f"<td>${sum_d1_cost:.4f}&thinsp;<small>({int(sum_d1_calls)} Aufrufe)</small></td>"
-        f"<td>${sum_d2_calls * cpc:.4f}&thinsp;<small>({int(sum_d2_calls)})</small></td>"
-        f"<td>${sum_d3_calls * cpc:.4f}&thinsp;<small>({int(sum_d3_calls)})</small></td>"
+        f"<td>${sum_d2_cost:.4f}&thinsp;<small>({int(sum_d2_calls)})</small></td>"
+        f"<td>${sum_d3_cost:.4f}&thinsp;<small>({int(sum_d3_calls)})</small></td>"
         f"<td style='font-weight:700'>${grand:.4f}</td>"
         f"</tr>"
     )
 
     return (
-        "<h2>Judge-Zusammenfassung – alle Agenten</h2>"
         f"<p style='color:#636e72;font-size:.85rem;margin-bottom:16px'>"
         f"Kumulierte Judge-Kosten über alle Agenten. Judge-Modell: <strong>{judge_model}</strong>. "
-        f"D1 exakt (DeepEval-Callback), D2/D3 geschätzt (~600&thinsp;/&thinsp;150 Tokens je Aufruf). "
+        f"Alle Werte sind exakt aus den tatsächlichen Token-Zahlen je Judge-Aufruf berechnet "
+        f"(D1: DeepEval evaluation_cost, D2/D3: promptfoo tokensUsed). "
         f"Error-Einträge fließen nicht in D1-Aufrufe ein.</p>"
         "<table><thead><tr>"
         "<th>Agent</th><th>D1 Funktionalität</th><th>D2 Sicherheit</th>"
@@ -951,8 +1013,10 @@ def _section_comparison(agents_data: list[dict]) -> str:
         sec_total = sec_pass + sec.get("total_fail", 0)
         sec_rate  = sec_pass / sec_total if sec_total else 0.0
 
-        comp_pass  = sum(v["pass"] for v in comp_d.values()) if comp_d else 0
-        comp_total = comp_pass + sum(v["fail"] for v in comp_d.values()) if comp_d else 0
+        # total_pass/total_fail aus comp_stats statt comp_d (by_article) – siehe
+        # Hinweis in _parse_compliance zur Mehrfach-Artikel-Doppelzählung.
+        comp_pass  = comp_stats_e.get("total_pass", 0)
+        comp_total = comp_pass + comp_stats_e.get("total_fail", 0)
         comp_rate  = comp_pass / comp_total if comp_total else 0.0
 
         # Kosten: Summe aus Funktionalität + Security + Compliance
@@ -963,7 +1027,7 @@ def _section_comparison(agents_data: list[dict]) -> str:
 
         # Latenz: bevorzuge Funktionalität, Fallback auf Security
         latency = (summary.get("avg_latency_ms") or
-                   sec.get("latency_p50_ms") or 0)
+                   sec.get("latency_avg_ms") or 0)
 
         func_errors = sum(1 for r in records if r.get("error"))
 
@@ -978,12 +1042,14 @@ def _section_comparison(agents_data: list[dict]) -> str:
             "latency":     latency,
         })
 
-    # Kosteneffizienz + Geschwindigkeit normalisieren (bester Agent = 1.0)
-    max_cost = max((e["cost"]    for e in entries), default=1) or 1
-    max_lat  = max((e["latency"] for e in entries), default=1) or 1
+    # Kosteneffizienz + Geschwindigkeit normalisieren: güngstigster/schnellster
+    # Agent erhält exakt 1.0 (100 %), andere proportional dazu (min/wert) –
+    # nicht "1 - wert/max", das würde dem teuersten Agenten fälschlich 0 % geben.
+    min_cost = min((e["cost"]    for e in entries if e["cost"]    > 0), default=0)
+    min_lat  = min((e["latency"] for e in entries if e["latency"] > 0), default=0)
     for e in entries:
-        e["cost_rate"]  = 1.0 - e["cost"]    / max_cost
-        e["speed_rate"] = 1.0 - e["latency"] / max_lat
+        e["cost_rate"]  = (min_cost / e["cost"])    if e["cost"]    > 0 and min_cost > 0 else 0.0
+        e["speed_rate"] = (min_lat  / e["latency"]) if e["latency"] > 0 and min_lat  > 0 else 0.0
 
     # ── Radar-Chart ───────────────────────────────────────────────────────
     radar = (
@@ -1060,7 +1126,7 @@ def _section_comparison(agents_data: list[dict]) -> str:
     return "<h2>Agenten-Vergleich</h2>" + radar + charts + "<br>" + table
 
 
-def _agent_block(entry: dict, judge_model: str) -> str:
+def _agent_block(entry: dict) -> str:
     """Erzeugt den vollständigen HTML-Block für einen einzelnen Agenten.
     Alle Daten (Security, Compliance, Funktionalität) kommen aus entry."""
     label        = entry["label"]
@@ -1079,12 +1145,14 @@ def _agent_block(entry: dict, judge_model: str) -> str:
         f'</div>'
     )
 
+    # _section_eval_overhead bewusst nicht hier eingebunden – die globale
+    # Judge-Zusammenfassung (_section_eval_overhead_all) deckt dieselben
+    # Zahlen pro Agent bereits ab, keine zusätzliche Erkenntnis pro Block.
     body = (
         _section_summary(sec_data, comp_data, comp_stats, scorecard, func_data)
         + _section_functionality(func_data)
         + _section_security(sec_data)
         + _section_compliance(comp_data, comp_stats, scorecard)
-        + _section_eval_overhead(sec_data, comp_stats, func_data, judge_model)
     )
 
     return (
@@ -1298,7 +1366,7 @@ def generate_multi_agent_report(
         sec_path = f"security_results_{_sfx}{agent_id}.json"
         sec_data = _parse_security(_promptfoo_results(
             _load_json(sec_path) or (_load_json(security_paths[0]) if security_paths else None)
-        ))
+        ), _judge)
 
         # Compliance – per-(UC,Agent)-Dateien, Fallback auf geteilte Dateien
         comp_path      = f"compliance_results_{_sfx}{agent_id}.json"
@@ -1306,7 +1374,7 @@ def generate_multi_agent_report(
         comp_results   = _promptfoo_results(
             _load_json(comp_path) or _load_json(compliance_path)
         )
-        comp_data, comp_stats = _parse_compliance(comp_results)
+        comp_data, comp_stats = _parse_compliance(comp_results, _judge)
         scorecard = _load_json(scorecard_path_agent) or _load_json(scorecard_path)
 
         # Funktionalität
@@ -1339,8 +1407,14 @@ def generate_multi_agent_report(
         + '</div></div>'
     )
     overall_html   = _section_overall_score(agents_data)
+    # Einklappbar wie die Agenten-Blöcke, ganz unten platziert – nur ein
+    # ergänzender Zusatzwert, keine Information, die zuerst gesehen werden muss.
     overhead_all   = (
-        '<div class="section-group">'
+        '<div class="section-group agent-section">'
+        '<div class="agent-divider" onclick="ovbToggle(this)">'
+        'Judge-Zusammenfassung – alle Agenten'
+        '<span class="toggle-arrow">▲</span>'
+        '</div>'
         '<div class="section-group-body">'
         + _section_eval_overhead_all(agents_data, _judge)
         + '</div></div>'
@@ -1351,7 +1425,7 @@ def generate_multi_agent_report(
         "<button class='ovb-collapse-btn' onclick='ovbExpandAll()'>Alle ausklappen</button>"
         "</div>"
     )
-    blocks = "".join(_agent_block(e, _judge) for e in agents_data)
+    blocks = "".join(_agent_block(e) for e in agents_data)
 
     html = f"""<!DOCTYPE html>
 <html lang="de">
@@ -1371,9 +1445,9 @@ def generate_multi_agent_report(
 <div class="container">
   {comparison_html}
   {overall_html}
-  {overhead_all}
   {collapse_bar}
   {blocks}
+  {overhead_all}
 </div>
 <footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>
 <script>
@@ -1404,10 +1478,12 @@ def generate_report(
     use_case: str | None = None,
 ) -> Path:
     security_paths = security_paths or []
+    model = model_name or os.environ.get("AGENT_MODEL_NAME", "gpt-5.4-mini")
+    judge_model = _load_judge_model_from_config() or os.environ.get("JUDGE_MODEL_NAME", model)
 
     # Alle übergebenen Security-Dateien zu einem Datensatz zusammenführen
     # (Rückwärtskompatibilität: Aufrufer kann mehrere --security-Dateien übergeben)
-    sec_datasets = [_parse_security(_promptfoo_results(_load_json(p))) for p in security_paths]
+    sec_datasets = [_parse_security(_promptfoo_results(_load_json(p)), judge_model) for p in security_paths]
     if not sec_datasets:
         sec_data: dict = {}
     elif len(sec_datasets) == 1:
@@ -1417,6 +1493,7 @@ def generate_report(
         ms: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
         tp = tf = tok = jc = pe = 0
         costs: list[float] = []
+        judge_costs: list[float] = []
         lats:  list[float] = []
         for d in sec_datasets:
             for k, v in d.get("by_class", {}).items():
@@ -1427,23 +1504,23 @@ def generate_report(
             tok += d.get("token_total", 0); jc  += d.get("judge_calls", 0)
             pe  += d.get("provider_errors", 0)
             if d.get("cost_usd"):        costs.append(d["cost_usd"])
-            if d.get("latency_p50_ms"):  lats.append(d["latency_p50_ms"])
+            if d.get("judge_cost_usd"):  judge_costs.append(d["judge_cost_usd"])
+            if d.get("latency_avg_ms"):  lats.append(d["latency_avg_ms"])
         sec_data = {
             "total_pass": tp, "total_fail": tf,
             "by_class": dict(mc), "by_scope": dict(ms),
             "token_total": tok, "cost_usd": round(sum(costs), 6),
-            "latency_p50_ms": round(sum(lats) / len(lats)) if lats else 0,
-            "judge_calls": jc, "provider_errors": pe,
+            "latency_avg_ms": round(sum(lats) / len(lats)) if lats else 0,
+            "judge_calls": jc, "judge_cost_usd": round(sum(judge_costs), 6),
+            "provider_errors": pe,
         }
 
     comp_results  = _promptfoo_results(_load_json(compliance_path))
-    comp_data, comp_stats = _parse_compliance(comp_results)
+    comp_data, comp_stats = _parse_compliance(comp_results, judge_model)
     scorecard     = _load_json(scorecard_path)
     func_data     = _parse_func_costs(_load_json(functionality_path))
 
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
-    model = model_name or os.environ.get("AGENT_MODEL_NAME", "gpt-5.4-mini")
-    judge_model = _load_judge_model_from_config() or os.environ.get("JUDGE_MODEL_NAME", model)
     model_badge = f'<span class="model-badge">{model}</span>'
 
     # UC-Badge: Arg → func_data → env → default

@@ -84,6 +84,14 @@ def calc_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
     return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
 
 
+def price_per_token(model: str) -> tuple[float, float]:
+    """Gibt (input_price, output_price) in USD PRO TOKEN zurück (nicht pro 1M) –
+    für Bibliotheken wie DeepEval, die Kosten selbst aus Rohpreisen pro Token
+    berechnen (z. B. via OPENAI_COST_PER_INPUT_TOKEN/...OUTPUT_TOKEN)."""
+    p = _resolve(model)
+    return p["input"] / 1_000_000, p["output"] / 1_000_000
+
+
 def validate_agents_config(config: dict) -> None:
     """Prüft Judge- und alle Agenten-Modelle aus agents.yaml gegen PRICES_PER_1M.
 
