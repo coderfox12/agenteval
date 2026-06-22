@@ -31,14 +31,23 @@ class CostTracker:
         self.records.append({"task_id": task_id, **cost_data})
         self._save()
 
-    def record_error(self, task_id: str, error_msg: str) -> None:
-        """Erfasst einen fehlgeschlagenen Task (z. B. API-Quota erschöpft, Timeout)."""
-        self.records.append({
+    def record_error(self, task_id: str, error_msg: str, cost_usd: float | None = None) -> None:
+        """Erfasst einen fehlgeschlagenen Task (z. B. API-Quota erschöpft, Timeout).
+
+        cost_usd: falls vor dem endgültigen Fehlschlag bereits reale, bei
+        OpenRouter abgerechnete Tokens verbraucht wurden (z. B. ein Content-
+        Filter-Treffer, der nach erfolgter Inferenz eine leere Antwort liefert) –
+        diese Kosten sollen nicht unsichtbar verschwinden, nur weil der Task
+        am Ende als Fehler gilt."""
+        record = {
             "task_id":    task_id,
             "error":      str(error_msg)[:400],
             "aborted_at": datetime.now().isoformat(timespec="seconds"),
             "passed":     False,
-        })
+        }
+        if cost_usd:
+            record["cost_usd"] = round(cost_usd, 6)
+        self.records.append(record)
         self._save()
 
     def update_metrics(self, task_id: str, metrics: dict) -> None:
@@ -92,7 +101,9 @@ class CostTracker:
     def _summary(self) -> dict:
         if not self.records:
             return {}
-        # Fehler-Records haben keine Tokens/Kosten/Latenz → sicher mit .get()
+        # Fehler-Records haben i.d.R. keine Tokens/Kosten/Latenz, außer
+        # record_error() wurde mit cost_usd aufgerufen (Content-Filter-Fall:
+        # Tokens trotz leerer Antwort verbraucht) → sicher mit .get()
         ok_records   = [r for r in self.records if not r.get("error")]
         err_records  = [r for r in self.records if r.get("error")]
         total_tokens = sum(r.get("total_tokens", 0) for r in self.records)

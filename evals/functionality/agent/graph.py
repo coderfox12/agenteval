@@ -90,7 +90,12 @@ class UseCaseAgent:
                 for tc in msg.tool_calls:
                     tools_called.append(tc["name"])
 
-        final_output = result["messages"][-1].content
+        # final_output kann leer sein (z.B. Content-Filter des Modells, bei
+        # Gemini via OpenRouter beobachtet) – die Tokens wurden trotzdem
+        # verbraucht und bei OpenRouter abgerechnet (cost_usd unten ist exakt),
+        # daher hier NICHT werfen: der Aufrufer (test_functionality._run_and_record)
+        # entscheidet, ob/wie ein leerer Output behandelt wird, behält aber in
+        # jedem Fall die echten Kosten dieses Aufrufs.
         cost_usd = calc_cost_usd(self.model_name, cb.prompt_tokens, cb.completion_tokens)
 
         return {

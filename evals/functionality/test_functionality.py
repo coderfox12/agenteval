@@ -24,6 +24,7 @@ import concurrent.futures
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -128,21 +129,53 @@ def _get_agent(cfg: dict) -> tuple[UseCaseAgent, CostTracker]:
 
 _cache: dict[tuple[str, str], tuple[str, list[ToolCall]] | None] = {}
 _errors: dict[tuple[str, str], str] = {}
+_AGENT_MAX_RETRIES = 3
 
 
 def _run_and_record(agent_cfg: dict, task: dict) -> tuple[str, list[ToolCall]] | None:
     """Führt den Agenten aus und cached das Ergebnis pro (Agent, Task).
-    Gibt None zurück wenn der Agent fehlschlägt (Quota, Timeout, Auth-Fehler)."""
+    Gibt None zurück wenn der Agent nach allen Versuchen fehlschlägt (Quota,
+    Timeout, Auth-Fehler, leere Antwort durch Content-Filter).
+
+    Mit Retry: reale Läufe zeigten intermittierende Fehler bei beiden Agenten
+    (nicht nur beim Judge) – wahrscheinlich transiente OpenRouter-Probleme,
+    kein deterministischer Bug. Ein zweiter/dritter Versuch ist oft erfolgreich."""
     key = (agent_cfg["id"], task["id"])
     if key not in _cache:
         agent, tracker = _get_agent(agent_cfg)
-        try:
-            result = agent.run(task["input"])
-            tracker.record(task["id"], result["cost"])
-            _cache[key] = (result["output"], [ToolCall(name=n) for n in result["tools_called"]])
-        except Exception as exc:
-            err_str = str(exc)
-            tracker.record_error(task["id"], err_str)
+        last_exc: Exception | None = None
+        # Kosten leerer/gefilterter Antworten aus vorherigen Versuchen dieser
+        # Schleife – echte, bei OpenRouter abgerechnete Tokens, die sonst
+        # spurlos verschwinden würden, nur weil der Task am Ende scheitert
+        # oder erst im nächsten Versuch erfolgreich ist.
+        wasted_cost_usd = 0.0
+        for attempt in range(_AGENT_MAX_RETRIES):
+            try:
+                result = agent.run(task["input"])
+                cost_data = result["cost"]
+                if wasted_cost_usd:
+                    cost_data = {**cost_data, "cost_usd": round(cost_data["cost_usd"] + wasted_cost_usd, 6)}
+                if not result["output"]:
+                    # Leere Antwort (kein Text, keine Tool-Calls) – z.B. durch
+                    # einen Content-Filter ausgelöst (bei Gemini via OpenRouter
+                    # beobachtet). Kosten dieses Versuchs nicht verwerfen,
+                    # sondern bei einem späteren Erfolg/endgültigen Fehler
+                    # draufrechnen, dann erneut versuchen.
+                    wasted_cost_usd = cost_data["cost_usd"]
+                    raise RuntimeError(
+                        "Agent lieferte leere Antwort (kein Text, keine Tool-Calls) – "
+                        "möglicherweise durch einen Content-Filter des Modells ausgelöst."
+                    )
+                tracker.record(task["id"], cost_data)
+                _cache[key] = (result["output"], [ToolCall(name=n) for n in result["tools_called"]])
+                break
+            except Exception as exc:
+                last_exc = exc
+                if attempt < _AGENT_MAX_RETRIES - 1:
+                    time.sleep(2 ** attempt)  # 1s, 2s
+        else:
+            err_str = str(last_exc)
+            tracker.record_error(task["id"], err_str, cost_usd=wasted_cost_usd or None)
             _cache[key] = None
             _errors[key] = err_str
     return _cache[key]
@@ -167,8 +200,10 @@ _IDS    = [f"{a['id']}__{t['id']}" for a, t in _PARAMS]
 # in pytest_sessionstart.
 
 _metric_cache: dict[tuple[str, str, str], tuple[float | None, float]] = {}
+_metric_errors: dict[tuple[str, str, str], str] = {}
 _metric_cache_lock = threading.Lock()
 _LLM_JUDGE_METRICS = ("task_completion", "answer_relevancy", "faithfulness", "hallucination")
+_METRIC_MAX_RETRIES = 3
 
 
 def _build_test_case_and_metric(task: dict, metric_name: str, actual_output: str):
@@ -199,20 +234,38 @@ def _build_test_case_and_metric(task: dict, metric_name: str, actual_output: str
 
 
 def _prewarm_metric(agent_cfg: dict, task: dict, metric_name: str) -> None:
-    """Berechnet eine LLM-Judge-Metrik für (agent, task) und cached (score, cost)."""
+    """Berechnet eine LLM-Judge-Metrik für (agent, task) und cached (score, cost).
+
+    Mit Retry: unter Last (security_compliance läuft als paralleler CI-Job
+    gleichzeitig gegen denselben Judge-API-Key) wurden vereinzelt transiente
+    Fehler (z.B. Rate-Limits) beobachtet, die ohne Retry sofort als endgültig
+    fehlgeschlagen gewertet wurden – obwohl ein zweiter Versuch oft erfolgreich
+    ist. Der Fehlergrund wird in _metric_errors hinterlegt, damit ein
+    endgültiger Fehlschlag im Test nicht nur als "–" verschwindet, sondern mit
+    Ursache sichtbar wird.
+    """
     key = (agent_cfg["id"], task["id"], metric_name)
     cached = _cache.get((agent_cfg["id"], task["id"]))
     if cached is None:
         return  # Agent-Lauf fehlgeschlagen – Tests behandeln das via _skip_if_error
     actual_output, _ = cached
-    try:
-        test_case, metric = _build_test_case_and_metric(task, metric_name, actual_output)
-        metric.measure(test_case)
-        with _metric_cache_lock:
-            _metric_cache[key] = (metric.score, metric.evaluation_cost or 0.0)
-    except Exception:
-        with _metric_cache_lock:
-            _metric_cache[key] = (None, 0.0)
+    last_exc: Exception | None = None
+    for attempt in range(_METRIC_MAX_RETRIES):
+        try:
+            test_case, metric = _build_test_case_and_metric(task, metric_name, actual_output)
+            metric.measure(test_case)
+            with _metric_cache_lock:
+                _metric_cache[key] = (metric.score, metric.evaluation_cost or 0.0)
+            return
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _METRIC_MAX_RETRIES - 1:
+                time.sleep(2 ** attempt)  # 1s, 2s
+
+    print(f"⚠  Judge-Metrik '{metric_name}' für {key} nach {_METRIC_MAX_RETRIES} Versuchen fehlgeschlagen: {last_exc}")
+    with _metric_cache_lock:
+        _metric_cache[key] = (None, 0.0)
+        _metric_errors[key] = str(last_exc)
 
 
 def pytest_sessionstart(session):
@@ -287,9 +340,10 @@ def test_task_completion(agent_cfg, task):
         pytest.skip(f"task_completion nicht in Metrik-Set von {_UC['id']}")
 
     _skip_if_error(agent_cfg, task)
-    score, judge_cost = _metric_cache.get((agent_cfg["id"], task["id"], "task_completion"), (None, 0.0))
+    key = (agent_cfg["id"], task["id"], "task_completion")
+    score, judge_cost = _metric_cache.get(key, (None, 0.0))
     if score is None:
-        pytest.fail("TaskCompletion: Metrik-Berechnung fehlgeschlagen")
+        pytest.fail(f"TaskCompletion: Metrik-Berechnung fehlgeschlagen – {_metric_errors.get(key, '?')}")
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
         "task_completion": round(score, 3),
@@ -306,9 +360,10 @@ def test_answer_relevancy(agent_cfg, task):
         pytest.skip(f"answer_relevancy nicht in Metrik-Set von {_UC['id']}")
 
     _skip_if_error(agent_cfg, task)
-    score, judge_cost = _metric_cache.get((agent_cfg["id"], task["id"], "answer_relevancy"), (None, 0.0))
+    key = (agent_cfg["id"], task["id"], "answer_relevancy")
+    score, judge_cost = _metric_cache.get(key, (None, 0.0))
     if score is None:
-        pytest.fail("AnswerRelevancy: Metrik-Berechnung fehlgeschlagen")
+        pytest.fail(f"AnswerRelevancy: Metrik-Berechnung fehlgeschlagen – {_metric_errors.get(key, '?')}")
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
         "answer_relevancy": round(score, 3),
@@ -325,9 +380,10 @@ def test_faithfulness(agent_cfg, task):
         pytest.skip(f"faithfulness nicht in Metrik-Set von {_UC['id']}")
 
     _skip_if_error(agent_cfg, task)
-    score, judge_cost = _metric_cache.get((agent_cfg["id"], task["id"], "faithfulness"), (None, 0.0))
+    key = (agent_cfg["id"], task["id"], "faithfulness")
+    score, judge_cost = _metric_cache.get(key, (None, 0.0))
     if score is None:
-        pytest.fail("Faithfulness: Metrik-Berechnung fehlgeschlagen")
+        pytest.fail(f"Faithfulness: Metrik-Berechnung fehlgeschlagen – {_metric_errors.get(key, '?')}")
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
         "faithfulness": round(score, 3),
@@ -344,9 +400,10 @@ def test_hallucination(agent_cfg, task):
         pytest.skip(f"hallucination nicht in Metrik-Set von {_UC['id']}")
 
     _skip_if_error(agent_cfg, task)
-    score, judge_cost = _metric_cache.get((agent_cfg["id"], task["id"], "hallucination"), (None, 0.0))
+    key = (agent_cfg["id"], task["id"], "hallucination")
+    score, judge_cost = _metric_cache.get(key, (None, 0.0))
     if score is None:
-        pytest.fail("Hallucination: Metrik-Berechnung fehlgeschlagen")
+        pytest.fail(f"Hallucination: Metrik-Berechnung fehlgeschlagen – {_metric_errors.get(key, '?')}")
     passed = score <= 0.5
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
