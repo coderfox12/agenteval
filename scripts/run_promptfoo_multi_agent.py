@@ -33,10 +33,15 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-import yaml
 from dotenv import load_dotenv
 
+from agenteval_ovb.agents_config import load_agents_config, require_api_base
 from agenteval_ovb.pricing import validate_agents_config
+from agenteval_ovb.promptfoo_utils import (
+    DEFAULT_MAX_CONCURRENCY,
+    PROMPTFOO_VERSION,
+    extract_promptfoo_results,
+)
 
 ROOT = Path(__file__).parent.parent
 
@@ -74,15 +79,6 @@ UC_SUITES = {
 }
 
 
-def load_config() -> dict:
-    with open(ROOT / "agents.yaml", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
-
-def load_agents() -> list[dict]:
-    return load_config()["agents"]
-
-
 def _validate_pricing(config: dict) -> None:
     """Bricht vor dem ersten promptfoo-Call ab, statt API-Budget für einen Lauf
     zu verbrauchen, dessen Wirtschaftlichkeits-Zahlen anschließend ohnehin
@@ -95,31 +91,19 @@ def _validate_pricing(config: dict) -> None:
 
 
 def _agent_env(agent: dict, judge: dict) -> dict:
-    if not agent.get("api_base"):
-        raise ValueError(
-            f"Agent '{agent.get('id', '?')}': api_base fehlt in agents.yaml – "
-            f"Pflichtfeld, auch für OpenAI (https://api.openai.com/v1)."
-        )
-    if not judge.get("api_base"):
-        raise ValueError(
-            "judge.api_base fehlt in agents.yaml – Pflichtfeld, auch für OpenAI "
-            "(https://api.openai.com/v1)."
-        )
+    agent_base = require_api_base(agent, f"Agent '{agent.get('id', '?')}'")
+    judge_base = require_api_base(judge, "judge")
     env = os.environ.copy()
     env["OPENAI_API_KEY"]  = os.environ.get(agent["api_key_env"], "")
     env["MODEL_NAME"]      = agent["model"]
-    env["OPENAI_BASE_URL"] = agent["api_base"]
+    env["OPENAI_BASE_URL"] = agent_base
     # Judge-Credentials separat, eigene Env-Variablen-Namen – die Eval-YAMLs
     # nutzen sie für defaultTest.options.provider, damit das Grading über den
     # konfigurierten Judge läuft statt über den gerade getesteten Agenten.
     env["JUDGE_MODEL_NAME"]      = judge["model"]
     env["JUDGE_OPENAI_API_KEY"]  = os.environ.get(judge["api_key_env"], "")
-    env["JUDGE_OPENAI_BASE_URL"] = judge["api_base"]
+    env["JUDGE_OPENAI_BASE_URL"] = judge_base
     return env
-
-
-def _promptfoo_results(data: dict) -> list[dict]:
-    return data.get("results", {}).get("results", data.get("results", []))
 
 
 def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dict], bool]:
@@ -143,7 +127,8 @@ def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dic
     tmp_out   = ROOT / f"_tmp_{safe_name}_{agent_id}.json"
 
     cmd = [
-        "npx", "promptfoo@latest", "eval", "--no-cache",
+        "npx", f"promptfoo@{PROMPTFOO_VERSION}", "eval", "--no-cache",
+        "--max-concurrency", str(DEFAULT_MAX_CONCURRENCY),
         "--config", str(config_path),
         "--output", str(tmp_out),
     ]
@@ -154,7 +139,7 @@ def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dic
     if tmp_out.exists():
         try:
             data = json.loads(tmp_out.read_text(encoding="utf-8"))
-            for r in _promptfoo_results(data):
+            for r in extract_promptfoo_results(data):
                 if not r:
                     continue
                 meta = r.setdefault("testCase", {}).setdefault("metadata", {})
@@ -185,7 +170,7 @@ def run_scorecard(agent_id: str) -> None:
 
 
 def main() -> None:
-    config = load_config()
+    config = load_agents_config()
     _validate_pricing(config)
     agents = config["agents"]
     judge  = config["judge"]

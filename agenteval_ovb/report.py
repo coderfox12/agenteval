@@ -24,6 +24,7 @@ from datetime import datetime
 from pathlib import Path
 
 from agenteval_ovb.pricing import calc_cost_usd
+from agenteval_ovb.promptfoo_utils import extract_promptfoo_results as _promptfoo_results
 
 # ---------------------------------------------------------------------------
 # Daten-Loader
@@ -36,12 +37,6 @@ def _load_json(path: str | None) -> dict | None:
     if not p.exists():
         return None
     return json.loads(p.read_text(encoding="utf-8"))
-
-
-def _promptfoo_results(data: dict | None) -> list[dict]:
-    if not data:
-        return []
-    return data.get("results", {}).get("results", data.get("results", []))
 
 
 def _is_provider_error(r: dict) -> bool:
@@ -69,21 +64,6 @@ def _api_error_banner(count: int, context: str) -> str:
         'Diese Tests zählen als nicht bestanden.'
         '</div>'
     )
-
-
-# OpenRouter-Routing-Suffixe (steuern NUR den Provider, kein Bestandteil des
-# Preis-Tiers). Andere Suffixe wie ":free" gehören zum Modellnamen selbst und
-# duerfen nicht abgeschnitten werden – sonst findet pricing.py keinen Preis
-# mehr (z. B. "meta-llama/llama-3.1-8b-instruct:free" != "...instruct").
-_OPENROUTER_ROUTING_SUFFIXES = (":floor", ":nitro")
-
-
-def _strip_routing_suffix(model: str) -> str:
-    """Entfernt nur bekannte OpenRouter-Routing-Suffixe vom Modellnamen."""
-    for suffix in _OPENROUTER_ROUTING_SUFFIXES:
-        if model.endswith(suffix):
-            return model[: -len(suffix)]
-    return model
 
 
 def _parse_security(results: list[dict], judge_model: str = "default") -> dict:
@@ -117,7 +97,9 @@ def _parse_security(results: list[dict], judge_model: str = "default") -> dict:
         out  = usage.get("completion", 0)
         token_total += usage.get("total", inp + out)
         provider_id = r.get("provider", {}).get("id", "") or ""
-        model = _strip_routing_suffix(provider_id.replace("openai:", ""))
+        # calc_cost_usd()/_resolve() entfernen Routing-Suffixe (:floor/:nitro)
+        # intern – kein manuelles Stripping hier nötig.
+        model = provider_id.replace("openai:", "")
         cost_total += calc_cost_usd(model, inp, out)
         latency = r.get("latencyMs", 0) or 0
         if latency:
@@ -185,8 +167,10 @@ def _parse_compliance(results: list[dict], judge_model: str = "default") -> tupl
         out  = usage.get("completion", 0)
         token_total += usage.get("total", inp + out)
         provider_id = r.get("provider", {}).get("id", "") or ""
-        model = _strip_routing_suffix(provider_id.replace("openai:", ""))
-        cost_total  += calc_cost_usd(model, inp, out)
+        # calc_cost_usd()/_resolve() entfernen Routing-Suffixe (:floor/:nitro)
+        # intern – kein manuelles Stripping hier nötig.
+        model = provider_id.replace("openai:", "")
+        cost_total += calc_cost_usd(model, inp, out)
         latency = r.get("latencyMs", 0) or 0
         if latency:
             latency_sum   += latency
@@ -219,15 +203,10 @@ def _parse_compliance(results: list[dict], judge_model: str = "default") -> tupl
 def _load_judge_model_from_config() -> str | None:
     """Liest das Judge-Modell aus agents.yaml, falls die Datei existiert."""
     try:
-        import yaml as _yaml
-        candidates = [Path("agents.yaml"), Path(__file__).parent.parent / "agents.yaml"]
-        for p in candidates:
-            if p.exists():
-                cfg = _yaml.safe_load(p.read_text(encoding="utf-8"))
-                return cfg.get("judge", {}).get("model")
+        from agenteval_ovb.agents_config import load_agents_config
+        return load_agents_config().get("judge", {}).get("model")
     except Exception:
-        pass
-    return None
+        return None
 
 
 def _parse_func_costs(data: dict | None) -> dict:

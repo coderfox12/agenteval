@@ -52,20 +52,37 @@ class UnknownModelPriceError(ValueError):
     """Für ein Modell ist kein Preis in PRICES_PER_1M hinterlegt."""
 
 
+# OpenRouter-Routing-Suffixe (steuern NUR den Provider, kein Bestandteil des
+# Preis-Tiers). Andere Suffixe wie ":free" gehören zum Modellnamen selbst und
+# dürfen nicht abgeschnitten werden – sonst findet _resolve() keinen Preis
+# mehr (z. B. "meta-llama/llama-3.1-8b-instruct:free" != "...instruct").
+_OPENROUTER_ROUTING_SUFFIXES = (":floor", ":nitro")
+
+
+def _strip_routing_suffix(model: str) -> str:
+    """Entfernt nur bekannte OpenRouter-Routing-Suffixe vom Modellnamen."""
+    for suffix in _OPENROUTER_ROUTING_SUFFIXES:
+        if model.endswith(suffix):
+            return model[: -len(suffix)]
+    return model
+
+
 def is_known(model: str) -> bool:
     """Prüft, ob für ein Modell ein Preis hinterlegt ist (exakt oder per Prefix)."""
-    name = VERSION_ALIASES.get(model, model)
+    name = VERSION_ALIASES.get(_strip_routing_suffix(model), model)
     return name in PRICES_PER_1M or any(name.startswith(key) for key in PRICES_PER_1M)
 
 
 def _resolve(model: str) -> dict[str, float]:
-    """Gibt das Preisdict für ein Modell zurück (Aliase werden aufgelöst).
+    """Gibt das Preisdict für ein Modell zurück (Routing-Suffixe entfernt,
+    Aliase aufgelöst).
 
     Wirft UnknownModelPriceError statt stillschweigend einen Default-Preis zu
     verwenden – ein fehlender Preis soll sofort auffallen, nicht erst als
     falsche Wirtschaftlichkeits-Zahl im Report.
     """
-    name = VERSION_ALIASES.get(model, model)
+    stripped = _strip_routing_suffix(model)
+    name = VERSION_ALIASES.get(stripped, stripped)
     if name in PRICES_PER_1M:
         return PRICES_PER_1M[name]
     for key in PRICES_PER_1M:
