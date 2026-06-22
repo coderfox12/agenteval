@@ -96,6 +96,7 @@ class UseCaseAgent:
         # daher hier NICHT werfen: der Aufrufer (test_functionality._run_and_record)
         # entscheidet, ob/wie ein leerer Output behandelt wird, behält aber in
         # jedem Fall die echten Kosten dieses Aufrufs.
+        final_output = result["messages"][-1].content
         cost_usd = calc_cost_usd(self.model_name, cb.prompt_tokens, cb.completion_tokens)
 
         return {
