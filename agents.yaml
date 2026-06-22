@@ -17,22 +17,24 @@
 #                api_key_env: OPENROUTER_API_KEY
 
 # ── Judge (LLM-as-Judge für alle Evaluationen) ────────────────────────────────
+# api_key_env bleibt JUDGE_API_KEY, auch wenn das Modell über OpenRouter läuft –
+# der Judge-Key wird strikt getrennt von den Agenten-Keys verwaltet. In .env
+# unter JUDGE_API_KEY den eigenen OpenRouter-Key eintragen (api_base bestimmt
+# den Provider, nicht der Name der Env-Variable).
 judge:
-  model: gpt-5.4-mini
+  model: openai/gpt-oss-120b
   api_key_env: JUDGE_API_KEY
-  api_base: https://api.openai.com/v1
-  # Für Judge über OpenRouter stattdessen:
-  # api_base: https://openrouter.ai/api/v1
+  api_base: https://openrouter.ai/api/v1
 
 agents:
-  - id: gpt-5-4-mini
-    label: "GPT-5.4-mini (OpenAI)"
-    model: gpt-5.4-mini
-    api_key_env: AGENT_API_KEY
-    api_base: https://api.openai.com/v1
+  - id: deepseek-v4-flash
+    label: "DeepSeek V4 Flash (OpenRouter)"
+    model: deepseek/deepseek-v4-flash
+    api_key_env: OPENROUTER_API_KEY
+    api_base: https://openrouter.ai/api/v1
 
-  - id: llama-3-openrouter
-    label: "Llama 3.1 8B (OpenRouter, kostenlos)"
-    model: meta-llama/llama-3.1-8b-instruct:free
+  - id: gemini-2.5-flash-lite
+    label: "Gemini 2.5 Flash Lite (OpenRouter)"
+    model: google/gemini-2.5-flash-lite
     api_key_env: OPENROUTER_API_KEY
     api_base: https://openrouter.ai/api/v1

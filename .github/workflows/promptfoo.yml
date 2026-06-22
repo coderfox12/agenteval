@@ -36,12 +36,15 @@ jobs:
       - name: Funktionalität – Python-Abhängigkeiten installieren
         run: pip install -r evals/functionality/requirements.txt
 
-      # ── R0: Smoke Test ────────────────────────────────────────────────────
-      - name: R0 – Hello-World Smoke Test
+      # ── R0: Smoke Test – Judge + alle Agenten aus agents.yaml ──────────────
+      # Schlägt einer fehl, bricht das Skript ab (Exit-Code 1) und R2/R3, D1
+      # laufen nicht mehr – nur der Report-Schritt (if: always()) läuft trotzdem.
+      - name: R0 – Smoke-Test (Judge + alle Agenten)
         env:
-          OPENAI_API_KEY: ${{ secrets.AGENT_API_KEY }}
-          MODEL_NAME: gpt-5.4-mini
-        run: npx promptfoo@latest eval --no-cache --config promptfooconfig.yaml
+          AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
+        run: python scripts/run_smoke_test.py
 
       # ── R2 + R3: Security & Compliance – alle Agenten ─────────────────────
       - name: R2/R3 – Security & Compliance (alle Agenten aus agents.yaml)

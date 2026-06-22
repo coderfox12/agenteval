@@ -29,7 +29,7 @@ USE_CASE ?= uc1
 # ── Hauptziele ────────────────────────────────────────────────────────────────
 all: eval
 
-eval: security functionality report
+eval: smoke security functionality report
 	@echo ""
 	@echo "✅ Alle Evals abgeschlossen (USE_CASE=$(USE_CASE)). Report: report.html"
 
@@ -44,9 +44,11 @@ eval-all:
 	@echo ""
 	@echo "✅ Alle 4 Use Cases evaluiert."
 
-# ── R0: Smoke Test ────────────────────────────────────────────────────────────
+# ── R0: Smoke Test – Judge + alle Agenten aus agents.yaml ──────────────────────
+# Schlägt einer fehl, bricht make ab – security/functionality/report laufen
+# dann nicht mehr (make stoppt bei der ersten fehlschlagenden Prerequisite).
 smoke:
-	MODEL_NAME=gpt-5.4-mini npx promptfoo@latest eval --no-cache --config promptfooconfig.yaml
+	python scripts/run_smoke_test.py
 
 # ── R2/R3: Security + Compliance für alle Agenten gegen den gewählten UC ──────
 # run_promptfoo_multi_agent.py iteriert über alle Agenten in agents.yaml

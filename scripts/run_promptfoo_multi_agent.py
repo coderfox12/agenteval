@@ -32,10 +32,14 @@ import sys
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
 
 from agenteval_ovb.pricing import validate_agents_config
 
 ROOT = Path(__file__).parent.parent
+
+# .env laden (lokal nötig – in CI kommen die Secrets bereits als Env-Variablen).
+load_dotenv(ROOT / ".env")
 
 # Use Case aus Umgebungsvariable (Default uc1)
 USE_CASE = os.environ.get("USE_CASE", "uc1")
