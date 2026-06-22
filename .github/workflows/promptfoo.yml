@@ -24,9 +24,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      # Cache-Key-Version muss zu PROMPTFOO_VERSION in
+      # agenteval_ovb/promptfoo_utils.py passen (beim Bump beide ändern).
+      - name: npm-Cache für promptfoo wiederverwenden
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-promptfoo-0.121.17
+          restore-keys: |
+            ${{ runner.os }}-npm-promptfoo-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
       - name: agenteval-ovb installieren (pip install -e .)
         run: pip install -e .
       - name: R0 – Smoke-Test (Judge + alle Agenten)
@@ -50,9 +60,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      - name: npm-Cache für promptfoo wiederverwenden
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-promptfoo-0.121.17
+          restore-keys: |
+            ${{ runner.os }}-npm-promptfoo-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
       - name: agenteval-ovb installieren (pip install -e .)
         run: pip install -e .
       - name: R2/R3 – Security & Compliance (alle Agenten aus agents.yaml)
@@ -88,6 +106,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
       - name: agenteval-ovb installieren (pip install -e .)
         run: pip install -e .
       - name: Funktionalität – Python-Abhängigkeiten installieren
@@ -119,6 +138,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
       - name: agenteval-ovb installieren (pip install -e .)
         run: pip install -e .
       - name: Security/Compliance-Ergebnisse herunterladen

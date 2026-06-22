@@ -9,27 +9,29 @@ Skript mit Exit-Code 1 ab. In CI führt das dazu, dass R2/R3, D1 und der
 Report (außer dem finalen Report-Schritt mit `if: always()`) nicht mehr
 laufen – ein kaputter Agent soll den Rest der Pipeline nicht verschleiern.
 
+Judge + alle Agenten werden parallel geprüft (ThreadPoolExecutor) statt
+nacheinander – jeder Check ist ein unabhängiger Subprozess ohne
+Datenabhängigkeit zu den anderen.
+
 Aufruf:
   python scripts/run_smoke_test.py
 """
 
+import concurrent.futures
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-import yaml
 from dotenv import load_dotenv
+
+from agenteval_ovb.agents_config import load_agents_config, require_api_base
+from agenteval_ovb.promptfoo_utils import DEFAULT_MAX_CONCURRENCY, PROMPTFOO_VERSION
 
 ROOT = Path(__file__).parent.parent
 
 # .env laden (lokal nötig – in CI kommen die Secrets bereits als Env-Variablen).
 load_dotenv(ROOT / ".env")
-
-
-def load_config() -> dict:
-    with open(ROOT / "agents.yaml", encoding="utf-8") as f:
-        return yaml.safe_load(f)
 
 
 def _entry_env(model: str, api_key_env: str, api_base: str) -> dict:
@@ -44,26 +46,38 @@ def run_smoke(label: str, model: str, api_key_env: str, api_base: str) -> bool:
     print(f"\n▶  Smoke-Test: {label}  (Modell: {model}, Endpunkt: {api_base})")
     env = _entry_env(model, api_key_env, api_base)
     result = subprocess.run(
-        ["npx", "promptfoo@latest", "eval", "--no-cache", "--config", "promptfooconfig.yaml"],
+        [
+            "npx", f"promptfoo@{PROMPTFOO_VERSION}", "eval", "--no-cache",
+            "--max-concurrency", str(DEFAULT_MAX_CONCURRENCY),
+            "--config", "promptfooconfig.yaml",
+        ],
         env=env, cwd=ROOT,
     )
     return result.returncode == 0
 
 
 def main() -> None:
-    config = load_config()
+    config = load_agents_config()
     failed: list[str] = []
+
+    entries: list[tuple[str, str, str, str]] = []  # (label, model, api_key_env, api_base)
 
     judge = config.get("judge") or {}
     if judge:
-        ok = run_smoke("Judge", judge["model"], judge["api_key_env"], judge["api_base"])
-        if not ok:
-            failed.append("Judge")
+        entries.append(("Judge", judge["model"], judge["api_key_env"], require_api_base(judge, "judge")))
 
     for agent in config.get("agents", []):
-        ok = run_smoke(agent["label"], agent["model"], agent["api_key_env"], agent["api_base"])
-        if not ok:
-            failed.append(agent["label"])
+        entries.append((
+            agent["label"], agent["model"], agent["api_key_env"],
+            require_api_base(agent, f"Agent '{agent.get('id', '?')}'"),
+        ))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(entries) or 1) as executor:
+        future_to_label = {executor.submit(run_smoke, *entry): entry[0] for entry in entries}
+        for future in concurrent.futures.as_completed(future_to_label):
+            label = future_to_label[future]
+            if not future.result():
+                failed.append(label)
 
     if failed:
         print(f"\n❌  Smoke-Test fehlgeschlagen für: {', '.join(failed)}")
