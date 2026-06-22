@@ -12,6 +12,11 @@ from pathlib import Path
 _INVERSE_METRICS = {"hallucination"}
 
 
+def _passes(key: str, score: float) -> bool:
+    threshold = 0.5 if key in _INVERSE_METRICS else 0.7
+    return score <= threshold if key in _INVERSE_METRICS else score >= threshold
+
+
 class CostTracker:
     def __init__(
         self,
@@ -59,7 +64,14 @@ class CostTracker:
         self._save()
 
     def _recompute_passed(self, record: dict) -> None:
-        """Berechnet passed dynamisch über alle UC-Metrik-Schlüssel."""
+        """Berechnet passed dynamisch über alle UC-Metrik-Schlüssel – WÄHREND
+        der Lauf noch läuft. Wartet bewusst, bis alle erwarteten Scores für
+        diesen Task vorliegen (Testfunktionen schreiben sie nacheinander),
+        sonst würde ein Task fälschlich als "nicht bestanden" gelten, nur weil
+        z. B. answer_relevancy noch gar nicht dran war. Für die ENDGÜLTIGE
+        Bewertung nach Testende siehe finalize_passed() – dort bedeutet ein
+        zu diesem Zeitpunkt immer noch fehlendes Score einen echten, nicht nur
+        einen vorübergehenden Mangel."""
         if not self.metrics:
             return
         score_keys = [k for k in self.metrics if k != "required_fields"]
@@ -67,20 +79,32 @@ class CostTracker:
         if not all(s is not None for s in scores):
             return  # warten bis alle Scores vorliegen
 
-        def _passes(key: str, score: float) -> bool:
-            threshold = 0.5 if key in _INVERSE_METRICS else 0.7
-            return score <= threshold if key in _INVERSE_METRICS else score >= threshold
-
-        record["passed"] = all(
-            _passes(key, record[key])
-            for key in score_keys
-            if record.get(key) is not None
-        )
+        record["passed"] = all(_passes(key, record[key]) for key in score_keys)
 
     def finalize_passed(self) -> None:
-        """Erneute Berechnung von passed für alle Records (nach pytest_sessionfinish)."""
+        """Endgültige Berechnung von passed für alle Records, nach Testende
+        (pytest_sessionfinish).
+
+        Anders als _recompute_passed() (während des Laufs, wartet auf alle
+        Scores) gilt hier: der Lauf ist vorbei – ein zu diesem Zeitpunkt immer
+        noch fehlendes Metrik-Score wird nie mehr ankommen (der zugehörige
+        Test ist nach erschöpften Retries endgültig fehlgeschlagen, z. B.
+        pytest.fail in test_task_completion). Das zählt als nicht bestanden,
+        nicht als unklares "–" für immer – sonst verschwinden Tasks mit
+        teilweise erfolgreichen Metriken (z. B. Tool Correctness vorhanden,
+        Task Completion fehlgeschlagen) komplett aus den Bestehensraten in
+        Übersicht und Einzelansicht, obwohl reale Metrikwerte vorliegen.
+        """
+        score_keys = [k for k in self.metrics if k != "required_fields"]
+        if not score_keys:
+            return
         for r in self.records:
-            self._recompute_passed(r)
+            if r.get("error"):
+                continue  # bereits explizit passed=False in record_error()
+            r["passed"] = all(
+                r.get(key) is not None and _passes(key, r[key])
+                for key in score_keys
+            )
 
     def get_eval_cost(self, task_id: str) -> float:
         for r in self.records:
