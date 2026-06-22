@@ -20,8 +20,10 @@ Ausführung:
   USE_CASE=uc1 pytest test_functionality.py -v
 """
 
+import concurrent.futures
 import os
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -102,30 +104,37 @@ os.environ["OPENAI_COST_PER_OUTPUT_TOKEN"] = str(_judge_out_price)
 
 _agent_instances: dict[str, UseCaseAgent] = {}
 _trackers: dict[str, CostTracker] = {}
+_agent_init_lock = threading.Lock()
 
 
 def _get_agent(cfg: dict) -> tuple[UseCaseAgent, CostTracker]:
     agent_id = cfg["id"]
     if agent_id not in _agent_instances:
-        if not cfg.get("api_base"):
-            raise ValueError(
-                f"Agent '{agent_id}': api_base fehlt in agents.yaml – "
-                f"Pflichtfeld, auch für OpenAI (https://api.openai.com/v1)."
-            )
-        api_key = os.environ.get(cfg["api_key_env"])
-        _agent_instances[agent_id] = UseCaseAgent(
-            tools=_UC["tools"],
-            system_prompt=_UC["system_prompt"],
-            model=cfg["model"],
-            api_key=api_key,
-            api_base=cfg["api_base"],
-        )
-        _trackers[agent_id] = CostTracker(
-            output_path=f"functionality_costs_{_UC['id']}_{agent_id}.json",
-            use_case=_UC["id"],
-            metrics=_UC["metrics"],
-            core_metrics=_UC.get("core_metrics", []),
-        )
+        # Lock nötig: beim parallelen Vorwärmen (ThreadPoolExecutor unten)
+        # greifen mehrere Threads gleichzeitig auf denselben Agenten zu –
+        # ohne Lock könnte ein zweiter Thread Instanz/Tracker überschreiben,
+        # bevor der erste fertig ist (verlorene Records, kein Crash).
+        with _agent_init_lock:
+            if agent_id not in _agent_instances:
+                if not cfg.get("api_base"):
+                    raise ValueError(
+                        f"Agent '{agent_id}': api_base fehlt in agents.yaml – "
+                        f"Pflichtfeld, auch für OpenAI (https://api.openai.com/v1)."
+                    )
+                api_key = os.environ.get(cfg["api_key_env"])
+                _agent_instances[agent_id] = UseCaseAgent(
+                    tools=_UC["tools"],
+                    system_prompt=_UC["system_prompt"],
+                    model=cfg["model"],
+                    api_key=api_key,
+                    api_base=cfg["api_base"],
+                )
+                _trackers[agent_id] = CostTracker(
+                    output_path=f"functionality_costs_{_UC['id']}_{agent_id}.json",
+                    use_case=_UC["id"],
+                    metrics=_UC["metrics"],
+                    core_metrics=_UC.get("core_metrics", []),
+                )
     return _agent_instances[agent_id], _trackers[agent_id]
 
 
@@ -164,6 +173,24 @@ def _skip_if_error(agent_cfg: dict, task: dict) -> None:
 
 _PARAMS = [(a, t) for a in AGENTS_CONFIG for t in TASKS]
 _IDS    = [f"{a['id']}__{t['id']}" for a, t in _PARAMS]
+
+
+def pytest_sessionstart(session):
+    """Wärmt _cache parallel vor – ein Thread pro (Agent, Task)-Kombination.
+
+    Der eigentliche Engpass war nie OpenRouter (verträgt problemlos mehrere
+    gleichzeitige Requests), sondern dass wir bisher einen Task nach dem
+    anderen abgeschickt haben. Threads statt pytest-xdist-Prozessen: Python
+    gibt die GIL während des Wartens auf die HTTP-Antwort frei (echte
+    Nebenläufigkeit fürs I/O), aber _cache/_trackers bleiben EIN gemeinsames
+    Objekt in EINEM Prozess – die Prozess-Race, die -n auto verursacht hat,
+    kann hier nicht auftreten (siehe Makefile-Kommentar). _get_agent() ist
+    per Lock gegen die verbleibende Race beim Erststart eines Agenten
+    abgesichert.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(_run_and_record, agent_cfg, task) for agent_cfg, task in _PARAMS]
+        concurrent.futures.wait(futures)
 
 
 # ─── Tests ────────────────────────────────────────────────────────────────────
@@ -342,17 +369,6 @@ def test_required_fields(agent_cfg, task):
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {"required_fields": score})
     assert passed, f"RequiredFields: {score:.2f} < 0.7 oder flag_missing_information nicht aufgerufen"
-
-
-# ─── pytest-xdist: Tests pro Agent auf denselben Worker gruppieren ────────────
-
-def pytest_collection_modifyitems(items):
-    """Gruppiert alle Tests eines Agenten auf denselben xdist-Worker.
-    So bleiben Cache und CostTracker innerhalb eines Prozesses konsistent."""
-    for item in items:
-        if hasattr(item, "callspec") and "agent_cfg" in item.callspec.params:
-            agent_id = item.callspec.params["agent_cfg"]["id"]
-            item.add_marker(pytest.mark.xdist_group(name=agent_id))
 
 
 # ─── Abschluss-Report nach allen Tests ────────────────────────────────────────

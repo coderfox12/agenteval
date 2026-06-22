@@ -60,12 +60,17 @@ security:
 compliance: security
 
 # ── Funktionalität: LangGraph + DeepEval, alle Agenten gegen den UC ───────────
-# -n auto --dist=loadgroup: Agenten laufen parallel auf getrennten Workern.
-# pytest_collection_modifyitems in test_functionality.py gruppiert alle Tests
-# eines Agenten auf denselben Worker → Cache und CostTracker bleiben konsistent.
+# KEIN -n auto: trotz xdist_group-Marker landeten Tests eines Agenten in der
+# Praxis auf mehreren Worker-PROZESSEN (in CI beobachtet: gw0–gw3 für
+# denselben Agenten) – _trackers/_cache sind Modul-Level-State, pro Prozess
+# getrennt, jeder Worker überschreibt beim Speichern die Datei des
+# vorherigen. Die eigentliche Parallelität läuft jetzt INNERHALB des
+# Test-Moduls per ThreadPoolExecutor (pytest_sessionstart in
+# test_functionality.py) – ein Prozess, mehrere Threads, daher kein
+# Cross-Prozess-Datenverlust, aber trotzdem alle Agent-Aufrufe gleichzeitig.
 functionality:
 	cd evals/functionality && \
-	  USE_CASE=$(USE_CASE) pytest test_functionality.py -v -n auto --dist=loadgroup
+	  USE_CASE=$(USE_CASE) pytest test_functionality.py -v
 
 # ── HTML-Report (Multi-Agent-Vergleich für den gewählten UC) ──────────────────
 report-html:

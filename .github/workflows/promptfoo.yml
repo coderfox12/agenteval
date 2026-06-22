@@ -55,6 +55,13 @@ jobs:
         run: python scripts/run_promptfoo_multi_agent.py
 
       # ── Funktionalität: LangGraph + DeepEval – alle Agenten ───────────────
+      # KEIN -n auto: in echten CI-Laeufen beobachtet, dass Tests eines
+      # Agenten trotz xdist_group-Marker auf mehrere Worker-PROZESSE
+      # (gw0-gw3) verteilt wurden – _trackers/_cache sind Modul-Level-State,
+      # pro Prozess getrennt, am Ende blieb nur 1 statt 5 Records uebrig.
+      # Parallelitaet laeuft jetzt INNERHALB des Test-Moduls per
+      # ThreadPoolExecutor (pytest_sessionstart in test_functionality.py) –
+      # ein Prozess, mehrere Threads, kein Cross-Prozess-Datenverlust.
       - name: Funktionalität – Multi-Step Agent Eval (LangGraph + DeepEval)
         continue-on-error: true
         env:
@@ -63,7 +70,7 @@ jobs:
           JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
           DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
           DEEPEVAL_DISABLE_DOTENV: "1"
-        run: cd evals/functionality && pytest test_functionality.py -v -n auto --dist=loadgroup
+        run: cd evals/functionality && pytest test_functionality.py -v
 
       # ── HTML-Report ───────────────────────────────────────────────────────
       - name: Benchmark-Report HTML generieren
