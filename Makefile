@@ -51,8 +51,10 @@ smoke:
 	python scripts/run_smoke_test.py
 
 # ── R2/R3: Security + Compliance für alle Agenten gegen den gewählten UC ──────
-# run_promptfoo_multi_agent.py iteriert über alle Agenten in agents.yaml
-# und erzeugt *_results_$(USE_CASE)_{agent_id}.json + Scorecards.
+# run_promptfoo_multi_agent.py führt alle (Agent × Config)-Kombinationen
+# parallel aus (ThreadPoolExecutor um subprocess.run() – jeder promptfoo-Call
+# ist ein eigener OS-Prozess) und erzeugt *_results_$(USE_CASE)_{agent_id}.json
+# + Scorecards.
 security:
 	USE_CASE=$(USE_CASE) python scripts/run_promptfoo_multi_agent.py
 
@@ -66,8 +68,12 @@ compliance: security
 # getrennt, jeder Worker überschreibt beim Speichern die Datei des
 # vorherigen. Die eigentliche Parallelität läuft jetzt INNERHALB des
 # Test-Moduls per ThreadPoolExecutor (pytest_sessionstart in
-# test_functionality.py) – ein Prozess, mehrere Threads, daher kein
-# Cross-Prozess-Datenverlust, aber trotzdem alle Agent-Aufrufe gleichzeitig.
+# test_functionality.py, zwei Phasen: erst alle Agent-Läufe parallel, dann
+# alle Judge-Bewertungen parallel) – ein Prozess, mehrere Threads, daher
+# kein Cross-Prozess-Datenverlust, aber trotzdem alles gleichzeitig statt
+# sequenziell. Dieser Job läuft in der CI außerdem als eigener, zu
+# security_compliance PARALLELER Job (siehe promptfoo.yml) – beide hängen
+# nur von smoke ab, nicht voneinander.
 functionality:
 	cd evals/functionality && \
 	  USE_CASE=$(USE_CASE) pytest test_functionality.py -v

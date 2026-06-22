@@ -25,10 +25,12 @@ Aufruf:
   USE_CASE=uc2 python scripts/run_promptfoo_multi_agent.py
 """
 
+import concurrent.futures
 import json
 import os
 import subprocess
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import yaml
@@ -133,7 +135,12 @@ def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dic
         return [], True
 
     agent_id = agent["id"]
-    tmp_out  = ROOT / f"_tmp_{Path(config).stem}_{agent_id}.json"
+    # Voller (sanitierter) Pfad statt nur Path.stem: Baseline- und UC-Suite
+    # heißen oft gleich (z.B. beide "security_eval.yaml" in verschiedenen
+    # Ordnern) – bei paralleler Ausführung für denselben Agenten würde der
+    # reine Stem zu einer Temp-Datei-Kollision führen.
+    safe_name = config.replace("/", "_").replace("\\", "_").removesuffix(".yaml")
+    tmp_out   = ROOT / f"_tmp_{safe_name}_{agent_id}.json"
 
     cmd = [
         "npx", "promptfoo@latest", "eval", "--no-cache",
@@ -186,24 +193,34 @@ def main() -> None:
 
     print(f"\n🎯  Use Case: {USE_CASE}  ({_UC_DIR})")
 
+    # Alle (Agent, Config)-Kombinationen sammeln und parallel ausführen. Jeder
+    # promptfoo-Aufruf ist ein eigener Subprozess (echte OS-Parallelität, kein
+    # GIL-Thema) und schreibt dank des vollen sanitierten Pfads in run_one()
+    # in eine eigene Temp-Datei – es gibt weder eine Datenabhängigkeit
+    # zwischen den Jobs noch ein Race auf gemeinsame Dateien.
+    jobs: list[tuple[dict, str, str, str]] = []  # (agent, prefix, cfg, scope)
     for agent in agents:
         for prefix in ("security_results", "compliance_results"):
-            merged: list[dict] = []
-            # 1) Generische Baseline (scope: generic)
             for cfg in BASELINE[prefix]:
-                res, ok = run_one(agent, judge, cfg, "generic")
-                merged += res
-                if not ok:
-                    failed.append(f"{agent['id']} / {Path(cfg).name}")
-            # 2) UC-spezifische Suite (scope: uc_specific)
-            uc_cfg = UC_SUITES[prefix]
-            res, ok = run_one(agent, judge, uc_cfg, "uc_specific")
-            merged += res
+                jobs.append((agent, prefix, cfg, "generic"))
+            jobs.append((agent, prefix, UC_SUITES[prefix], "uc_specific"))
+
+    merged_by_agent_prefix: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs)) as executor:
+        future_to_job = {
+            executor.submit(run_one, agent, judge, cfg, scope): (agent, prefix, cfg)
+            for agent, prefix, cfg, scope in jobs
+        }
+        for future in concurrent.futures.as_completed(future_to_job):
+            agent, prefix, cfg = future_to_job[future]
+            res, ok = future.result()
+            merged_by_agent_prefix[(agent["id"], prefix)] += res
             if not ok:
-                failed.append(f"{agent['id']} / {Path(uc_cfg).name}")
+                failed.append(f"{agent['id']} / {Path(cfg).name}")
 
-            write_merged(merged, f"{prefix}_{USE_CASE}_{agent['id']}.json")
-
+    for agent in agents:
+        for prefix in ("security_results", "compliance_results"):
+            write_merged(merged_by_agent_prefix[(agent["id"], prefix)], f"{prefix}_{USE_CASE}_{agent['id']}.json")
         run_scorecard(agent["id"])
 
     if failed:
