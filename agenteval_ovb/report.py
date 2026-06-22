@@ -294,7 +294,7 @@ tr:hover td { background: #f7f9fc; }
                                  transition: transform .25s; display: inline-block; }
 .section-group.collapsed .toggle-arrow { transform: rotate(-180deg); }
 .section-group.collapsed .section-group-body { display: none; }
-.ovb-collapse-bar { display: flex; gap: 16px; margin: 0 0 20px; }
+.ovb-collapse-bar { display: flex; gap: 16px; margin: 32px 0 20px; }
 .ovb-collapse-btn { font-size: .8rem; color: #0984e3; cursor: pointer;
                     background: none; border: none; padding: 0; text-decoration: underline; }
 .chart-wrap { background: #fff; border-radius: 10px; padding: 24px 28px;
