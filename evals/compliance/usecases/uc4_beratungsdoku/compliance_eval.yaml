@@ -17,7 +17,11 @@ prompts:
 
 defaultTest:
   options:
-    provider: openai:{{env.MODEL_NAME}}
+    provider:
+      id: openai:{{env.JUDGE_MODEL_NAME}}
+      config:
+        apiKey: '{{env.JUDGE_OPENAI_API_KEY}}'
+        apiBaseUrl: '{{env.JUDGE_OPENAI_BASE_URL}}'
 
 tests:
 

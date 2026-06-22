@@ -92,16 +92,27 @@ def _validate_pricing(config: dict) -> None:
         sys.exit(1)
 
 
-def _agent_env(agent: dict) -> dict:
+def _agent_env(agent: dict, judge: dict) -> dict:
     if not agent.get("api_base"):
         raise ValueError(
             f"Agent '{agent.get('id', '?')}': api_base fehlt in agents.yaml – "
             f"Pflichtfeld, auch für OpenAI (https://api.openai.com/v1)."
         )
+    if not judge.get("api_base"):
+        raise ValueError(
+            "judge.api_base fehlt in agents.yaml – Pflichtfeld, auch für OpenAI "
+            "(https://api.openai.com/v1)."
+        )
     env = os.environ.copy()
     env["OPENAI_API_KEY"]  = os.environ.get(agent["api_key_env"], "")
     env["MODEL_NAME"]      = agent["model"]
     env["OPENAI_BASE_URL"] = agent["api_base"]
+    # Judge-Credentials separat, eigene Env-Variablen-Namen – die Eval-YAMLs
+    # nutzen sie für defaultTest.options.provider, damit das Grading über den
+    # konfigurierten Judge läuft statt über den gerade getesteten Agenten.
+    env["JUDGE_MODEL_NAME"]      = judge["model"]
+    env["JUDGE_OPENAI_API_KEY"]  = os.environ.get(judge["api_key_env"], "")
+    env["JUDGE_OPENAI_BASE_URL"] = judge["api_base"]
     return env
 
 
@@ -109,7 +120,7 @@ def _promptfoo_results(data: dict) -> list[dict]:
     return data.get("results", {}).get("results", data.get("results", []))
 
 
-def run_one(agent: dict, config: str, scope: str) -> tuple[list[dict], bool]:
+def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dict], bool]:
     """Führt einen promptfoo-Eval aus und gibt (results, ok) zurück.
 
     Jeder Ergebnis-Datensatz erhält metadata.scope (nur falls noch nicht gesetzt –
@@ -130,7 +141,7 @@ def run_one(agent: dict, config: str, scope: str) -> tuple[list[dict], bool]:
         "--output", str(tmp_out),
     ]
     print(f"\n▶  {USE_CASE} | {agent['label']!r} | {Path(config).name}  (scope={scope})")
-    result = subprocess.run(cmd, env=_agent_env(agent))
+    result = subprocess.run(cmd, env=_agent_env(agent, judge))
 
     results: list[dict] = []
     if tmp_out.exists():
@@ -170,6 +181,7 @@ def main() -> None:
     config = load_config()
     _validate_pricing(config)
     agents = config["agents"]
+    judge  = config["judge"]
     failed: list[str] = []
 
     print(f"\n🎯  Use Case: {USE_CASE}  ({_UC_DIR})")
@@ -179,13 +191,13 @@ def main() -> None:
             merged: list[dict] = []
             # 1) Generische Baseline (scope: generic)
             for cfg in BASELINE[prefix]:
-                res, ok = run_one(agent, cfg, "generic")
+                res, ok = run_one(agent, judge, cfg, "generic")
                 merged += res
                 if not ok:
                     failed.append(f"{agent['id']} / {Path(cfg).name}")
             # 2) UC-spezifische Suite (scope: uc_specific)
             uc_cfg = UC_SUITES[prefix]
-            res, ok = run_one(agent, uc_cfg, "uc_specific")
+            res, ok = run_one(agent, judge, uc_cfg, "uc_specific")
             merged += res
             if not ok:
                 failed.append(f"{agent['id']} / {Path(uc_cfg).name}")
