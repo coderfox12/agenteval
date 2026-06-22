@@ -175,21 +175,92 @@ _PARAMS = [(a, t) for a in AGENTS_CONFIG for t in TASKS]
 _IDS    = [f"{a['id']}__{t['id']}" for a, t in _PARAMS]
 
 
-def pytest_sessionstart(session):
-    """Wärmt _cache parallel vor – ein Thread pro (Agent, Task)-Kombination.
+# ─── Metrik-Cache: (agent_id, task_id, metric_name) → (score, judge_cost) ──────
+# Separat vom Ergebnis-Cache (_cache), weil eine LLM-Judge-Bewertung erst
+# nach dem Agent-Lauf möglich ist (braucht actual_output) – siehe Phase 2
+# in pytest_sessionstart.
 
-    Der eigentliche Engpass war nie OpenRouter (verträgt problemlos mehrere
-    gleichzeitige Requests), sondern dass wir bisher einen Task nach dem
-    anderen abgeschickt haben. Threads statt pytest-xdist-Prozessen: Python
-    gibt die GIL während des Wartens auf die HTTP-Antwort frei (echte
-    Nebenläufigkeit fürs I/O), aber _cache/_trackers bleiben EIN gemeinsames
-    Objekt in EINEM Prozess – die Prozess-Race, die -n auto verursacht hat,
-    kann hier nicht auftreten (siehe Makefile-Kommentar). _get_agent() ist
-    per Lock gegen die verbleibende Race beim Erststart eines Agenten
-    abgesichert.
+_metric_cache: dict[tuple[str, str, str], tuple[float | None, float]] = {}
+_metric_cache_lock = threading.Lock()
+_LLM_JUDGE_METRICS = ("task_completion", "answer_relevancy", "faithfulness", "hallucination")
+
+
+def _build_test_case_and_metric(task: dict, metric_name: str, actual_output: str):
+    """Baut LLMTestCase + frisches Metric-Objekt für eine LLM-Judge-Metrik.
+    Jeder Aufruf erzeugt ein eigenes Metric-Objekt – kein gemeinsamer
+    mutable State zwischen parallel laufenden Threads."""
+    if metric_name == "task_completion":
+        test_case = LLMTestCase(
+            input=task["input"], actual_output=actual_output, expected_output=task["deepeval_task"],
+        )
+        metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"], model=_JUDGE_MODEL)
+    elif metric_name == "answer_relevancy":
+        test_case = LLMTestCase(input=task["input"], actual_output=actual_output)
+        metric = AnswerRelevancyMetric(threshold=0.7, model=_JUDGE_MODEL)
+    elif metric_name == "faithfulness":
+        retrieval_context = [task.get("expected_output", "")]
+        test_case = LLMTestCase(
+            input=task["input"], actual_output=actual_output, retrieval_context=retrieval_context,
+        )
+        metric = FaithfulnessMetric(threshold=0.7, model=_JUDGE_MODEL)
+    elif metric_name == "hallucination":
+        context = [task.get("input", ""), task.get("expected_output", "")]
+        test_case = LLMTestCase(input=task["input"], actual_output=actual_output, context=context)
+        metric = HallucinationMetric(threshold=0.5, model=_JUDGE_MODEL)
+    else:
+        raise ValueError(f"Unbekannte LLM-Judge-Metrik: {metric_name}")
+    return test_case, metric
+
+
+def _prewarm_metric(agent_cfg: dict, task: dict, metric_name: str) -> None:
+    """Berechnet eine LLM-Judge-Metrik für (agent, task) und cached (score, cost)."""
+    key = (agent_cfg["id"], task["id"], metric_name)
+    cached = _cache.get((agent_cfg["id"], task["id"]))
+    if cached is None:
+        return  # Agent-Lauf fehlgeschlagen – Tests behandeln das via _skip_if_error
+    actual_output, _ = cached
+    try:
+        test_case, metric = _build_test_case_and_metric(task, metric_name, actual_output)
+        metric.measure(test_case)
+        with _metric_cache_lock:
+            _metric_cache[key] = (metric.score, metric.evaluation_cost or 0.0)
+    except Exception:
+        with _metric_cache_lock:
+            _metric_cache[key] = (None, 0.0)
+
+
+def pytest_sessionstart(session):
+    """Wärmt Agent-Läufe und Judge-Bewertungen parallel vor (Threads, ein Prozess).
+
+    Phase 1: alle agent.run()-Aufrufe parallel (_cache befüllen).
+    Phase 2: alle LLM-Judge-Metriken parallel (_metric_cache befüllen) – erst
+    nachdem Phase 1 abgeschlossen ist, da jede Metrik actual_output braucht.
+    Die Testfunktionen unten lesen danach nur noch aus den Caches und machen
+    selbst keine API-Calls mehr – der gesamte Lauf wird dadurch durch die
+    LANGSAMSTE Einzelanfrage begrenzt, nicht durch die Summe aller Anfragen.
+
+    Threads statt pytest-xdist-Prozessen: Python gibt die GIL während des
+    Wartens auf die HTTP-Antwort frei (echte Nebenläufigkeit fürs I/O), aber
+    _cache/_trackers/_metric_cache bleiben EIN gemeinsames Objekt in EINEM
+    Prozess – die Prozess-Race, die -n auto verursacht hat, kann hier nicht
+    auftreten (siehe Makefile-Kommentar). _get_agent() ist per Lock gegen
+    die verbleibende Race beim Erststart eines Agenten abgesichert.
     """
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(_run_and_record, agent_cfg, task) for agent_cfg, task in _PARAMS]
+        concurrent.futures.wait(futures)
+
+    metric_jobs = [
+        (agent_cfg, task, metric_name)
+        for agent_cfg, task in _PARAMS
+        for metric_name in _LLM_JUDGE_METRICS
+        if metric_name in _UC["metrics"]
+    ]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [
+            executor.submit(_prewarm_metric, agent_cfg, task, metric_name)
+            for agent_cfg, task, metric_name in metric_jobs
+        ]
         concurrent.futures.wait(futures)
 
 
@@ -223,125 +294,80 @@ def test_tool_correctness(agent_cfg, task):
 
 @pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
 def test_task_completion(agent_cfg, task):
-    """Prüft ob der Agent die Gesamtaufgabe vollständig erfüllt hat."""
+    """Prüft ob der Agent die Gesamtaufgabe vollständig erfüllt hat.
+    Score/Kosten kommen aus _metric_cache (Phase 2 in pytest_sessionstart) –
+    kein API-Call mehr hier, nur noch Auswertung des Vorgewärmten."""
     if "task_completion" not in _UC["metrics"]:
         pytest.skip(f"task_completion nicht in Metrik-Set von {_UC['id']}")
 
-    _run_and_record(agent_cfg, task)
     _skip_if_error(agent_cfg, task)
-    actual_output, _ = _cache[(agent_cfg["id"], task["id"])]
-
-    test_case = LLMTestCase(
-        input=task["input"],
-        actual_output=actual_output,
-        expected_output=task["deepeval_task"],
-    )
-
-    metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"], model=_JUDGE_MODEL)
-    metric.measure(test_case)
-    # metric.evaluation_cost: DeepEval berechnet das selbst aus den echten
-    # Tokens der API-Antwort × OPENAI_COST_PER_*_TOKEN (oben auf unseren
-    # Judge-Preis gesetzt) – exakt, kein get_openai_callback() nötig (der
-    # faengt DeepEvals eigene Client-Calls ohnehin nicht ab).
-    judge_cost = metric.evaluation_cost or 0.0
+    score, judge_cost = _metric_cache.get((agent_cfg["id"], task["id"], "task_completion"), (None, 0.0))
+    if score is None:
+        pytest.fail("TaskCompletion: Metrik-Berechnung fehlgeschlagen")
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
-        "task_completion": round(metric.score, 3),
+        "task_completion": round(score, 3),
         "eval_cost_usd": round(tracker.get_eval_cost(task["id"]) + judge_cost, 6),
     })
-    assert metric.is_successful(), f"TaskCompletion: {metric.score:.2f} < 0.7"
+    assert score >= 0.7, f"TaskCompletion: {score:.2f} < 0.7"
 
 
 @pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
 def test_answer_relevancy(agent_cfg, task):
-    """Prüft ob die Antwort des Agenten relevant zur gestellten Aufgabe ist (UC1/UC2)."""
+    """Prüft ob die Antwort des Agenten relevant zur gestellten Aufgabe ist (UC1/UC2).
+    Score/Kosten kommen aus _metric_cache (Phase 2 in pytest_sessionstart)."""
     if "answer_relevancy" not in _UC["metrics"]:
         pytest.skip(f"answer_relevancy nicht in Metrik-Set von {_UC['id']}")
 
-    _run_and_record(agent_cfg, task)
     _skip_if_error(agent_cfg, task)
-    actual_output, _ = _cache[(agent_cfg["id"], task["id"])]
-
-    test_case = LLMTestCase(input=task["input"], actual_output=actual_output)
-
-    metric = AnswerRelevancyMetric(threshold=0.7, model=_JUDGE_MODEL)
-    metric.measure(test_case)
-    # metric.evaluation_cost: DeepEval berechnet das selbst aus den echten
-    # Tokens der API-Antwort × OPENAI_COST_PER_*_TOKEN (oben auf unseren
-    # Judge-Preis gesetzt) – exakt, kein get_openai_callback() nötig (der
-    # faengt DeepEvals eigene Client-Calls ohnehin nicht ab).
-    judge_cost = metric.evaluation_cost or 0.0
+    score, judge_cost = _metric_cache.get((agent_cfg["id"], task["id"], "answer_relevancy"), (None, 0.0))
+    if score is None:
+        pytest.fail("AnswerRelevancy: Metrik-Berechnung fehlgeschlagen")
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
-        "answer_relevancy": round(metric.score, 3),
+        "answer_relevancy": round(score, 3),
         "eval_cost_usd": round(tracker.get_eval_cost(task["id"]) + judge_cost, 6),
     })
-    assert metric.is_successful(), f"AnswerRelevancy: {metric.score:.2f} < 0.7"
+    assert score >= 0.7, f"AnswerRelevancy: {score:.2f} < 0.7"
 
 
 @pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
 def test_faithfulness(agent_cfg, task):
-    """Prüft Zitationstreue – Antwort darf nur Fakten aus dem Retrieval-Kontext enthalten (UC3)."""
+    """Prüft Zitationstreue – Antwort darf nur Fakten aus dem Retrieval-Kontext enthalten (UC3).
+    Score/Kosten kommen aus _metric_cache (Phase 2 in pytest_sessionstart)."""
     if "faithfulness" not in _UC["metrics"]:
         pytest.skip(f"faithfulness nicht in Metrik-Set von {_UC['id']}")
 
-    _run_and_record(agent_cfg, task)
     _skip_if_error(agent_cfg, task)
-    actual_output, _ = _cache[(agent_cfg["id"], task["id"])]
-
-    retrieval_context = [task.get("expected_output", "")]
-    test_case = LLMTestCase(
-        input=task["input"],
-        actual_output=actual_output,
-        retrieval_context=retrieval_context,
-    )
-
-    metric = FaithfulnessMetric(threshold=0.7, model=_JUDGE_MODEL)
-    metric.measure(test_case)
-    # metric.evaluation_cost: DeepEval berechnet das selbst aus den echten
-    # Tokens der API-Antwort × OPENAI_COST_PER_*_TOKEN (oben auf unseren
-    # Judge-Preis gesetzt) – exakt, kein get_openai_callback() nötig (der
-    # faengt DeepEvals eigene Client-Calls ohnehin nicht ab).
-    judge_cost = metric.evaluation_cost or 0.0
+    score, judge_cost = _metric_cache.get((agent_cfg["id"], task["id"], "faithfulness"), (None, 0.0))
+    if score is None:
+        pytest.fail("Faithfulness: Metrik-Berechnung fehlgeschlagen")
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
-        "faithfulness": round(metric.score, 3),
+        "faithfulness": round(score, 3),
         "eval_cost_usd": round(tracker.get_eval_cost(task["id"]) + judge_cost, 6),
     })
-    assert metric.is_successful(), f"Faithfulness: {metric.score:.2f} < 0.7"
+    assert score >= 0.7, f"Faithfulness: {score:.2f} < 0.7"
 
 
 @pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
 def test_hallucination(agent_cfg, task):
-    """Prüft Halluzinationen – Agent darf keine Fakten erfinden (UC4)."""
+    """Prüft Halluzinationen – Agent darf keine Fakten erfinden (UC4).
+    Score/Kosten kommen aus _metric_cache (Phase 2 in pytest_sessionstart)."""
     if "hallucination" not in _UC["metrics"]:
         pytest.skip(f"hallucination nicht in Metrik-Set von {_UC['id']}")
 
-    _run_and_record(agent_cfg, task)
     _skip_if_error(agent_cfg, task)
-    actual_output, _ = _cache[(agent_cfg["id"], task["id"])]
-
-    context = [task.get("input", ""), task.get("expected_output", "")]
-    test_case = LLMTestCase(
-        input=task["input"],
-        actual_output=actual_output,
-        context=context,
-    )
-
-    metric = HallucinationMetric(threshold=0.5, model=_JUDGE_MODEL)
-    metric.measure(test_case)
-    # metric.evaluation_cost: DeepEval berechnet das selbst aus den echten
-    # Tokens der API-Antwort × OPENAI_COST_PER_*_TOKEN (oben auf unseren
-    # Judge-Preis gesetzt) – exakt, kein get_openai_callback() nötig (der
-    # faengt DeepEvals eigene Client-Calls ohnehin nicht ab).
-    judge_cost = metric.evaluation_cost or 0.0
-    passed = metric.score <= 0.5
+    score, judge_cost = _metric_cache.get((agent_cfg["id"], task["id"], "hallucination"), (None, 0.0))
+    if score is None:
+        pytest.fail("Hallucination: Metrik-Berechnung fehlgeschlagen")
+    passed = score <= 0.5
     _, tracker = _get_agent(agent_cfg)
     tracker.update_metrics(task["id"], {
-        "hallucination": round(metric.score, 3),
+        "hallucination": round(score, 3),
         "eval_cost_usd": round(tracker.get_eval_cost(task["id"]) + judge_cost, 6),
     })
-    assert passed, f"Hallucination zu hoch: {metric.score:.2f} > 0.5"
+    assert passed, f"Hallucination zu hoch: {score:.2f} > 0.5"
 
 
 @pytest.mark.parametrize("agent_cfg,task", _PARAMS, ids=_IDS)
