@@ -20,7 +20,6 @@
 # Optionale Erweiterungen:
 #   - OPENROUTER_API_KEY       → für weitere Agenten in agents.yaml (Llama etc.)
 #   - MISTRAL_API_KEY          → für make benchmark (Mistral-Provider)
-#   - LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY → LangSmith-Tracing
 
 .PHONY: all eval eval-all smoke security compliance \
         functionality report report-html benchmark install clean

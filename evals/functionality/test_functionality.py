@@ -36,7 +36,7 @@ from deepeval.metrics import (
 )
 from deepeval.test_case import LLMTestCase, ToolCall
 from dotenv import load_dotenv
-from agenteval_ovb.pricing import calc_cost_usd
+from agenteval_ovb.pricing import calc_cost_usd, validate_agents_config
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -69,17 +69,25 @@ AGENTS_CONFIG = _CONFIG["agents"]
 TASKS         = load_tasks()
 
 # Judge-Konfiguration aus agents.yaml
-_JUDGE_CFG      = _CONFIG.get("judge", {})
+_JUDGE_CFG = _CONFIG.get("judge", {})
+if not _JUDGE_CFG.get("api_base"):
+    raise ValueError(
+        "judge.api_base fehlt in agents.yaml – Pflichtfeld, auch für OpenAI "
+        "(https://api.openai.com/v1)."
+    )
 _JUDGE_MODEL    = _JUDGE_CFG.get("model", "gpt-5.4-mini")
 _JUDGE_API_KEY  = os.environ.get(_JUDGE_CFG.get("api_key_env", "JUDGE_API_KEY"))
-_JUDGE_API_BASE = _JUDGE_CFG.get("api_base") or None
+_JUDGE_API_BASE = _JUDGE_CFG["api_base"]
+
+# Preis-Validierung: lieber jetzt abbrechen als falsche Wirtschaftlichkeits-
+# Zahlen im Report erzeugen, weil ein Modell in pricing.py fehlt.
+validate_agents_config(_CONFIG)
 
 # DeepEval liest OPENAI_API_KEY und OPENAI_BASE_URL aus der Umgebung.
 # Wir setzen sie auf die Judge-Credentials aus agents.yaml.
 if _JUDGE_API_KEY:
     os.environ["OPENAI_API_KEY"] = _JUDGE_API_KEY
-if _JUDGE_API_BASE:
-    os.environ["OPENAI_BASE_URL"] = _JUDGE_API_BASE
+os.environ["OPENAI_BASE_URL"] = _JUDGE_API_BASE
 
 
 # ─── Agent- und Tracker-Instanzen (lazy, gecacht) ─────────────────────────────
@@ -91,13 +99,18 @@ _trackers: dict[str, CostTracker] = {}
 def _get_agent(cfg: dict) -> tuple[UseCaseAgent, CostTracker]:
     agent_id = cfg["id"]
     if agent_id not in _agent_instances:
+        if not cfg.get("api_base"):
+            raise ValueError(
+                f"Agent '{agent_id}': api_base fehlt in agents.yaml – "
+                f"Pflichtfeld, auch für OpenAI (https://api.openai.com/v1)."
+            )
         api_key = os.environ.get(cfg["api_key_env"])
         _agent_instances[agent_id] = UseCaseAgent(
             tools=_UC["tools"],
             system_prompt=_UC["system_prompt"],
             model=cfg["model"],
             api_key=api_key,
-            api_base=cfg.get("api_base") or None,
+            api_base=cfg["api_base"],
         )
         _trackers[agent_id] = CostTracker(
             output_path=f"functionality_costs_{_UC['id']}_{agent_id}.json",

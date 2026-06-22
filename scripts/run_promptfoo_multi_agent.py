@@ -33,6 +33,8 @@ from pathlib import Path
 
 import yaml
 
+from agenteval_ovb.pricing import validate_agents_config
+
 ROOT = Path(__file__).parent.parent
 
 # Use Case aus Umgebungsvariable (Default uc1)
@@ -66,20 +68,36 @@ UC_SUITES = {
 }
 
 
-def load_agents() -> list[dict]:
+def load_config() -> dict:
     with open(ROOT / "agents.yaml", encoding="utf-8") as f:
-        return yaml.safe_load(f)["agents"]
+        return yaml.safe_load(f)
+
+
+def load_agents() -> list[dict]:
+    return load_config()["agents"]
+
+
+def _validate_pricing(config: dict) -> None:
+    """Bricht vor dem ersten promptfoo-Call ab, statt API-Budget für einen Lauf
+    zu verbrauchen, dessen Wirtschaftlichkeits-Zahlen anschließend ohnehin
+    nicht berechnet werden könnten (fehlender Preis in pricing.py)."""
+    try:
+        validate_agents_config(config)
+    except ValueError as exc:
+        print(f"❌ {exc}")
+        sys.exit(1)
 
 
 def _agent_env(agent: dict) -> dict:
+    if not agent.get("api_base"):
+        raise ValueError(
+            f"Agent '{agent.get('id', '?')}': api_base fehlt in agents.yaml – "
+            f"Pflichtfeld, auch für OpenAI (https://api.openai.com/v1)."
+        )
     env = os.environ.copy()
-    env["OPENAI_API_KEY"] = os.environ.get(agent["api_key_env"], "")
-    env["MODEL_NAME"]     = agent["model"]
-    api_base = agent.get("api_base") or ""
-    if api_base:
-        env["OPENAI_BASE_URL"] = api_base
-    else:
-        env.pop("OPENAI_BASE_URL", None)
+    env["OPENAI_API_KEY"]  = os.environ.get(agent["api_key_env"], "")
+    env["MODEL_NAME"]      = agent["model"]
+    env["OPENAI_BASE_URL"] = agent["api_base"]
     return env
 
 
@@ -145,7 +163,9 @@ def run_scorecard(agent_id: str) -> None:
 
 
 def main() -> None:
-    agents = load_agents()
+    config = load_config()
+    _validate_pricing(config)
+    agents = config["agents"]
     failed: list[str] = []
 
     print(f"\n🎯  Use Case: {USE_CASE}  ({_UC_DIR})")

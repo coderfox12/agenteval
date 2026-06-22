@@ -7,13 +7,6 @@ damit jeder UC ein eigenständiges, steckbares Paket bleibt.
 Unterstützte API-Anbieter: alle OpenAI-kompatiblen Endpunkte.
 Für Anthropic/Gemini etc. einfach OpenRouter als Proxy nutzen
 (api_base=https://openrouter.ai/api/v1, Modellname z.B. anthropic/claude-3-haiku).
-
-LangSmith-Tracing (optional):
-  Wenn folgende Umgebungsvariablen gesetzt sind, werden alle Traces
-  automatisch an LangSmith übertragen – kein Code-Änderung nötig:
-    LANGCHAIN_TRACING_V2=true
-    LANGCHAIN_API_KEY=<dein LangSmith API Key>
-    LANGCHAIN_PROJECT=agenteval-ovb   (optional, Default: "default")
 """
 
 import os

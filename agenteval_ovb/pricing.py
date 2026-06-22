@@ -27,8 +27,11 @@ PRICES_PER_1M: dict[str, dict[str, float]] = {
     "gpt-4o":           {"input": 2.50,   "output": 10.00},
     "gpt-3.5-turbo":    {"input": 0.50,   "output": 1.50},
 
-    # ── Fallback ─────────────────────────────────────────────────────────────
-    "default":          {"input": 0.75,   "output": 4.50},
+    # ── Drittanbieter-Modelle über OpenRouter (Preise von openrouter.ai) ────
+    "openai/gpt-oss-120b":                    {"input": 0.039, "output": 0.18},
+    "google/gemini-2.5-flash-lite":           {"input": 0.10,  "output": 0.40},
+    "deepseek/deepseek-v4-flash":              {"input": 0.09,  "output": 0.18},
+    "meta-llama/llama-3.1-8b-instruct:free":  {"input": 0.0,   "output": 0.0},
 }
 
 # Versionsaliase: OpenAI gibt im Dashboard oft den versionierten Namen zurück
@@ -45,18 +48,59 @@ VERSION_ALIASES: dict[str, str] = {
 }
 
 
-def _resolve(model: str) -> dict[str, float]:
-    """Gibt das Preisdict für ein Modell zurück (Aliase werden aufgelöst)."""
+class UnknownModelPriceError(ValueError):
+    """Für ein Modell ist kein Preis in PRICES_PER_1M hinterlegt."""
+
+
+def is_known(model: str) -> bool:
+    """Prüft, ob für ein Modell ein Preis hinterlegt ist (exakt oder per Prefix)."""
     name = VERSION_ALIASES.get(model, model)
-    # Prefix-Matching als Fallback (z. B. "gpt-5.4-2026-xx-xx" → "gpt-5.4")
-    if name not in PRICES_PER_1M:
-        for key in PRICES_PER_1M:
-            if name.startswith(key):
-                return PRICES_PER_1M[key]
-    return PRICES_PER_1M.get(name, PRICES_PER_1M["default"])
+    return name in PRICES_PER_1M or any(name.startswith(key) for key in PRICES_PER_1M)
+
+
+def _resolve(model: str) -> dict[str, float]:
+    """Gibt das Preisdict für ein Modell zurück (Aliase werden aufgelöst).
+
+    Wirft UnknownModelPriceError statt stillschweigend einen Default-Preis zu
+    verwenden – ein fehlender Preis soll sofort auffallen, nicht erst als
+    falsche Wirtschaftlichkeits-Zahl im Report.
+    """
+    name = VERSION_ALIASES.get(model, model)
+    if name in PRICES_PER_1M:
+        return PRICES_PER_1M[name]
+    for key in PRICES_PER_1M:
+        if name.startswith(key):
+            return PRICES_PER_1M[key]
+    raise UnknownModelPriceError(
+        f"Kein Preis für Modell '{model}' in agenteval_ovb/pricing.py "
+        f"(PRICES_PER_1M) hinterlegt. Bitte Input-/Output-Preis pro 1M Tokens "
+        f"ergänzen – sonst sind die Wirtschaftlichkeits-Zahlen im Report falsch."
+    )
 
 
 def calc_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
     """Berechnet die API-Kosten in USD aus Token-Zahlen und eigener Preistabelle."""
     p = _resolve(model)
     return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
+
+
+def validate_agents_config(config: dict) -> None:
+    """Prüft Judge- und alle Agenten-Modelle aus agents.yaml gegen PRICES_PER_1M.
+
+    Von jedem unabhängigen Einstiegspunkt (D1-Pytest, D2/D3-Runner) selbst
+    aufzurufen, da beide auch einzeln gestartet werden können – es gibt
+    keinen gemeinsamen Startpunkt, der das einmalig für beide erledigt.
+    """
+    judge_model = (config.get("judge") or {}).get("model")
+    if judge_model and not is_known(judge_model):
+        raise UnknownModelPriceError(
+            f"Kein Preis für Judge-Modell '{judge_model}' in "
+            f"agenteval_ovb/pricing.py hinterlegt. Bitte PRICES_PER_1M ergänzen."
+        )
+    for agent in config.get("agents", []):
+        if not is_known(agent["model"]):
+            raise UnknownModelPriceError(
+                f"Kein Preis für Agent '{agent['id']}' (Modell "
+                f"'{agent['model']}') in agenteval_ovb/pricing.py hinterlegt. "
+                f"Bitte PRICES_PER_1M ergänzen."
+            )
