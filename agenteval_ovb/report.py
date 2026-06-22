@@ -606,18 +606,29 @@ def _section_functionality(func_data: dict) -> str:
     n_metric_cols = len(metric_keys)
 
     err_records = [r for r in records if r.get("error")]
+    # Marker-Substring aus der Fehlermeldung in agent/graph.py – unterscheidet
+    # "Modell hat geantwortet, aber leer/gefiltert" (Tokens wurden trotzdem
+    # verbraucht) von echten API-Fehlern (Timeout, Quota, Auth).
+    _EMPTY_RESPONSE_MARKER = "leere Antwort"
 
     # ── Abort-Banner ──────────────────────────────────────────────────────────
     banner = ""
     if err_records:
         first_err = err_records[0]
         at_str = f" um {first_err['aborted_at']}" if first_err.get("aborted_at") else ""
+        n_empty = sum(1 for r in err_records if _EMPTY_RESPONSE_MARKER in r.get("error", ""))
+        cause = (
+            "Mögliche Ursache: Content-Filter des Modells (leere Antwort trotz "
+            "erfolgreichem API-Call) oder API-Kontingent erschöpft/Anbieter überlastet."
+            if n_empty else
+            "Mögliche Ursache: API-Kontingent erschöpft oder Anbieter überlastet."
+        )
         banner = (
             '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;'
             'padding:14px 18px;margin:16px 0 20px;font-size:.88rem;line-height:1.6">'
             f'⚠️ <strong>{len(err_records)} Task(s) durch API-Fehler abgebrochen</strong> – '
             f'Erste Unterbrechung bei Task <code>{first_err["task_id"]}</code>{at_str}. '
-            'Mögliche Ursache: API-Kontingent erschöpft oder Anbieter überlastet. '
+            f'{cause} '
             'Übersprungene Tasks zählen als nicht bestanden.'
             '</div>'
         )
@@ -633,13 +644,21 @@ def _section_functionality(func_data: dict) -> str:
             aborted_at = r.get("aborted_at", "")
             time_info  = (f"<br><small style='color:#b2bec3'>Abgebrochen: {aborted_at}</small>"
                           if aborted_at else "")
+            is_empty_response = _EMPTY_RESPONSE_MARKER in error_msg
+            err_badge = ('<span class="badge warn">⚠ Leere Antwort</span>' if is_empty_response
+                         else '<span class="badge err">⚠ API-Fehler</span>')
+            # Bei "leere Antwort" wurden trotz Fehlschlag reale Tokens verbraucht
+            # und bei OpenRouter abgerechnet (siehe cost_tracker.record_error) –
+            # diese Kosten anzeigen statt sie wie bei echten API-Fehlern auf "–"
+            # zu setzen.
+            err_cost = f"${r['cost_usd']:.4f}" if r.get("cost_usd") else "–"
             rows.append(
                 f'<tr style="background:#fff8f8">'
                 f'<td><code>{task_id}</code></td>'
-                f'<td><span class="badge err">⚠ API-Fehler</span></td>'
+                f'<td>{err_badge}</td>'
                 f'<td colspan="{n_metric_cols}" style="color:#636e72;font-size:.82rem">'
                 f'{short_err}{time_info}</td>'
-                f'<td>–</td><td>–</td></tr>'
+                f'<td>{err_cost}</td><td>–</td></tr>'
             )
         else:
             passed     = r.get("passed")
