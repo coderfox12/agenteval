@@ -1,8 +1,12 @@
 name: Promptfoo Eval
 
 on:
+  # push nur auf main (Lauf nach einem Merge) – Feature-Branches mit offenem
+  # PR liefen sonst bei jedem Push ZWEIMAL (push-Event + pull_request-Event
+  # für denselben Commit), was die echten OpenRouter-Kosten je Push verdoppelt
+  # hat, ohne zusätzlichen Erkenntniswert (identischer Code, identische Tests).
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
     branches: ["**"]
 
