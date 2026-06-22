@@ -13,32 +13,22 @@ env:
   USE_CASE: uc1
 
 jobs:
-  eval:
+  # ── R0: Smoke Test – Judge + alle Agenten aus agents.yaml ───────────────────
+  # Schlägt einer fehl, bricht der Job ab und security_compliance/functionality
+  # laufen dank "needs:" gar nicht erst an – nur report (if: always()) läuft
+  # trotzdem, damit zumindest ein (leerer) Report-Artefakt entsteht.
+  smoke:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "24"
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: agenteval-ovb installieren (pip install -e .)
         run: pip install -e .
-
-      - name: Funktionalität – Python-Abhängigkeiten installieren
-        run: pip install -r evals/functionality/requirements.txt
-
-      # ── R0: Smoke Test – Judge + alle Agenten aus agents.yaml ──────────────
-      # Schlägt einer fehl, bricht das Skript ab (Exit-Code 1) und R2/R3, D1
-      # laufen nicht mehr – nur der Report-Schritt (if: always()) läuft trotzdem.
       - name: R0 – Smoke-Test (Judge + alle Agenten)
         env:
           AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
@@ -46,22 +36,62 @@ jobs:
           JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
         run: python scripts/run_smoke_test.py
 
-      # ── R2 + R3: Security & Compliance – alle Agenten ─────────────────────
+  # ── R2 + R3: Security & Compliance – alle Agenten ───────────────────────────
+  # Läuft als EIGENER Job parallel zu "functionality" (siehe unten) – beide
+  # hängen nur von "smoke" ab, nicht voneinander: unterschiedliche
+  # Ergebnisdateien, keine Datenabhängigkeit. Vorher liefen sie als
+  # sequenzielle Steps in einem Job (13 + 11 Min addiert) – als parallele
+  # Jobs begrenzt die Gesamtzeit nur noch das langsamere der beiden.
+  security_compliance:
+    needs: smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: agenteval-ovb installieren (pip install -e .)
+        run: pip install -e .
       - name: R2/R3 – Security & Compliance (alle Agenten aus agents.yaml)
         continue-on-error: true
         env:
           AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: python scripts/run_promptfoo_multi_agent.py
+      - name: Ergebnisse hochladen
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-compliance-results
+          path: |
+            *_results_*.json
+            *_scorecard_*.json
+          if-no-files-found: warn
 
-      # ── Funktionalität: LangGraph + DeepEval – alle Agenten ───────────────
-      # KEIN -n auto: in echten CI-Laeufen beobachtet, dass Tests eines
-      # Agenten trotz xdist_group-Marker auf mehrere Worker-PROZESSE
-      # (gw0-gw3) verteilt wurden – _trackers/_cache sind Modul-Level-State,
-      # pro Prozess getrennt, am Ende blieb nur 1 statt 5 Records uebrig.
-      # Parallelitaet laeuft jetzt INNERHALB des Test-Moduls per
-      # ThreadPoolExecutor (pytest_sessionstart in test_functionality.py) –
-      # ein Prozess, mehrere Threads, kein Cross-Prozess-Datenverlust.
+  # ── Funktionalität: LangGraph + DeepEval – alle Agenten ─────────────────────
+  # Eigener Job, parallel zu "security_compliance" (siehe oben). KEIN -n auto:
+  # in echten CI-Laeufen beobachtet, dass Tests eines Agenten trotz
+  # xdist_group-Marker auf mehrere Worker-PROZESSE (gw0-gw3) verteilt wurden –
+  # _trackers/_cache sind Modul-Level-State, pro Prozess getrennt, am Ende
+  # blieb nur 1 statt 5 Records uebrig. Parallelitaet laeuft jetzt INNERHALB
+  # des Test-Moduls per ThreadPoolExecutor (pytest_sessionstart in
+  # test_functionality.py, zwei Phasen: Agent-Laeufe, dann Judge-Bewertungen)
+  # – ein Prozess, mehrere Threads, kein Cross-Prozess-Datenverlust.
+  functionality:
+    needs: smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: agenteval-ovb installieren (pip install -e .)
+        run: pip install -e .
+      - name: Funktionalität – Python-Abhängigkeiten installieren
+        run: pip install -r evals/functionality/requirements.txt
       - name: Funktionalität – Multi-Step Agent Eval (LangGraph + DeepEval)
         continue-on-error: true
         env:
@@ -71,14 +101,40 @@ jobs:
           DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
           DEEPEVAL_DISABLE_DOTENV: "1"
         run: cd evals/functionality && pytest test_functionality.py -v
-
-      # ── HTML-Report ───────────────────────────────────────────────────────
-      - name: Benchmark-Report HTML generieren
+      - name: Ergebnisse hochladen
+        uses: actions/upload-artifact@v4
         if: always()
-        run: agenteval-report --out report.html
+        with:
+          name: functionality-results
+          path: evals/functionality/functionality_costs_*.json
+          if-no-files-found: warn
 
-      # ── Artefakte sichern ─────────────────────────────────────────────────
-      - name: Upload Eval Results
+  # ── HTML-Report (braucht Ergebnisse aus BEIDEN parallelen Jobs) ─────────────
+  report:
+    needs: [security_compliance, functionality]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: agenteval-ovb installieren (pip install -e .)
+        run: pip install -e .
+      - name: Security/Compliance-Ergebnisse herunterladen
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: security-compliance-results
+      - name: Funktionalitäts-Ergebnisse herunterladen
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: functionality-results
+          path: evals/functionality
+      - name: Benchmark-Report HTML generieren
+        run: agenteval-report --out report.html
+      - name: Alle Artefakte zusammenführen
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -88,3 +144,4 @@ jobs:
             *_scorecard_*.json
             evals/functionality/functionality_costs_*.json
             report.html
+          if-no-files-found: warn
