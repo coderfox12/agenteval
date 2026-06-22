@@ -1397,13 +1397,11 @@ def generate_multi_agent_report(
         f'&nbsp;<span style="font-size:.95rem;font-weight:400;opacity:.85">{uc_name}</span>'
     ) if uc else ""
 
-    comparison_html = (
-        '<div class="section-group">'
-        '<div class="section-group-body">'
-        + _section_comparison(agents_data)
-        + '</div></div>'
-    )
-    overall_html   = _section_overall_score(agents_data)
+    # Kein section-group-Wrapper (kein Karten-Look, nicht einklappbar wie die
+    # Agenten-Blöcke unten) – gehört inhaltlich zur Übersicht zusammen mit
+    # Gesamtbewertung direkt darunter, die ebenfalls ungerahmt ist.
+    comparison_html = _section_comparison(agents_data)
+    overall_html    = _section_overall_score(agents_data)
     # Einklappbar wie die Agenten-Blöcke, ganz unten platziert – nur ein
     # ergänzender Zusatzwert, keine Information, die zuerst gesehen werden muss.
     overhead_all   = (
