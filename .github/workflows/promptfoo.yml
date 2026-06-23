@@ -1,72 +1,179 @@
 name: Promptfoo Eval
 
 on:
+  # push nur auf main (Lauf nach einem Merge) – Feature-Branches mit offenem
+  # PR liefen sonst bei jedem Push ZWEIMAL (push-Event + pull_request-Event
+  # für denselben Commit), was die echten OpenRouter-Kosten je Push verdoppelt
+  # hat, ohne zusätzlichen Erkenntniswert (identischer Code, identische Tests).
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
     branches: ["**"]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Ausgewählter Use Case für die gesamte Pipeline (Producer + Report).
+  # Hier festsetzen, um einen anderen Use Case zu evaluieren (uc1–uc4).
+  USE_CASE: uc1
 
 jobs:
-  eval:
+  # ── R0: Smoke Test – Judge + alle Agenten aus agents.yaml ───────────────────
+  # Schlägt einer fehl, bricht der Job ab und security_compliance/functionality
+  # laufen dank "needs:" gar nicht erst an – nur report (if: always()) läuft
+  # trotzdem, damit zumindest ein (leerer) Report-Artefakt entsteht.
+  smoke:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: "24"
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # Cache-Key-Version muss zu PROMPTFOO_VERSION in
+      # agenteval_ovb/promptfoo_utils.py passen (beim Bump beide ändern).
+      - name: npm-Cache für promptfoo wiederverwenden
+        uses: actions/cache@v5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-promptfoo-0.121.17
+          restore-keys: |
+            ${{ runner.os }}-npm-promptfoo-
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-
+          cache: pip
       - name: agenteval-ovb installieren (pip install -e .)
         run: pip install -e .
-
-      - name: Funktionalität – Python-Abhängigkeiten installieren
-        run: pip install -r evals/functionality/requirements.txt
-
-      # ── R0: Smoke Test ────────────────────────────────────────────────────
-      - name: R0 – Hello-World Smoke Test
+      - name: R0 – Smoke-Test (Judge + alle Agenten)
         env:
-          OPENAI_API_KEY: ${{ secrets.AGENT_API_KEY }}
-          MODEL_NAME: gpt-5.4-mini
-        run: npx promptfoo@latest eval --no-cache --config promptfooconfig.yaml
+          AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
+        run: python scripts/run_smoke_test.py
 
-      # ── R2 + R3: Security & Compliance – alle Agenten ─────────────────────
+  # ── R2 + R3: Security & Compliance – alle Agenten ───────────────────────────
+  # Läuft als EIGENER Job parallel zu "functionality" (siehe unten) – beide
+  # hängen nur von "smoke" ab, nicht voneinander: unterschiedliche
+  # Ergebnisdateien, keine Datenabhängigkeit. Vorher liefen sie als
+  # sequenzielle Steps in einem Job (13 + 11 Min addiert) – als parallele
+  # Jobs begrenzt die Gesamtzeit nur noch das langsamere der beiden.
+  security_compliance:
+    needs: smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: npm-Cache für promptfoo wiederverwenden
+        uses: actions/cache@v5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-promptfoo-0.121.17
+          restore-keys: |
+            ${{ runner.os }}-npm-promptfoo-
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: agenteval-ovb installieren (pip install -e .)
+        run: pip install -e .
       - name: R2/R3 – Security & Compliance (alle Agenten aus agents.yaml)
         continue-on-error: true
         env:
           AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: python scripts/run_promptfoo_multi_agent.py
+      - name: Ergebnisse hochladen
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: security-compliance-results
+          path: |
+            *_results_*.json
+            *_scorecard_*.json
+          if-no-files-found: warn
 
-      # ── Funktionalität: LangGraph + DeepEval – alle Agenten ───────────────
+  # ── Funktionalität: LangGraph + DeepEval – alle Agenten ─────────────────────
+  # Eigener Job, parallel zu "security_compliance" (siehe oben). KEIN -n auto:
+  # in echten CI-Laeufen beobachtet, dass Tests eines Agenten trotz
+  # xdist_group-Marker auf mehrere Worker-PROZESSE (gw0-gw3) verteilt wurden –
+  # _trackers/_cache sind Modul-Level-State, pro Prozess getrennt, am Ende
+  # blieb nur 1 statt 5 Records uebrig. Parallelitaet laeuft jetzt INNERHALB
+  # des Test-Moduls per ThreadPoolExecutor (pytest_sessionstart in
+  # conftest.py ruft test_functionality.warm_caches() auf, zwei Phasen:
+  # Agent-Laeufe, dann Judge-Bewertungen – pytest erkennt Session-Hooks NUR
+  # in conftest.py, nicht in test_functionality.py selbst) – ein Prozess,
+  # mehrere Threads, kein Cross-Prozess-Datenverlust.
+  functionality:
+    needs: smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: agenteval-ovb installieren (pip install -e .)
+        run: pip install -e .
+      - name: Funktionalität – Python-Abhängigkeiten installieren
+        run: pip install -r evals/functionality/requirements.txt
       - name: Funktionalität – Multi-Step Agent Eval (LangGraph + DeepEval)
-        continue-on-error: true
         env:
           AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
           DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
           DEEPEVAL_DISABLE_DOTENV: "1"
-        run: cd evals/functionality && pytest test_functionality.py -v -n auto --dist=loadgroup
-
-      # ── HTML-Report ───────────────────────────────────────────────────────
-      - name: Benchmark-Report HTML generieren
+        # pytest exit code 1 bedeutet nur "manche Tests fehlgeschlagen" – das
+        # ist bei uns das ERWARTETE Auswertungsergebnis (z.B. ein Agent
+        # erfüllt eine Aufgabe nicht gut genug), kein Skriptfehler, und wird
+        # nicht als CI-Fehler-Annotation angezeigt. Exit-Codes 2+ (Absturz,
+        # interner Fehler, Usage-Fehler, keine Tests gefunden) bleiben echte
+        # Fehler und lassen den Schritt weiterhin fehlschlagen.
+        run: |
+          set +e
+          cd evals/functionality
+          pytest test_functionality.py -v
+          code=$?
+          set -e
+          if [ $code -eq 1 ]; then exit 0; fi
+          exit $code
+      - name: Ergebnisse hochladen
+        uses: actions/upload-artifact@v7
         if: always()
-        run: agenteval-report --out report.html
+        with:
+          name: functionality-results
+          path: evals/functionality/functionality_costs_*.json
+          if-no-files-found: warn
 
-      # ── Artefakte sichern ─────────────────────────────────────────────────
-      - name: Upload Eval Results
-        uses: actions/upload-artifact@v4
+  # ── HTML-Report (braucht Ergebnisse aus BEIDEN parallelen Jobs) ─────────────
+  report:
+    needs: [security_compliance, functionality]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: agenteval-ovb installieren (pip install -e .)
+        run: pip install -e .
+      - name: Security/Compliance-Ergebnisse herunterladen
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: security-compliance-results
+      - name: Funktionalitäts-Ergebnisse herunterladen
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: functionality-results
+          path: evals/functionality
+      - name: Benchmark-Report HTML generieren
+        run: agenteval-report --out report.html
+      - name: Alle Artefakte zusammenführen
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: eval-results
@@ -75,3 +182,4 @@ jobs:
             *_scorecard_*.json
             evals/functionality/functionality_costs_*.json
             report.html
+          if-no-files-found: warn

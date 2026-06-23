@@ -9,46 +9,81 @@ OVB Holding AG × TU Darmstadt – Kooperatives Seminar Sommersemester 2026
 ## Schnellstart
 
 ```bash
-# 1. Voraussetzungen: Python 3.11+, Node.js 20+, OPENAI_API_KEY
-cp .env.example .env                               # OPENAI_API_KEY eintragen
-pip install -e .                                   # agenteval-ovb als Package installieren
+# 1. Voraussetzungen: Python 3.11+, Node.js 20+
+cp .env.example .env          # AGENT_API_KEY + JUDGE_API_KEY eintragen
+pip install -e .              # agenteval-ovb als Package installieren
 pip install -r evals/functionality/requirements.txt  # DeepEval + LangGraph
 
-# 2. Alle Evals + HTML-Report
+# 2. Alle Evals für Use Case 1 (Standard) + HTML-Report
 make eval
-# → report.html (Benchmark-Report)
-# → compliance_scorecard.json (EU AI Act Mapping)
+# → report_uc1.html           (Benchmark-Report mit Agenten-Vergleich)
+# → compliance_scorecard_uc1_*.json  (EU AI Act Mapping pro Agent)
+
+# 3. Anderen Use Case evaluieren
+make eval USE_CASE=uc2
+
+# 4. Alle vier Use Cases sequenziell
+make eval-all
 ```
+
+---
+
+## Architektur: Zwei orthogonale Dimensionen
+
+```
+USE_CASE  ×  agents.yaml
+   │               │
+   │               └─ WOMIT wird getestet? (Modell/Endpunkt)
+   └─ WAS wird getestet? (Domäne, Tools, Tasks, Metriken)
+```
+
+| Use Case | Domäne | Regulatorik |
+|----------|--------|-------------|
+| **uc1** – Suitability-Check | Anlageeignungsprüfung | IDD Art. 30 / §7 VersVermV |
+| **uc2** – Onboarding | KYC / Kundendaten | GwG §10 / AMLA |
+| **uc3** – Compliance-Triage | Regulatorische Einordnung | EU AI Act / OVB-Governance |
+| **uc4** – Beratungsdokumentation | Protokollerstellung | §61 VVG |
+| **uc0** – Generische Baseline | Allg. Finanzberatung | (kein fachlicher UC) |
 
 ---
 
 ## Evaluations-Dimensionen
 
-| Dimension | Tool | Output |
-|-----------|------|--------|
-| **D1 Funktionalität** | LangGraph + DeepEval | Task-Completion, Tool-Use-Correctness |
-| **D2 Sicherheit** | promptfoo | Prompt-Injection-Resistenz, Data-Leakage-Rate |
-| **D3 Compliance** | promptfoo + Scorecard | EU AI Act Art. 9/13/14/15/52 |
-| **Wirtschaftlichkeit** *(Querschnitt)* | cost_report.js | Tokens, Kosten in USD, Latenz (p50/p95) |
+| Dimension | Tool | Metriken |
+|-----------|------|---------|
+| **D1 Funktionalität** | LangGraph + DeepEval | `task_completion` (Kern, UC-übergreifend) + UC-spezifisch: `tool_correctness`, `answer_relevancy`, `faithfulness` (UC3), `hallucination` + `required_fields` (UC4) |
+| **D2 Sicherheit** | promptfoo | Prompt-Injection-Resistenz (9 Angriffsklassen, 100+ Tests); generische Baseline + UC-spezifisch |
+| **D3 Compliance** | promptfoo + Scorecard | EU AI Act Art. 9/13/14/15/52; generische Baseline (14 Tests) + UC-spezifisch |
+| **Wirtschaftlichkeit** *(Querschnitt)* | CostTracker + Report | Tokens, Kosten in USD, Latenz (p50/p95) |
+
+### Zweischichtige D2/D3-Struktur
+
+```
+GENERISCHE BASELINE (scope: generic)   – läuft bei JEDEM Use Case
+  evals/security/security_eval.yaml         (40 Tests, AgentDojo/InjecAgent)
+  evals/security/security_eval_finance.yaml (60 Tests, Finance-spezifisch)
+  evals/compliance/compliance_eval.yaml     (14 Tests, EU AI Act)
+
+UC-SPEZIFISCH (scope: uc_specific)     – nur für den gewählten UC
+  evals/security/usecases/{uc}/security_eval.yaml
+  evals/compliance/usecases/{uc}/compliance_eval.yaml
+```
 
 ---
 
 ## Make-Targets
 
 ```bash
-make eval            # Alle Evals + Scorecard + HTML-Report (Hauptziel)
-make smoke           # R0: Hello-World Smoke Test
-make security        # R2: Sicherheits-Taxonomie (AgentDojo/InjecAgent)
-make security-finance  # R2: Finance-Kontext (manuell kuratiert)
-make security-all    # R2: Beide Security-Suiten
-make compliance      # R3: EU AI Act Compliance
-make scorecard       # Compliance-Scorecard generieren
-make functionality   # D1: LangGraph + DeepEval Agent Eval
-make report          # Scorecard + HTML-Report generieren
-make report-html     # Nur HTML-Report
-make benchmark       # Multi-Modell-Vergleich (benötigt MISTRAL_API_KEY + GROQ_API_KEY)
-make install         # pip install -e . (einmalig)
-make clean           # Alle generierten Ergebnisdateien löschen
+make eval [USE_CASE=uc1]  # D2+D3+D1 + HTML-Report → report.html (Standard: uc1)
+make eval-all             # Alle 4 Use Cases sequenziell
+make smoke                # R0: Hello-World Smoke Test
+make security             # D2+D3: Security & Compliance für alle Agenten
+make compliance           # Alias für 'make security' (Runner deckt beides ab)
+make functionality        # D1: LangGraph + DeepEval, Agenten parallel (-n auto)
+make report               # HTML-Report erzeugen → report.html
+make benchmark            # Multi-Modell-Vergleich
+make install              # pip install -e .
+make clean                # Generierte Ergebnisdateien löschen
 ```
 
 ---
@@ -56,63 +91,67 @@ make clean           # Alle generierten Ergebnisdateien löschen
 ## Package-Struktur
 
 ```
-agenteval_ovb/            ← installierbares Python-Package (pip install -e .)
-  __init__.py
-  scorecard.py            ← EU AI Act Scorecard-Generator (CLI: agenteval-scorecard)
-  report.py               ← HTML-Report-Generator (CLI: agenteval-report)
+agenteval_ovb/                  ← installierbares Python-Package
+  scorecard.py                  ← EU AI Act Scorecard-Generator (CLI: agenteval-scorecard)
+  report.py                     ← HTML-Report-Generator (CLI: agenteval-report)
+  pricing.py                    ← Kostenberechnung nach Modell
 
 evals/
   security/
-    security_eval.yaml              ← R2: Allgemeine Red-Team-Suite (AgentDojo/InjecAgent)
-    security_eval_finance.yaml      ← R2: Finance-spezifische Angriffe (110+ Tests)
+    security_eval.yaml          ← D2: Generische Baseline (40 Tests, AgentDojo/InjecAgent)
+    security_eval_finance.yaml  ← D2: Finance-Baseline (60 Tests)
+    usecases/{uc}/
+      security_eval.yaml        ← D2: UC-spezifische Angriffe (scope: uc_specific)
   compliance/
-    compliance_eval.yaml            ← R3: EU AI Act Compliance-Tests
+    compliance_eval.yaml        ← D3: Generische Baseline (14 Tests, EU AI Act)
+    usecases/{uc}/
+      compliance_eval.yaml      ← D3: UC-spezifische Compliance-Tests
   functionality/
-    agent/                          ← LangGraph Finance Advisory Agent
-    test_functionality.py           ← DeepEval Test Suite
-    tasks/ovb_tasks.yaml            ← Deklarative Task-Definitionen
-  benchmark/
-    model_comparison.yaml           ← Multi-Modell-Vergleich
-
-docs/
-  security_taxonomy.yaml            ← Angriffsklassen-Taxonomie
-  eu_ai_act_mapping.yaml            ← Regulatorisches Mapping
+    agent/
+      graph.py                  ← UseCaseAgent (LangGraph ReAct, Tools/Prompt injiziert)
+    usecases/
+      registry.py               ← UC-Auswahl via USE_CASE-Env
+      uc0_generic/              ← Generische D1-Baseline (keine Fachdomäne)
+      uc1_suitability/          ← D1: IDD-Suitability-Tests
+      uc2_onboarding/           ← D1: KYC/GwG-Tests
+      uc3_compliance_triage/    ← D1: EU-AI-Act-RAG-Tests
+      uc4_beratungsdoku/        ← D1: §61-VVG-Protokoll-Tests
+    test_functionality.py       ← DeepEval-Test-Suite (pytest)
+    cost_tracker.py             ← Token/Kosten/Latenz-Tracking
 
 scripts/
-  cost_report.js                    ← Wirtschaftlichkeits-Report (Token, Kosten, Latenz)
-  compliance_scorecard.py           ← Wrapper → agenteval_ovb.scorecard
-  generate_tests_from_injecagent.py ← InjecAgent JSONL → promptfoo YAML
-  run_benchmark.js                  ← Multi-Modell-Benchmark Runner
+  run_promptfoo_multi_agent.py  ← D2+D3-Runner (alle Agenten × Baseline + UC-Suite)
+  run_benchmark.js              ← Multi-Modell-Benchmark
 
-.github/workflows/promptfoo.yml     ← CI-Pipeline (GitHub Actions)
-pyproject.toml                      ← Package-Konfiguration
-Makefile                            ← Unified Eval Runner
+agents.yaml                     ← Agenten-Konfiguration (Modell, API-Key-Env, Endpunkt)
+.github/workflows/promptfoo.yml ← CI-Pipeline (USE_CASE: uc1)
 ```
 
 ---
 
 ## Reproduzierbarkeit
 
-Alle Eval-Läufe verwenden `--no-cache` und `temperature: 0`. Für exakte Reproduzierbarkeit:
+Alle Eval-Läufe verwenden `--no-cache` und `temperature: 0`. Der Use Case wird über die
+Umgebungsvariable `USE_CASE` gesetzt (Default: `uc1`) — sowohl im Runner als auch im Report,
+sodass Producer und Consumer immer dieselbe Konfiguration verwenden.
 
-```bash
-# Versionen fixieren (nach erstem erfolgreichen Lauf)
-pip freeze > requirements-lock.txt
-npx promptfoo@latest --version   # im README dokumentieren
+Jeder CI-Lauf speichert folgende Artefakte:
+
 ```
-
-Ergebnisdateien als GitHub-Artifacts: jeder CI-Lauf speichert `security_results.json`,
-`compliance_results.json`, `compliance_scorecard.json`, `functionality_costs.json` und
-`report.html` als downloadbare Artefakte.
+*_results_*.json                              # D2/D3 Ergebnisse pro (UC, Agent)
+compliance_scorecard_*.json                   # EU AI Act Scorecard pro Agent
+evals/functionality/functionality_costs_*.json # D1 Kosten/Metriken pro (UC, Agent)
+report.html                                   # Konsolidierter HTML-Report
+```
 
 ---
 
 ## CLI-Kommandos (nach `pip install -e .`)
 
 ```bash
-agenteval-scorecard compliance_results.json   # EU AI Act Scorecard
-agenteval-report --out report.html            # HTML-Benchmark-Report
-agenteval-report --help                       # Alle Optionen
+agenteval-scorecard compliance_results_uc1_gpt.json --use-case uc1
+agenteval-report --use-case uc1 --out report_uc1.html
+agenteval-report --help
 ```
 
 ---
@@ -122,16 +161,16 @@ agenteval-report --help                       # Alle Optionen
 | Werkzeug | Version | Zweck |
 |----------|---------|-------|
 | Python | ≥ 3.11 | Package, DeepEval, Scorecard |
-| Node.js | ≥ 20 | promptfoo, cost_report.js |
-| OPENAI_API_KEY | – | Alle Evals (Pflicht) |
-| MISTRAL_API_KEY | – | `make benchmark` (optional) |
-| GROQ_API_KEY | – | `make benchmark` (optional) |
+| Node.js | ≥ 20 | promptfoo |
+| AGENT_API_KEY | – | Getestete Agenten (Pflicht) |
+| JUDGE_API_KEY | – | LLM-as-Judge / DeepEval (Pflicht) |
+| OPENROUTER_API_KEY | – | Zusätzliche Agenten via OpenRouter (optional) |
 
 ---
 
-## Red-Team-Suite (R2)
+## Red-Team-Suite (D2)
 
-110+ kuratierte Tests in 9 Angriffsklassen:
+100+ kuratierte Tests in 9 Angriffsklassen (generische Baseline) + UC-spezifische Erweiterungen:
 
 | Klasse | Beschreibung | Basis |
 |--------|-------------|-------|

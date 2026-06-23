@@ -1,78 +1,94 @@
 # agenteval-ovb – Unified Eval Runner
 #
-# Verwendung: make <target>
+# Verwendung: make <target> [USE_CASE=uc1|uc2|uc3|uc4]
+#
+# Zwei orthogonale Dimensionen:
+#   USE_CASE  = WAS getestet wird (Domäne, Tools, Tasks, Metriken)  → uc1..uc4
+#   agents.yaml = WOMIT getestet wird (Modelle/Endpunkte)           → alle Agenten
+#
+# Beispiele:
+#   make eval USE_CASE=uc2           # Alle Agenten gegen UC2, ein Vergleichs-Report
+#   make functionality USE_CASE=uc3  # Nur Functionality (alle Agenten) für UC3
+#   make eval-all                    # Alle 4 Use Cases sequenziell
 #
 # Voraussetzungen:
 #   - Node.js + npx  (für promptfoo)
 #   - Python 3.11+   (für Funktionalitäts-Eval und Scorecard)
 #   - pip install -e . (einmalig, installiert agenteval-ovb als Package)
-#   - OPENAI_API_KEY in .env oder Umgebungsvariable
+#   - .env mit AGENT_API_KEY + JUDGE_API_KEY (siehe .env.example)
 #
 # Optionale Erweiterungen:
+#   - OPENROUTER_API_KEY       → für weitere Agenten in agents.yaml (Llama etc.)
 #   - MISTRAL_API_KEY          → für make benchmark (Mistral-Provider)
-#   - GROQ_API_KEY             → für make benchmark (Open-Source-Provider)
-#   - LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY → LangSmith-Tracing
 
-.PHONY: all eval smoke security security-finance security-all \
-        compliance scorecard functionality report report-html benchmark install clean
+.PHONY: all eval eval-all smoke security compliance \
+        functionality report report-html benchmark install clean
 
-# ── Hauptziel: Alle Evals + HTML-Report ──────────────────────────────────────
+USE_CASE ?= uc1
+
+# ── Hauptziele ────────────────────────────────────────────────────────────────
 all: eval
 
-eval: security security-finance compliance functionality report
+eval: smoke security functionality report
 	@echo ""
-	@echo "✅ Alle Evals abgeschlossen. Report: report.html"
+	@echo "✅ Alle Evals abgeschlossen (USE_CASE=$(USE_CASE)). Report: report.html"
 
-# ── R0: Smoke Test ────────────────────────────────────────────────────────────
+eval-all:
+	@for uc in uc1 uc2 uc3 uc4; do \
+	  echo ""; \
+	  echo "══════════════════════════════════════════════════"; \
+	  echo "  Evaluierung Use Case: $$uc"; \
+	  echo "══════════════════════════════════════════════════"; \
+	  $(MAKE) eval USE_CASE=$$uc; \
+	done
+	@echo ""
+	@echo "✅ Alle 4 Use Cases evaluiert."
+
+# ── R0: Smoke Test – Judge + alle Agenten aus agents.yaml ──────────────────────
+# Schlägt einer fehl, bricht make ab – security/functionality/report laufen
+# dann nicht mehr (make stoppt bei der ersten fehlschlagenden Prerequisite).
 smoke:
-	npx promptfoo@latest eval --no-cache --config promptfooconfig.yaml
+	python scripts/run_smoke_test.py
 
-# ── R2: Sicherheit ────────────────────────────────────────────────────────────
+# ── R2/R3: Security + Compliance für alle Agenten gegen den gewählten UC ──────
+# run_promptfoo_multi_agent.py führt alle (Agent × Config)-Kombinationen
+# parallel aus (ThreadPoolExecutor um subprocess.run() – jeder promptfoo-Call
+# ist ein eigener OS-Prozess) und erzeugt *_results_$(USE_CASE)_{agent_id}.json
+# + Scorecards.
 security:
-	npx promptfoo@latest eval --no-cache \
-	  --config evals/security/security_eval.yaml \
-	  --output security_results.json
-	node scripts/cost_report.js security_results.json
+	USE_CASE=$(USE_CASE) python scripts/run_promptfoo_multi_agent.py
 
-security-finance:
-	npx promptfoo@latest eval --no-cache \
-	  --config evals/security/security_eval_finance.yaml \
-	  --output security_finance_results.json
-	node scripts/cost_report.js security_finance_results.json
+# compliance ist ein Alias für security – der Runner erzeugt beides in einem Lauf.
+compliance: security
 
-security-all: security security-finance
-
-# ── R3: Compliance ────────────────────────────────────────────────────────────
-compliance:
-	npx promptfoo@latest eval --no-cache \
-	  --config evals/compliance/compliance_eval.yaml \
-	  --output compliance_results.json
-	node scripts/cost_report.js compliance_results.json
-
-# ── Compliance Scorecard (EU AI Act Mapping) ──────────────────────────────────
-scorecard:
-	agenteval-scorecard compliance_results.json
-
-# ── Funktionalität: LangGraph + DeepEval ─────────────────────────────────────
+# ── Funktionalität: LangGraph + DeepEval, alle Agenten gegen den UC ───────────
+# KEIN -n auto: trotz xdist_group-Marker landeten Tests eines Agenten in der
+# Praxis auf mehreren Worker-PROZESSEN (in CI beobachtet: gw0–gw3 für
+# denselben Agenten) – _trackers/_cache sind Modul-Level-State, pro Prozess
+# getrennt, jeder Worker überschreibt beim Speichern die Datei des
+# vorherigen. Die eigentliche Parallelität läuft jetzt INNERHALB des
+# Test-Moduls per ThreadPoolExecutor (pytest_sessionstart in conftest.py
+# ruft test_functionality.warm_caches() auf, zwei Phasen: erst alle
+# Agent-Läufe parallel, dann alle Judge-Bewertungen parallel – WICHTIG:
+# pytest erkennt pytest_sessionstart/pytest_sessionfinish NUR in
+# conftest.py, nicht in test_functionality.py selbst, sonst wird der Hook
+# nie aufgerufen) – ein Prozess, mehrere Threads, daher
+# kein Cross-Prozess-Datenverlust, aber trotzdem alles gleichzeitig statt
+# sequenziell. Dieser Job läuft in der CI außerdem als eigener, zu
+# security_compliance PARALLELER Job (siehe promptfoo.yml) – beide hängen
+# nur von smoke ab, nicht voneinander.
 functionality:
-	cd evals/functionality && deepeval test run test_functionality.py -v
+	cd evals/functionality && \
+	  USE_CASE=$(USE_CASE) pytest test_functionality.py -v
 
-# ── HTML-Report ───────────────────────────────────────────────────────────────
+# ── HTML-Report (Multi-Agent-Vergleich für den gewählten UC) ──────────────────
 report-html:
-	agenteval-report \
-	  --security security_results.json \
-	  --security security_finance_results.json \
-	  --compliance compliance_results.json \
-	  --scorecard compliance_scorecard.json \
-	  --functionality evals/functionality/functionality_costs.json \
-	  --out report.html
+	agenteval-report --use-case $(USE_CASE) --out report.html
 
-# ── Reporting (Scorecard + HTML) ──────────────────────────────────────────────
-report: scorecard report-html
-	@echo "📊 Reports generiert: compliance_scorecard.json, report.html"
+report: report-html
+	@echo "📊 Report generiert: report.html"
 
 # ── Multi-Modell-Benchmark (Vendor Neutrality) ────────────────────────────────
-# Benötigt: MISTRAL_API_KEY + GROQ_API_KEY (beide kostenlos erhältlich)
 benchmark:
 	node scripts/run_benchmark.js
 
@@ -82,5 +98,5 @@ install:
 
 # ── Aufräumen ─────────────────────────────────────────────────────────────────
 clean:
-	rm -f *_results.json compliance_scorecard.json report.html
-	rm -f evals/functionality/functionality_costs.json
+	rm -f *_results_*.json compliance_scorecard_*.json report.html
+	rm -f evals/functionality/functionality_costs_*.json

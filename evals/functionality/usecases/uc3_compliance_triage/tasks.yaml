@@ -1,0 +1,113 @@
+# UC3 – Compliance-Triage-Agent (EU AI Act / OVB-Governance)
+# Jeder Task prüft eine geplante KI-Anwendung auf Zulässigkeit und Anforderungen.
+# Ground Truth: erwartetes Risikolevel + erwartete Quellen-IDs (für FaithfulnessMetric).
+# Bewertet mit: ToolCorrectnessMetric, TaskCompletionMetric, FaithfulnessMetric
+
+tasks:
+
+  - id: "UC3-01"
+    description: "Hochrisiko – Kreditwürdigkeitsprüfung (Annex III Nr. 5b)"
+    category: "risk_classification"
+    input: >
+      Ich plane folgende KI-Anwendung: Ein Algorithmus zur automatischen
+      Kreditwürdigkeitsprüfung für Privatkundenkredite.
+      Ist sie nach EU AI Act und OVB-Governance zulässig und welche Pflichten ergeben sich?
+    expected_tools:
+      - retrieve_regulatory_corpus
+      - classify_risk_level
+      - match_governance_policy
+      - generate_action_list
+    expected_output: >
+      Risikolevel: high_risk (Annex III Nr. 5b EU AI Act: Kreditwürdigkeitsprüfung).
+      Maßnahmen: AI-Review-Board-Genehmigung, Folgenabschätzung, EU-Datenbank-Registrierung,
+      Mensch-in-der-Schleife, Transparenzpflicht (Art. 13).
+      Quellen zitiert: EU-AI-Act/Annex-III/Nr.5b, DSGVO/Art.22, OVB-AI-Policy/v1.2/§3.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll den vollständigen Workflow durchlaufen, das Risikolevel high_risk
+      korrekt klassifizieren, Quellen-IDs aus dem Korpus zitieren und eine vollständige
+      Maßnahmenliste gemäß OVB-Governance-Policy ausgeben.
+
+  - id: "UC3-02"
+    description: "Begrenztes Risiko – KI-Chatbot im Kundendialog (Art. 52)"
+    category: "risk_classification"
+    input: >
+      Ich plane einen KI-Chatbot für die Beantwortung allgemeiner Kundenanfragen
+      (keine Beratung, keine Entscheidungen). Ist er zulässig?
+    expected_tools:
+      - retrieve_regulatory_corpus
+      - classify_risk_level
+      - match_governance_policy
+      - generate_action_list
+    expected_output: >
+      Risikolevel: limited_risk (EU AI Act Art. 52: KI-Kennzeichnungspflicht).
+      Maßnahmen: KI-Identifikationspflicht umsetzen, Datenschutz-Folgenabschätzung prüfen,
+      interne Freigabe. Keine Hochrisiko-Anforderungen.
+      Quelle zitiert: EU-AI-Act/Art.52.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll limited_risk klassifizieren, Art. 52 als Quelle zitieren,
+      und nur die für begrenztes Risiko relevanten Anforderungen ausgeben.
+      Keine Hochrisiko-Anforderungen in der Maßnahmenliste.
+
+  - id: "UC3-03"
+    description: "Zitationstreue-Test: Agent darf nichts erfinden"
+    category: "faithfulness"
+    input: >
+      Mein KI-System hilft Beratern bei der IDD-Eignungsprüfung (Suitability Check).
+      Was muss ich nach EU AI Act und OVB-Governance beachten?
+    expected_tools:
+      - retrieve_regulatory_corpus
+      - classify_risk_level
+      - match_governance_policy
+      - generate_action_list
+    expected_output: >
+      Risikolevel: high_risk (Eignungsprüfung / Suitability Check → Annex III Nr. 5 oder 5b).
+      Antwort enthält ausschließlich Anforderungen, die im Regulatorik-Korpus belegt sind.
+      Keine halluzinierten Artikel oder Anforderungen.
+      Alle Anforderungen mit Quellen-ID belegt.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll nur regulatorische Anforderungen nennen, die durch retrieve_regulatory_corpus
+      belegt sind (Zitationstreue). Erfundene Artikel oder Anforderungen sind ein Misserfolg.
+      Mindestens eine Quellen-ID muss in der finalen Antwort erscheinen.
+
+  - id: "UC3-04"
+    description: "Minimales Risiko – Spam-Filter, keine verbindlichen Anforderungen"
+    category: "risk_classification"
+    input: >
+      Wir nutzen einen KI-basierten Spam-Filter für interne E-Mails.
+      Hat das irgendwelche EU AI Act-Auswirkungen?
+    expected_tools:
+      - retrieve_regulatory_corpus
+      - classify_risk_level
+      - match_governance_policy
+      - generate_action_list
+    expected_output: >
+      Risikolevel: minimal_risk (Erwägungsgrund 47 EU AI Act: Spam-Filter).
+      Keine verbindlichen EU AI Act-Anforderungen. Nur interne Best-Practice-Richtlinien.
+      Zeitaufwand: 1 Woche.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll minimal_risk klassifizieren, kommunizieren dass keine verbindlichen
+      Anforderungen bestehen, und den Aufwand (1 Woche) korrekt aus der Policy ausgeben.
+
+  - id: "UC3-05"
+    description: "Personalauswahl-KI – Hochrisiko, Annex III Nr. 5"
+    category: "risk_classification"
+    input: >
+      Ich möchte eine KI-Anwendung einsetzen, die Bewerbungsunterlagen analysiert
+      und eine Einstellungsentscheidung empfiehlt. Welche Pflichten habe ich?
+    expected_tools:
+      - retrieve_regulatory_corpus
+      - classify_risk_level
+      - match_governance_policy
+      - generate_action_list
+    expected_output: >
+      Risikolevel: high_risk (Annex III Nr. 5: Einstellungsentscheidungen).
+      12 Wochen Umsetzungsaufwand. Vollständige Hochrisiko-Anforderungen.
+      Quelle zitiert: EU-AI-Act/Annex-III/Nr.5.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll high_risk für Einstellungsentscheidungen (Annex III Nr. 5) klassifizieren,
+      alle Hochrisiko-Anforderungen ausgeben und die Quelle EU-AI-Act/Annex-III/Nr.5 zitieren.

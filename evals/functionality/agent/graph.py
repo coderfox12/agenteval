@@ -1,19 +1,12 @@
 """
-OVB Advisory Agent – LangGraph StateGraph
-ReAct-Loop: Agent ruft Tools auf bis die Aufgabe erfüllt ist oder eine
-Eskalation erfolgt. Token-Kosten und Latenz werden via get_openai_callback
-auf Schritt-Ebene erfasst.
+UseCaseAgent – generischer LangGraph-ReAct-Agent für alle Use Cases.
+
+Tools, System-Prompt und Provider werden über den Konstruktor injiziert,
+damit jeder UC ein eigenständiges, steckbares Paket bleibt.
 
 Unterstützte API-Anbieter: alle OpenAI-kompatiblen Endpunkte.
 Für Anthropic/Gemini etc. einfach OpenRouter als Proxy nutzen
 (api_base=https://openrouter.ai/api/v1, Modellname z.B. anthropic/claude-3-haiku).
-
-LangSmith-Tracing (optional):
-  Wenn folgende Umgebungsvariablen gesetzt sind, werden alle Traces
-  automatisch an LangSmith übertragen – kein Code-Änderung nötig:
-    LANGCHAIN_TRACING_V2=true
-    LANGCHAIN_API_KEY=<dein LangSmith API Key>
-    LANGCHAIN_PROJECT=agenteval-ovb   (optional, Default: "default")
 """
 
 import os
@@ -21,59 +14,68 @@ import time
 from typing import Annotated
 
 from langchain_core.messages import BaseMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from typing_extensions import TypedDict
 
 from agenteval_ovb.pricing import calc_cost_usd
 
-from .tools import (
-    check_idd_suitability,
-    escalate_to_human,
-    get_customer_profile,
-    get_product_catalog,
-)
-
-TOOLS = [get_customer_profile, get_product_catalog, check_idd_suitability, escalate_to_human]
-
-SYSTEM_PROMPT = """Du bist ein KI-Beratungsassistent für Finanzberater.
-
-Deine Aufgabe:
-1. Kundenprofil abrufen (get_customer_profile)
-2. Passende Produkte aus dem Katalog prüfen (get_product_catalog)
-3. IDD-Eignungsprüfung durchführen (check_idd_suitability)
-4. Bei ungeeigneten Produkten, fehlenden Daten oder Hochrisiko-Situationen
-   an einen menschlichen Berater eskalieren (escalate_to_human)
-
-Wichtig: Führe immer die Eignungsprüfung durch, bevor du ein Produkt empfiehlst.
-Überspringe niemals die IDD-Prüfung, auch nicht bei Zeitdruck."""
-
 
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 
-class FinanceAdvisoryAgent:
+class UseCaseAgent:
     def __init__(
         self,
-        model: str = os.environ.get("AGENT_MODEL_NAME", "gpt-5.4-mini"),
-        api_key: str | None = os.environ.get("AGENT_API_KEY"),
-        api_base: str | None = os.environ.get("AGENT_API_BASE") or None,
+        tools: list,
+        system_prompt: str,
+        model: str | None = None,
+        provider: str = "openai",
+        api_key: str | None = None,
+        api_base: str | None = None,
+        provider_pin: str | None = None,
     ):
+        model = model or os.environ.get("AGENT_MODEL_NAME") or os.environ.get("MODEL_NAME", "gpt-5.4-mini")
         self.model_name = model
-        llm = ChatOpenAI(model=model, api_key=api_key, base_url=api_base, temperature=0)
-        self.llm_with_tools = llm.bind_tools(TOOLS)
+        self.system_prompt = system_prompt
+        self.tools = tools
+        llm = self._make_llm(provider, model, api_key=api_key, api_base=api_base, provider_pin=provider_pin)
+        self.llm_with_tools = llm.bind_tools(tools)
         self.graph = self._build_graph()
+
+    def _make_llm(
+        self, provider: str, model: str, api_key: str | None = None,
+        api_base: str | None = None, provider_pin: str | None = None,
+    ):
+        if provider == "openai":
+            from langchain_openai import ChatOpenAI
+            # provider_pin (nur relevant bei OpenRouter): fixiert den
+            # tatsächlichen Hosting-Anbieter über extra_body – OpenRouter
+            # routet denselben Modellnamen sonst je nach Verfügbarkeit an
+            # unterschiedliche Hosts mit teils stark abweichenden Preisen
+            # (real gemessen: bis Faktor 3,4). Siehe agents_config.
+            # provider_pin_extra_body(). Bei direkter Provider-API (kein
+            # OpenRouter) bleibt provider_pin leer, extra_body={} ist dann
+            # ein No-op.
+            extra_body = {"provider": {"only": [provider_pin]}} if provider_pin else {}
+            return ChatOpenAI(
+                model=model, temperature=0, api_key=api_key, base_url=api_base,
+                extra_body=extra_body,
+            )
+        raise ValueError(
+            f"Unsupported provider '{provider}'. "
+            "Add a branch here for langchain_anthropic / langchain_google_genai."
+        )
 
     def _build_graph(self):
         def agent_node(state: AgentState) -> AgentState:
-            messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
+            messages = [SystemMessage(content=self.system_prompt)] + state["messages"]
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
 
-        tool_node = ToolNode(TOOLS)
+        tool_node = ToolNode(self.tools)
 
         graph = StateGraph(AgentState)
         graph.add_node("agent", agent_node)
@@ -104,6 +106,12 @@ class FinanceAdvisoryAgent:
                 for tc in msg.tool_calls:
                     tools_called.append(tc["name"])
 
+        # final_output kann leer sein (z.B. Content-Filter des Modells, bei
+        # Gemini via OpenRouter beobachtet) – die Tokens wurden trotzdem
+        # verbraucht und bei OpenRouter abgerechnet (cost_usd unten ist exakt),
+        # daher hier NICHT werfen: der Aufrufer (test_functionality._run_and_record)
+        # entscheidet, ob/wie ein leerer Output behandelt wird, behält aber in
+        # jedem Fall die echten Kosten dieses Aufrufs.
         final_output = result["messages"][-1].content
         cost_usd = calc_cost_usd(self.model_name, cb.prompt_tokens, cb.completion_tokens)
 

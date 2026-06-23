@@ -8,6 +8,7 @@ providers:
   - id: openai:{{env.MODEL_NAME}}
     config:
       temperature: 0
+      passthrough: {{env.MODEL_PASSTHROUGH_JSON}}
 
 # Chat-Prompt-Template: System + User
 prompts:
@@ -16,7 +17,12 @@ prompts:
 
 defaultTest:
   options:
-    provider: openai:{{env.MODEL_NAME}}
+    provider:
+      id: openai:{{env.JUDGE_MODEL_NAME}}
+      config:
+        apiKey: '{{env.JUDGE_OPENAI_API_KEY}}'
+        apiBaseUrl: '{{env.JUDGE_OPENAI_BASE_URL}}'
+        passthrough: {{env.JUDGE_PASSTHROUGH_JSON}}
 
 tests:
 
