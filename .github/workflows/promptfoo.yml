@@ -24,20 +24,20 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: "24"
       # Cache-Key-Version muss zu PROMPTFOO_VERSION in
       # agenteval_ovb/promptfoo_utils.py passen (beim Bump beide ändern).
       - name: npm-Cache für promptfoo wiederverwenden
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.npm
           key: ${{ runner.os }}-npm-promptfoo-0.121.17
           restore-keys: |
             ${{ runner.os }}-npm-promptfoo-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -60,18 +60,18 @@ jobs:
     needs: smoke
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: "24"
       - name: npm-Cache für promptfoo wiederverwenden
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.npm
           key: ${{ runner.os }}-npm-promptfoo-0.121.17
           restore-keys: |
             ${{ runner.os }}-npm-promptfoo-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -84,7 +84,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: python scripts/run_promptfoo_multi_agent.py
       - name: Ergebnisse hochladen
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: security-compliance-results
@@ -108,8 +108,8 @@ jobs:
     needs: smoke
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -118,16 +118,26 @@ jobs:
       - name: Funktionalität – Python-Abhängigkeiten installieren
         run: pip install -r evals/functionality/requirements.txt
       - name: Funktionalität – Multi-Step Agent Eval (LangGraph + DeepEval)
-        continue-on-error: true
         env:
           AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
           DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
           DEEPEVAL_DISABLE_DOTENV: "1"
-        run: cd evals/functionality && pytest test_functionality.py -v
+        # pytest exit code 1 bedeutet nur "manche Tests fehlgeschlagen" – das
+        # ist bei uns das ERWARTETE Auswertungsergebnis (z.B. ein Agent
+        # erfüllt eine Aufgabe nicht gut genug), kein Skriptfehler, und wird
+        # nicht als CI-Fehler-Annotation angezeigt. Exit-Codes 2+ (Absturz,
+        # interner Fehler, Usage-Fehler, keine Tests gefunden) bleiben echte
+        # Fehler und lassen den Schritt weiterhin fehlschlagen.
+        run: |
+          cd evals/functionality
+          pytest test_functionality.py -v
+          code=$?
+          if [ $code -eq 1 ]; then exit 0; fi
+          exit $code
       - name: Ergebnisse hochladen
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: functionality-results
@@ -140,20 +150,20 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
       - name: agenteval-ovb installieren (pip install -e .)
         run: pip install -e .
       - name: Security/Compliance-Ergebnisse herunterladen
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: security-compliance-results
       - name: Funktionalitäts-Ergebnisse herunterladen
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: functionality-results
@@ -161,7 +171,7 @@ jobs:
       - name: Benchmark-Report HTML generieren
         run: agenteval-report --out report.html
       - name: Alle Artefakte zusammenführen
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: eval-results

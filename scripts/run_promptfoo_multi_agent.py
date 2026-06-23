@@ -172,7 +172,15 @@ def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dic
         finally:
             tmp_out.unlink(missing_ok=True)
 
-    return results, result.returncode == 0
+    # NICHT result.returncode == 0 verwenden: promptfoo gibt bewusst exit
+    # code 1 zurück, wenn TESTS fehlschlagen (z.B. ein Security-Test zeigt,
+    # dass sich der Agent jailbreaken ließ) – das ist bei uns das ERWARTETE,
+    # interessante Auswertungsergebnis, kein Skript-/Infrastrukturfehler.
+    # "ok" bedeutet hier: hat der Prozess überhaupt verwertbare Ergebnisse
+    # geliefert? Nur ein leeres/fehlendes Output-File (Crash, Auth-Fehler vor
+    # dem ersten Call usw.) gilt als echter Fehlschlag.
+    ok = len(results) > 0
+    return results, ok
 
 
 def write_merged(results: list[dict], output: str) -> None:
