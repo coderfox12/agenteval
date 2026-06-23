@@ -28,8 +28,10 @@ Aufruf:
 import concurrent.futures
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -126,6 +128,18 @@ def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dic
     safe_name = config.replace("/", "_").replace("\\", "_").removesuffix(".yaml")
     tmp_out   = ROOT / f"_tmp_{safe_name}_{agent_id}.json"
 
+    # Eigenes, isoliertes PROMPTFOO_CONFIG_DIR pro Job: promptfoo schreibt
+    # JEDEN Testlauf zusätzlich in eine lokale SQLite-DB (promptfoo.db) im
+    # Config-Verzeichnis (Default: ~/.promptfoo) – bei mehreren parallelen
+    # npx-Prozessen, die alle in dieselbe Datei schreiben, kam es zu echten
+    # "Failed query: insert into eval_results" Fehlern (SQLite-Lock unter
+    # Nebenläufigkeit), wodurch einzelne Testergebnisse stillschweigend
+    # verloren gingen – in der Praxis beobachtet: 102 erwartete Security-
+    # Tests wurden zu inkonsistent 57/87 zwischen den beiden Agenten. Mit
+    # --no-cache wird nur der API-Response-Cache deaktiviert, NICHT diese
+    # History-DB. Eigenes Verzeichnis pro Job umgeht den Konflikt komplett.
+    pf_config_dir = Path(tempfile.mkdtemp(prefix=f"promptfoo_{safe_name}_{agent_id}_"))
+
     cmd = [
         "npx", f"promptfoo@{PROMPTFOO_VERSION}", "eval", "--no-cache",
         "--max-concurrency", str(DEFAULT_MAX_CONCURRENCY),
@@ -133,7 +147,12 @@ def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dic
         "--output", str(tmp_out),
     ]
     print(f"\n▶  {USE_CASE} | {agent['label']!r} | {Path(config).name}  (scope={scope})")
-    result = subprocess.run(cmd, env=_agent_env(agent, judge))
+    env = _agent_env(agent, judge)
+    env["PROMPTFOO_CONFIG_DIR"] = str(pf_config_dir)
+    try:
+        result = subprocess.run(cmd, env=env)
+    finally:
+        shutil.rmtree(pf_config_dir, ignore_errors=True)
 
     results: list[dict] = []
     if tmp_out.exists():
