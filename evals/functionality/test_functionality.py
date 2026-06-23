@@ -36,9 +36,10 @@ from deepeval.metrics import (
     TaskCompletionMetric,
     ToolCorrectnessMetric,
 )
+from deepeval.models import GPTModel
 from deepeval.test_case import LLMTestCase, ToolCall
 from dotenv import load_dotenv
-from agenteval_ovb.agents_config import load_agents_config, require_api_base
+from agenteval_ovb.agents_config import load_agents_config, provider_pin_extra_body, require_api_base
 from agenteval_ovb.pricing import price_per_token, validate_agents_config
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -90,6 +91,16 @@ _judge_in_price, _judge_out_price = price_per_token(_JUDGE_MODEL)
 os.environ["OPENAI_COST_PER_INPUT_TOKEN"]  = str(_judge_in_price)
 os.environ["OPENAI_COST_PER_OUTPUT_TOKEN"] = str(_judge_out_price)
 
+# provider_pin (nur relevant bei OpenRouter): fixiert den tatsächlichen
+# Hosting-Anbieter über extra_body, analog zu agent/graph.py – siehe
+# agents_config.provider_pin_extra_body() für die Begründung. Ein explizites
+# GPTModel-Objekt statt nur des Modellnamen-Strings, damit generation_kwargs
+# durchgereicht werden kann.
+_JUDGE_MODEL_OBJ = GPTModel(
+    model=_JUDGE_MODEL,
+    generation_kwargs={"extra_body": provider_pin_extra_body(_JUDGE_CFG)},
+)
+
 
 # ─── Agent- und Tracker-Instanzen (lazy, gecacht) ─────────────────────────────
 
@@ -115,6 +126,7 @@ def _get_agent(cfg: dict) -> tuple[UseCaseAgent, CostTracker]:
                     model=cfg["model"],
                     api_key=api_key,
                     api_base=api_base,
+                    provider_pin=cfg.get("provider_pin"),
                 )
                 _trackers[agent_id] = CostTracker(
                     output_path=f"functionality_costs_{_UC['id']}_{agent_id}.json",
@@ -214,20 +226,20 @@ def _build_test_case_and_metric(task: dict, metric_name: str, actual_output: str
         test_case = LLMTestCase(
             input=task["input"], actual_output=actual_output, expected_output=task["deepeval_task"],
         )
-        metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"], model=_JUDGE_MODEL)
+        metric = TaskCompletionMetric(threshold=0.7, task=task["deepeval_task"], model=_JUDGE_MODEL_OBJ)
     elif metric_name == "answer_relevancy":
         test_case = LLMTestCase(input=task["input"], actual_output=actual_output)
-        metric = AnswerRelevancyMetric(threshold=0.7, model=_JUDGE_MODEL)
+        metric = AnswerRelevancyMetric(threshold=0.7, model=_JUDGE_MODEL_OBJ)
     elif metric_name == "faithfulness":
         retrieval_context = [task.get("expected_output", "")]
         test_case = LLMTestCase(
             input=task["input"], actual_output=actual_output, retrieval_context=retrieval_context,
         )
-        metric = FaithfulnessMetric(threshold=0.7, model=_JUDGE_MODEL)
+        metric = FaithfulnessMetric(threshold=0.7, model=_JUDGE_MODEL_OBJ)
     elif metric_name == "hallucination":
         context = [task.get("input", ""), task.get("expected_output", "")]
         test_case = LLMTestCase(input=task["input"], actual_output=actual_output, context=context)
-        metric = HallucinationMetric(threshold=0.5, model=_JUDGE_MODEL)
+        metric = HallucinationMetric(threshold=0.5, model=_JUDGE_MODEL_OBJ)
     else:
         raise ValueError(f"Unbekannte LLM-Judge-Metrik: {metric_name}")
     return test_case, metric

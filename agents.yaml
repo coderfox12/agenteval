@@ -16,11 +16,21 @@
 #                model:       anthropic/claude-3-haiku  |  google/gemini-flash-1.5  |  meta-llama/...
 #                api_key_env: OPENROUTER_API_KEY
 #
-# OpenRouter-Suffix ":floor" am Modellnamen erzwingt automatisch den
-# günstigsten verfügbaren Anbieter für dieses Modell (Gegenstück: ":nitro"
-# für den schnellsten). Reiner Bestandteil des model-Strings, daher ohne
-# Code-Änderung wirksam – pricing.py löst den Preis trotz Suffix korrekt auf
-# (Prefix-Matching).
+# provider_pin (NUR für OpenRouter relevant, optional): erzwingt einen
+# konkreten Hosting-Anbieter für dieses Modell über OpenRouters
+# provider.only-Parameter (siehe scripts/run_promptfoo_multi_agent.py,
+# evals/functionality/agent/graph.py). Ohne provider_pin routet OpenRouter
+# denselben Modellnamen je nach Verfügbarkeit an viele verschiedene Hosts
+# mit TEILS STARK UNTERSCHIEDLICHEN Preisen für dasselbe Modell (real
+# gemessen: bis Faktor 3,4 Unterschied bei openai/gpt-oss-120b je
+# Anbieter) – die Preistabelle in pricing.py kann das ohne Pin nicht
+# zuverlässig abbilden. Bei direktem Zugriff auf eine Provider-API
+# (api_base zeigt NICHT auf openrouter.ai) einfach weglassen – dort gibt
+# es ohnehin nur einen Anbieter, also keine Preis-Varianz.
+# Empfehlung: einen Anbieter mit hoher Uptime UND einem Preis wählen, der
+# auch als eigenständige Direkt-API existiert (z. B. DeepInfra, Google) –
+# dann gilt der hinterlegte Preis unverändert, falls später direkt statt
+# über OpenRouter auf diesen Anbieter zugegriffen wird.
 
 # ── Judge (LLM-as-Judge für alle Evaluationen) ────────────────────────────────
 # api_key_env bleibt JUDGE_API_KEY, auch wenn das Modell über OpenRouter läuft –
@@ -28,19 +38,22 @@
 # unter JUDGE_API_KEY den eigenen OpenRouter-Key eintragen (api_base bestimmt
 # den Provider, nicht der Name der Env-Variable).
 judge:
-  model: openai/gpt-oss-120b:floor
+  model: openai/gpt-oss-120b
+  provider_pin: DeepInfra
   api_key_env: JUDGE_API_KEY
   api_base: https://openrouter.ai/api/v1
 
 agents:
   - id: deepseek-v4-flash
     label: "DeepSeek V4 Flash (OpenRouter)"
-    model: deepseek/deepseek-v4-flash:floor
+    model: deepseek/deepseek-v4-flash
+    provider_pin: DeepInfra
     api_key_env: OPENROUTER_API_KEY
     api_base: https://openrouter.ai/api/v1
 
   - id: gemini-2.5-flash-lite
     label: "Gemini 2.5 Flash Lite (OpenRouter)"
-    model: google/gemini-2.5-flash-lite:floor
+    model: google/gemini-2.5-flash-lite
+    provider_pin: Google
     api_key_env: OPENROUTER_API_KEY
     api_base: https://openrouter.ai/api/v1

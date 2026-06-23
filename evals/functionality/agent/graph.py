@@ -35,19 +35,35 @@ class UseCaseAgent:
         provider: str = "openai",
         api_key: str | None = None,
         api_base: str | None = None,
+        provider_pin: str | None = None,
     ):
         model = model or os.environ.get("AGENT_MODEL_NAME") or os.environ.get("MODEL_NAME", "gpt-5.4-mini")
         self.model_name = model
         self.system_prompt = system_prompt
         self.tools = tools
-        llm = self._make_llm(provider, model, api_key=api_key, api_base=api_base)
+        llm = self._make_llm(provider, model, api_key=api_key, api_base=api_base, provider_pin=provider_pin)
         self.llm_with_tools = llm.bind_tools(tools)
         self.graph = self._build_graph()
 
-    def _make_llm(self, provider: str, model: str, api_key: str | None = None, api_base: str | None = None):
+    def _make_llm(
+        self, provider: str, model: str, api_key: str | None = None,
+        api_base: str | None = None, provider_pin: str | None = None,
+    ):
         if provider == "openai":
             from langchain_openai import ChatOpenAI
-            return ChatOpenAI(model=model, temperature=0, api_key=api_key, base_url=api_base)
+            # provider_pin (nur relevant bei OpenRouter): fixiert den
+            # tatsächlichen Hosting-Anbieter über extra_body – OpenRouter
+            # routet denselben Modellnamen sonst je nach Verfügbarkeit an
+            # unterschiedliche Hosts mit teils stark abweichenden Preisen
+            # (real gemessen: bis Faktor 3,4). Siehe agents_config.
+            # provider_pin_extra_body(). Bei direkter Provider-API (kein
+            # OpenRouter) bleibt provider_pin leer, extra_body={} ist dann
+            # ein No-op.
+            extra_body = {"provider": {"only": [provider_pin]}} if provider_pin else {}
+            return ChatOpenAI(
+                model=model, temperature=0, api_key=api_key, base_url=api_base,
+                extra_body=extra_body,
+            )
         raise ValueError(
             f"Unsupported provider '{provider}'. "
             "Add a branch here for langchain_anthropic / langchain_google_genai."

@@ -18,6 +18,7 @@ Aufruf:
 """
 
 import concurrent.futures
+import json
 import os
 import shutil
 import subprocess
@@ -27,7 +28,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from agenteval_ovb.agents_config import load_agents_config, require_api_base
+from agenteval_ovb.agents_config import load_agents_config, provider_pin_extra_body, require_api_base
 from agenteval_ovb.promptfoo_utils import DEFAULT_MAX_CONCURRENCY, PROMPTFOO_VERSION
 
 ROOT = Path(__file__).parent.parent
@@ -36,17 +37,18 @@ ROOT = Path(__file__).parent.parent
 load_dotenv(ROOT / ".env")
 
 
-def _entry_env(model: str, api_key_env: str, api_base: str) -> dict:
+def _entry_env(cfg: dict, api_base: str) -> dict:
     env = os.environ.copy()
-    env["OPENAI_API_KEY"]  = os.environ.get(api_key_env, "")
-    env["MODEL_NAME"]      = model
+    env["OPENAI_API_KEY"]  = os.environ.get(cfg["api_key_env"], "")
+    env["MODEL_NAME"]      = cfg["model"]
     env["OPENAI_BASE_URL"] = api_base
+    env["MODEL_PASSTHROUGH_JSON"] = json.dumps(provider_pin_extra_body(cfg))
     return env
 
 
-def run_smoke(label: str, model: str, api_key_env: str, api_base: str) -> bool:
-    print(f"\n▶  Smoke-Test: {label}  (Modell: {model}, Endpunkt: {api_base})")
-    env = _entry_env(model, api_key_env, api_base)
+def run_smoke(label: str, cfg: dict, api_base: str) -> bool:
+    print(f"\n▶  Smoke-Test: {label}  (Modell: {cfg['model']}, Endpunkt: {api_base})")
+    env = _entry_env(cfg, api_base)
     # Eigenes, isoliertes PROMPTFOO_CONFIG_DIR pro Job: promptfoo schreibt jeden
     # Lauf zusätzlich in eine lokale SQLite-Verlaufs-DB (Default ~/.promptfoo) –
     # bei den hier parallel laufenden Jobs (Judge + alle Agenten gleichzeitig)
@@ -72,15 +74,15 @@ def main() -> None:
     config = load_agents_config()
     failed: list[str] = []
 
-    entries: list[tuple[str, str, str, str]] = []  # (label, model, api_key_env, api_base)
+    entries: list[tuple[str, dict, str]] = []  # (label, cfg, api_base)
 
     judge = config.get("judge") or {}
     if judge:
-        entries.append(("Judge", judge["model"], judge["api_key_env"], require_api_base(judge, "judge")))
+        entries.append(("Judge", judge, require_api_base(judge, "judge")))
 
     for agent in config.get("agents", []):
         entries.append((
-            agent["label"], agent["model"], agent["api_key_env"],
+            agent["label"], agent,
             require_api_base(agent, f"Agent '{agent.get('id', '?')}'"),
         ))
 

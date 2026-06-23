@@ -27,10 +27,18 @@ PRICES_PER_1M: dict[str, dict[str, float]] = {
     "gpt-4o":           {"input": 2.50,   "output": 10.00},
     "gpt-3.5-turbo":    {"input": 0.50,   "output": 1.50},
 
-    # ── Drittanbieter-Modelle über OpenRouter (Preise von openrouter.ai) ────
-    "openai/gpt-oss-120b":                    {"input": 0.039, "output": 0.18},
-    "google/gemini-2.5-flash-lite":           {"input": 0.10,  "output": 0.40},
-    "deepseek/deepseek-v4-flash":              {"input": 0.09,  "output": 0.18},
+    # ── Drittanbieter-Modelle über OpenRouter ───────────────────────────────
+    # WICHTIG: Diese Preise gelten exakt für den in agents.yaml unter
+    # provider_pin festgelegten Anbieter – OpenRouter routet denselben
+    # Modellnamen je nach Verfügbarkeit an viele verschiedene Hosts mit
+    # UNTERSCHIEDLICHEN Preisen (für openai/gpt-oss-120b z. B. zwischen
+    # $0.039 und $0.15 Input je Anbieter, Faktor >3 Unterschied). Ohne
+    # provider_pin (z. B. :floor-Routing) ist der hier hinterlegte Preis
+    # nur ein Näherungswert – siehe scripts/run_promptfoo_multi_agent.py
+    # und agent/graph.py für die Anbieter-Fixierung (provider.only).
+    "openai/gpt-oss-120b":                    {"input": 0.039, "output": 0.19},   # Anbieter: DeepInfra
+    "google/gemini-2.5-flash-lite":           {"input": 0.10,  "output": 0.40},   # Anbieter: Google
+    "deepseek/deepseek-v4-flash":              {"input": 0.10,  "output": 0.20},   # Anbieter: DeepInfra
     "meta-llama/llama-3.1-8b-instruct:free":  {"input": 0.0,   "output": 0.0},
 }
 

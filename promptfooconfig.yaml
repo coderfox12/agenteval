@@ -16,6 +16,8 @@ description: Hello-World Test – Hauptstadt Frankreich
 
 providers:
   - id: openai:{{env.MODEL_NAME}}
+    config:
+      passthrough: {{env.MODEL_PASSTHROUGH_JSON}}
 
 prompts:
   - "Was ist die Hauptstadt von Frankreich? Antworte nur mit dem Stadtnamen."

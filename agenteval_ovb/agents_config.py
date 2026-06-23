@@ -46,3 +46,23 @@ def require_api_base(cfg: dict, label: str) -> str:
             f"OpenAI (https://api.openai.com/v1)."
         )
     return api_base
+
+
+def provider_pin_extra_body(cfg: dict) -> dict:
+    """Baut den extra_body/passthrough-Block für OpenRouters provider.only-
+    Parameter, falls cfg["provider_pin"] gesetzt ist – sonst leeres dict
+    (No-op, z. B. bei direktem Zugriff auf eine Provider-API ohne OpenRouter).
+
+    OpenRouter routet denselben Modellnamen je nach Verfügbarkeit an viele
+    verschiedene Hosts mit teils stark unterschiedlichen Preisen für
+    dasselbe Modell (real gemessen: bis Faktor 3,4 Unterschied) – ohne
+    Pinning sind die Kosten in pricing.py daher nur ein Näherungswert.
+    Wird in run_promptfoo_multi_agent.py/run_smoke_test.py (als JSON für
+    Nunjucks-Templates in den promptfoo-YAMLs) und in graph.py/
+    test_functionality.py (direkt als extra_body/generation_kwargs für
+    LangChain bzw. DeepEval) verwendet – jeweils dasselbe openai-python-
+    SDK-Feature extra_body, das OpenRouter-spezifische Zusatzparameter
+    direkt in den Request-Body durchreicht.
+    """
+    pin = cfg.get("provider_pin")
+    return {"provider": {"only": [pin]}} if pin else {}
