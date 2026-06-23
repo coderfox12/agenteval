@@ -131,9 +131,11 @@ jobs:
         # interner Fehler, Usage-Fehler, keine Tests gefunden) bleiben echte
         # Fehler und lassen den Schritt weiterhin fehlschlagen.
         run: |
+          set +e
           cd evals/functionality
           pytest test_functionality.py -v
           code=$?
+          set -e
           if [ $code -eq 1 ]; then exit 0; fi
           exit $code
       - name: Ergebnisse hochladen
