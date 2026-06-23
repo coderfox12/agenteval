@@ -67,9 +67,12 @@ compliance: security
 # denselben Agenten) – _trackers/_cache sind Modul-Level-State, pro Prozess
 # getrennt, jeder Worker überschreibt beim Speichern die Datei des
 # vorherigen. Die eigentliche Parallelität läuft jetzt INNERHALB des
-# Test-Moduls per ThreadPoolExecutor (pytest_sessionstart in
-# test_functionality.py, zwei Phasen: erst alle Agent-Läufe parallel, dann
-# alle Judge-Bewertungen parallel) – ein Prozess, mehrere Threads, daher
+# Test-Moduls per ThreadPoolExecutor (pytest_sessionstart in conftest.py
+# ruft test_functionality.warm_caches() auf, zwei Phasen: erst alle
+# Agent-Läufe parallel, dann alle Judge-Bewertungen parallel – WICHTIG:
+# pytest erkennt pytest_sessionstart/pytest_sessionfinish NUR in
+# conftest.py, nicht in test_functionality.py selbst, sonst wird der Hook
+# nie aufgerufen) – ein Prozess, mehrere Threads, daher
 # kein Cross-Prozess-Datenverlust, aber trotzdem alles gleichzeitig statt
 # sequenziell. Dieser Job läuft in der CI außerdem als eigener, zu
 # security_compliance PARALLELER Job (siehe promptfoo.yml) – beide hängen

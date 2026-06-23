@@ -100,8 +100,10 @@ jobs:
   # _trackers/_cache sind Modul-Level-State, pro Prozess getrennt, am Ende
   # blieb nur 1 statt 5 Records uebrig. Parallelitaet laeuft jetzt INNERHALB
   # des Test-Moduls per ThreadPoolExecutor (pytest_sessionstart in
-  # test_functionality.py, zwei Phasen: Agent-Laeufe, dann Judge-Bewertungen)
-  # – ein Prozess, mehrere Threads, kein Cross-Prozess-Datenverlust.
+  # conftest.py ruft test_functionality.warm_caches() auf, zwei Phasen:
+  # Agent-Laeufe, dann Judge-Bewertungen – pytest erkennt Session-Hooks NUR
+  # in conftest.py, nicht in test_functionality.py selbst) – ein Prozess,
+  # mehrere Threads, kein Cross-Prozess-Datenverlust.
   functionality:
     needs: smoke
     runs-on: ubuntu-latest

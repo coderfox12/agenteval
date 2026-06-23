@@ -268,8 +268,17 @@ def _prewarm_metric(agent_cfg: dict, task: dict, metric_name: str) -> None:
         _metric_errors[key] = str(last_exc)
 
 
-def pytest_sessionstart(session):
+def warm_caches() -> None:
     """Wärmt Agent-Läufe und Judge-Bewertungen parallel vor (Threads, ein Prozess).
+
+    WICHTIG: wird über conftest.py:pytest_sessionstart aufgerufen, NICHT als
+    pytest_sessionstart hier in der Testdatei selbst definiert – pytest
+    erkennt Session-Hooks (pytest_sessionstart/pytest_sessionfinish) NUR in
+    conftest.py, nicht in regulären test_*.py-Dateien. Ein gleichnamiger Hook
+    direkt hier wird von pytest nie aufgerufen (verifiziert mit einem
+    minimalen Wegwerf-Testfall) – dieser Bug hat dafür gesorgt, dass die
+    gesamte Parallelisierung + Judge-Bewertung in der Praxis nie liefen,
+    obwohl die Funktion selbst korrekt war.
 
     Phase 1: alle agent.run()-Aufrufe parallel (_cache befüllen).
     Phase 2: alle LLM-Judge-Metriken parallel (_metric_cache befüllen) – erst
@@ -442,16 +451,28 @@ def test_required_fields(agent_cfg, task):
 
 # ─── Abschluss-Report nach allen Tests ────────────────────────────────────────
 
-def pytest_sessionfinish(session, exitstatus):
-    """Berechnet passed-Flag aus gespeicherten Scores und gibt Report pro Agent aus."""
+def finalize_and_report() -> None:
+    """Berechnet passed-Flag aus gespeicherten Scores und gibt Report pro Agent aus.
+
+    Wird über conftest.py:pytest_sessionfinish aufgerufen – siehe warm_caches()
+    für die Erklärung, warum dieser Hook nicht hier in der Testdatei selbst
+    als pytest_sessionfinish definiert sein darf."""
     for agent_id, tracker in _trackers.items():
         if not tracker.records:
             continue
         for r in tracker.records:
             if r.get("error"):
                 r["passed"] = False
+        # finalize_passed()/_save() MÜSSEN für jeden Agenten laufen, auch wenn
+        # ein anderer Agent zuvor beim reinen Konsolen-Report crasht (z.B.
+        # UnicodeEncodeError bei Emojis auf Windows-Terminals mit cp1252 –
+        # real beobachtet). Eine kaputte Konsolenausgabe darf nie verhindern,
+        # dass die Datenkorrektheit für die übrigen Agenten sichergestellt wird.
         tracker.finalize_passed()
         tracker._save()
-        print(f"\n{'='*70}")
-        print(f"  Use Case: {_UC['id']}  |  Agent: {agent_id}")
-        tracker.print_report()
+        try:
+            print(f"\n{'='*70}")
+            print(f"  Use Case: {_UC['id']}  |  Agent: {agent_id}")
+            tracker.print_report()
+        except UnicodeEncodeError:
+            print(f"  (Konsolen-Report für {agent_id} wegen Encoding-Problem übersprungen – Daten sind trotzdem korrekt gespeichert)")
