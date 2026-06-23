@@ -19,8 +19,10 @@ Aufruf:
 
 import concurrent.futures
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -45,14 +47,24 @@ def _entry_env(model: str, api_key_env: str, api_base: str) -> dict:
 def run_smoke(label: str, model: str, api_key_env: str, api_base: str) -> bool:
     print(f"\n▶  Smoke-Test: {label}  (Modell: {model}, Endpunkt: {api_base})")
     env = _entry_env(model, api_key_env, api_base)
-    result = subprocess.run(
-        [
-            "npx", f"promptfoo@{PROMPTFOO_VERSION}", "eval", "--no-cache",
-            "--max-concurrency", str(DEFAULT_MAX_CONCURRENCY),
-            "--config", "promptfooconfig.yaml",
-        ],
-        env=env, cwd=ROOT,
-    )
+    # Eigenes, isoliertes PROMPTFOO_CONFIG_DIR pro Job: promptfoo schreibt jeden
+    # Lauf zusätzlich in eine lokale SQLite-Verlaufs-DB (Default ~/.promptfoo) –
+    # bei den hier parallel laufenden Jobs (Judge + alle Agenten gleichzeitig)
+    # führte das zu echten "SQLITE_BUSY: database is locked"-Fehlern (siehe
+    # run_promptfoo_multi_agent.py für denselben, dort bereits behobenen Bug).
+    pf_config_dir = Path(tempfile.mkdtemp(prefix=f"promptfoo_smoke_{label.replace(' ', '_')}_"))
+    env["PROMPTFOO_CONFIG_DIR"] = str(pf_config_dir)
+    try:
+        result = subprocess.run(
+            [
+                "npx", f"promptfoo@{PROMPTFOO_VERSION}", "eval", "--no-cache",
+                "--max-concurrency", str(DEFAULT_MAX_CONCURRENCY),
+                "--config", "promptfooconfig.yaml",
+            ],
+            env=env, cwd=ROOT,
+        )
+    finally:
+        shutil.rmtree(pf_config_dir, ignore_errors=True)
     return result.returncode == 0
 
 
