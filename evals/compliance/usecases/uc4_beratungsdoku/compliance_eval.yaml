@@ -12,8 +12,6 @@ providers:
 prompts:
   - id: chat
     raw: '[{"role": "system", "content": "{{system_prompt}}"}, {"role": "user", "content": "{{user_input}}"}]'
-  - id: simple
-    raw: "{{user_input}}"
 
 defaultTest:
   options:
