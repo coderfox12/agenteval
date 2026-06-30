@@ -17,6 +17,27 @@ env:
   USE_CASE: uc1
 
 jobs:
+  # ── Web-App: Lädt fehlerfrei? (kein Geld, kein echter Eval-Lauf) ────────────
+  # Unabhängiger Job, läuft parallel zu allem anderen. Die Web-App wird sonst
+  # von CI nicht genutzt (reine Lokal-Komfortfunktion) – trotzdem hier
+  # geprüft, damit ein kaputtes webapp/app.py nicht erst beim nächsten
+  # manuellen Start auffällt. AppTest führt das Skript in einer simulierten
+  # Session aus (alle Bereiche außer "Hilfe", die nur README.md rendert);
+  # Start/Stop-Buttons lösen nur bei echtem Klick etwas aus – hier wird
+  # nichts geklickt, also keine echten Subprozesse/API-Calls/Kosten.
+  webapp_check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Web-App-Abhängigkeiten installieren
+        run: pip install -r webapp/requirements.txt
+      - name: Web-App lädt fehlerfrei (alle Bereiche, kein echter Eval-Lauf)
+        run: python webapp/test_smoke.py
+
   # ── R0: Smoke Test – Judge + alle Agenten aus agents.yaml ───────────────────
   # Schlägt einer fehl, bricht der Job ab und security_compliance/functionality
   # laufen dank "needs:" gar nicht erst an – nur report (if: always()) läuft
