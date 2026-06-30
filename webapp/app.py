@@ -840,6 +840,31 @@ elif section == "Agenten":
             key="agents_editor",
         )
 
+        # Zusätzlich zu den "?"-Tooltips in den Spaltenköpfen (oben) auch
+        # fest sichtbar als Text, ohne dass man dafür hovern muss.
+        st.markdown(
+            "**Spalten-Erklärung**\n"
+            "- **id** – frei wählbare, eindeutige Kurzkennung ohne Leerzeichen, z. B. `deepseek-v4-flash`. "
+            "Taucht in den Namen der erzeugten Ergebnis-Dateien auf, hat sonst keine technische Bedeutung "
+            "und muss nicht zum Modellnamen passen.\n"
+            "- **Anzeigename** – frei wählbarer Name für Report und Vergleichstabelle, z. B. "
+            "`DeepSeek V4 Flash (OpenRouter)`. Rein kosmetisch. Leer lassen → es wird automatisch die id verwendet.\n"
+            "- **Modell** – exakter Modellname, wie ihn der Endpunkt erwartet. Läuft der Agent über OpenRouter "
+            "(api_base = openrouter.ai/...), steht immer ein Anbieter-Präfix davor, z. B. "
+            "`deepseek/deepseek-v4-flash` oder `google/gemini-2.5-flash-lite` – das ist **kein Ordner**, "
+            "sondern Teil des Modellnamens in OpenRouters Katalog (Anbieter/Modell). Bei direktem "
+            "OpenAI-Zugriff entfällt das Präfix, z. B. nur `gpt-5.4-mini`.\n"
+            "- **API-Key-Quelle** – welcher der im Bereich „API & Modelle“ hinterlegten Keys für diesen "
+            "Agenten verwendet wird (Dropdown, kein Eintippen nötig).\n"
+            "- **api_base** *(Pflicht)* – der Endpunkt, an den die Anfragen geschickt werden. Direkt zu "
+            "OpenAI: `https://api.openai.com/v1`. Über OpenRouter (deckt fast alle anderen Anbieter ab, "
+            "z. B. Anthropic/Google/DeepSeek/Llama): `https://openrouter.ai/api/v1`.\n"
+            "- **provider_pin** *(optional)* – nur bei OpenRouter relevant: fixiert, welcher tatsächliche "
+            "Hosting-Anbieter hinter dem Modellnamen bedient (z. B. `DeepInfra`, `Google`). Ohne Pin routet "
+            "OpenRouter je nach Verfügbarkeit an wechselnde Hosts mit teils stark unterschiedlichen Preisen "
+            "für dasselbe Modell."
+        )
+
         if st.button("agents.yaml speichern", type="primary"):
             missing_api_base = [r["id"] for r in edited_rows if r.get("id") and r.get("model") and not r.get("api_base")]
             if not judge_api_base:
