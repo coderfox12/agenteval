@@ -36,6 +36,12 @@ ROOT = Path(__file__).parent.parent
 # .env laden (lokal nötig – in CI kommen die Secrets bereits als Env-Variablen).
 load_dotenv(ROOT / ".env")
 
+# subprocess.run(["npx", ...]) ohne shell=True findet unter Windows nur
+# "npx.exe", nicht das tatsächlich installierte "npx.cmd" (FileNotFoundError /
+# WinError 2) – auf Linux/macOS (z.B. CI) kein Unterschied. shutil.which löst
+# das plattformrichtig über PATHEXT auf.
+NPX = shutil.which("npx") or "npx"
+
 
 def _entry_env(cfg: dict, api_base: str) -> dict:
     env = os.environ.copy()
@@ -59,7 +65,7 @@ def run_smoke(label: str, cfg: dict, api_base: str) -> bool:
     try:
         result = subprocess.run(
             [
-                "npx", f"promptfoo@{PROMPTFOO_VERSION}", "eval", "--no-cache",
+                NPX, f"promptfoo@{PROMPTFOO_VERSION}", "eval", "--no-cache",
                 "--max-concurrency", str(DEFAULT_MAX_CONCURRENCY),
                 "--config", "promptfooconfig.yaml",
             ],

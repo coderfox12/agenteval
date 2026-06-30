@@ -5,6 +5,9 @@
 # erzeugt am Ende einen gemeinsamen HTML-Report.
 #
 # api_key_env: Name der Umgebungsvariable in .env, die den API-Key enthält.
+#              Generische, anbieterunabhängige Namen (AGENT_API_KEY_1,
+#              AGENT_API_KEY_2, ...) – beliebig viele, verwaltet über die
+#              Web-App (Tab "API & Modelle").
 # api_base:    PFLICHTFELD für jeden Agenten und den Judge – auch für OpenAI.
 #              Macht den tatsächlich verwendeten Endpunkt immer explizit
 #              sichtbar und verhindert einen versehentlichen Fallback auf
@@ -13,8 +16,7 @@
 #   OpenAI:      api_base: https://api.openai.com/v1
 #   OpenRouter:  api_base: https://openrouter.ai/api/v1
 #                (Proxy für Anthropic/Gemini/Llama etc.)
-#                model:       anthropic/claude-3-haiku  |  google/gemini-flash-1.5  |  meta-llama/...
-#                api_key_env: OPENROUTER_API_KEY
+#                model: anthropic/claude-3-haiku | google/gemini-flash-1.5 | meta-llama/...
 #
 # provider_pin (NUR für OpenRouter relevant, optional): erzwingt einen
 # konkreten Hosting-Anbieter für dieses Modell über OpenRouters
@@ -48,12 +50,12 @@ agents:
     label: "DeepSeek V4 Flash (OpenRouter)"
     model: deepseek/deepseek-v4-flash
     provider_pin: DeepInfra
-    api_key_env: OPENROUTER_API_KEY
+    api_key_env: AGENT_API_KEY_2
     api_base: https://openrouter.ai/api/v1
 
   - id: gemini-2.5-flash-lite
     label: "Gemini 2.5 Flash Lite (OpenRouter)"
     model: google/gemini-2.5-flash-lite
     provider_pin: Google
-    api_key_env: OPENROUTER_API_KEY
+    api_key_env: AGENT_API_KEY_2
     api_base: https://openrouter.ai/api/v1

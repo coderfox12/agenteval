@@ -50,6 +50,12 @@ ROOT = Path(__file__).parent.parent
 # .env laden (lokal nötig – in CI kommen die Secrets bereits als Env-Variablen).
 load_dotenv(ROOT / ".env")
 
+# subprocess.run(["npx", ...]) ohne shell=True findet unter Windows nur
+# "npx.exe", nicht das tatsächlich installierte "npx.cmd" (FileNotFoundError /
+# WinError 2) – auf Linux/macOS (z.B. CI) kein Unterschied. shutil.which löst
+# das plattformrichtig über PATHEXT auf.
+NPX = shutil.which("npx") or "npx"
+
 # Use Case aus Umgebungsvariable (Default uc1)
 USE_CASE = os.environ.get("USE_CASE", "uc1")
 
@@ -79,6 +85,17 @@ UC_SUITES = {
     "security_results":   f"evals/security/usecases/{_UC_DIR}/security_eval.yaml",
     "compliance_results": f"evals/compliance/usecases/{_UC_DIR}/compliance_eval.yaml",
 }
+
+# D2 (Sicherheit) und D3 (Compliance) einzeln abwählbar machen, ohne den
+# Default zu ändern: RUN_SECURITY/RUN_COMPLIANCE sind in CI und beim
+# direkten Terminal-Aufruf nie gesetzt, also bleiben beide an ("1") – nur
+# die Web-App setzt sie gezielt auf "0", wenn der Nutzer eine der beiden
+# Suiten abwählt.
+_PREFIX_ENABLED = {
+    "security_results":   os.environ.get("RUN_SECURITY", "1") != "0",
+    "compliance_results": os.environ.get("RUN_COMPLIANCE", "1") != "0",
+}
+ACTIVE_PREFIXES = [p for p in ("security_results", "compliance_results") if _PREFIX_ENABLED[p]]
 
 
 def _validate_pricing(config: dict) -> None:
@@ -146,7 +163,7 @@ def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dic
     pf_config_dir = Path(tempfile.mkdtemp(prefix=f"promptfoo_{safe_name}_{agent_id}_"))
 
     cmd = [
-        "npx", f"promptfoo@{PROMPTFOO_VERSION}", "eval", "--no-cache",
+        NPX, f"promptfoo@{PROMPTFOO_VERSION}", "eval", "--no-cache",
         "--max-concurrency", str(DEFAULT_MAX_CONCURRENCY),
         "--config", str(config_path),
         "--output", str(tmp_out),
@@ -210,6 +227,10 @@ def main() -> None:
 
     print(f"\n🎯  Use Case: {USE_CASE}  ({_UC_DIR})")
 
+    if not ACTIVE_PREFIXES:
+        print("ℹ  Weder RUN_SECURITY noch RUN_COMPLIANCE aktiv – nichts zu tun.")
+        return
+
     # Alle (Agent, Config)-Kombinationen sammeln und parallel ausführen. Jeder
     # promptfoo-Aufruf ist ein eigener Subprozess (echte OS-Parallelität, kein
     # GIL-Thema) und schreibt dank des vollen sanitierten Pfads in run_one()
@@ -217,7 +238,7 @@ def main() -> None:
     # zwischen den Jobs noch ein Race auf gemeinsame Dateien.
     jobs: list[tuple[dict, str, str, str]] = []  # (agent, prefix, cfg, scope)
     for agent in agents:
-        for prefix in ("security_results", "compliance_results"):
+        for prefix in ACTIVE_PREFIXES:
             for cfg in BASELINE[prefix]:
                 jobs.append((agent, prefix, cfg, "generic"))
             jobs.append((agent, prefix, UC_SUITES[prefix], "uc_specific"))
@@ -236,9 +257,10 @@ def main() -> None:
                 failed.append(f"{agent['id']} / {Path(cfg).name}")
 
     for agent in agents:
-        for prefix in ("security_results", "compliance_results"):
+        for prefix in ACTIVE_PREFIXES:
             write_merged(merged_by_agent_prefix[(agent["id"], prefix)], f"{prefix}_{USE_CASE}_{agent['id']}.json")
-        run_scorecard(agent["id"])
+        if "compliance_results" in ACTIVE_PREFIXES:
+            run_scorecard(agent["id"])
 
     if failed:
         print(f"\n⚠  Fehlgeschlagen: {', '.join(failed)}")

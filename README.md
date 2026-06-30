@@ -8,23 +8,63 @@ OVB Holding AG × TU Darmstadt – Kooperatives Seminar Sommersemester 2026
 
 ## Schnellstart
 
+Du bist gerade frisch auf der Repo-Seite gelandet und hast noch nichts installiert?
+Hier die komplette Strecke bis zum fertigen HTML-Report, in zwei Teilen:
+
+### Schritt 0: Einmalige Vorbereitung (für BEIDE Wege gleich nötig)
+
 ```bash
-# 1. Voraussetzungen: Python 3.11+, Node.js 20+
-cp .env.example .env          # AGENT_API_KEY + JUDGE_API_KEY eintragen
-pip install -e .              # agenteval-ovb als Package installieren
-pip install -r evals/functionality/requirements.txt  # DeepEval + LangGraph
-
-# 2. Alle Evals für Use Case 1 (Standard) + HTML-Report
-make eval
-# → report_uc1.html           (Benchmark-Report mit Agenten-Vergleich)
-# → compliance_scorecard_uc1_*.json  (EU AI Act Mapping pro Agent)
-
-# 3. Anderen Use Case evaluieren
-make eval USE_CASE=uc2
-
-# 4. Alle vier Use Cases sequenziell
-make eval-all
+git clone <repo-url> && cd agenteval
+pip install -e .                                      # agenteval-ovb als Package
+pip install -r evals/functionality/requirements.txt   # DeepEval + LangGraph
 ```
+
+Zusätzlich nötig: **Node.js ≥ 20** (für promptfoo) muss installiert sein – sonst nichts.
+
+Danach entscheidest du dich für GENAU EINEN der beiden folgenden Wege. Beide führen
+am Ende zum selben `report.html`, rufen intern auch dieselben Skripte auf – der
+Unterschied ist nur, *wie* du `.env`/`agents.yaml` befüllst und den Lauf startest.
+
+### Weg 1: Terminal (von Hand konfigurieren)
+
+```bash
+cp .env.example .env
+# .env im Editor öffnen: AGENT_API_KEY_1 + JUDGE_API_KEY eintragen
+# agents.yaml im Editor öffnen: Judge + mind. einen Agenten eintragen
+#   (model, api_key_env, api_base – api_base ist Pflicht, siehe Kommentare in der Datei)
+
+make eval                     # Use Case 1 (Standard): D1+D2+D3 + HTML-Report
+# → report.html               (im Projekt-Root, direkt im Browser öffnen)
+
+make eval USE_CASE=uc2        # optional: anderen Use Case evaluieren
+make eval-all                 # optional: alle vier Use Cases sequenziell
+```
+
+### Weg 2: Web-App (nichts von Hand editieren)
+
+```bash
+# Windows: einfach start.bat doppelklicken – installiert fehlende
+# Abhängigkeiten automatisch und startet den Server.
+start.bat
+
+# Oder manuell, plattformunabhängig:
+pip install -r webapp/requirements.txt
+streamlit run webapp/app.py
+```
+
+Browser öffnet sich automatisch unter `http://localhost:8501` (Tab „API & Modelle“).
+Von dort, der Reihe nach:
+
+1. **API & Modelle** – Agent- und Judge-API-Keys eintragen, „.env speichern“ klicken
+2. **Agenten** – Judge- und Agenten-Konfiguration (Modell, api_base, provider_pin) eintragen, „agents.yaml speichern“ klicken
+3. **Use Case & Evaluierung** – Use Case (UC0–UC4) wählen, gewünschte Dimensionen (D1/D2/D3) ankreuzen, „Evaluierung starten“ klicken – Log läuft live im Browser mit
+4. Nach Abschluss: **HTML-Report** direkt eingebettet sichtbar (Agenten-Vergleich, Radar-Chart) plus Button **„Report herunterladen (HTML)“** → das ist die fertige `report.html`-Datei, z. B. zum Versenden per Mail
+5. **Hilfe & Dokumentation** (Sidebar) – genau diese README, direkt in der App nachlesbar
+
+Weder `.env` noch `agents.yaml` müssen für Weg 2 vorher angelegt werden – die Web-App
+erzeugt beide Dateien selbst beim ersten Speichern. Da es ganz normale Dateien im
+Projekt-Root sind, wirken Änderungen über die Web-App sofort auch bei `make eval` im
+Terminal und umgekehrt – beide Wege teilen sich dieselbe Konfiguration.
 
 ---
 
@@ -162,9 +202,9 @@ agenteval-report --help
 |----------|---------|-------|
 | Python | ≥ 3.11 | Package, DeepEval, Scorecard |
 | Node.js | ≥ 20 | promptfoo |
-| AGENT_API_KEY | – | Getestete Agenten (Pflicht) |
+| AGENT_API_KEY_1 (mind. einer) | – | Getestete Agenten (Pflicht) |
 | JUDGE_API_KEY | – | LLM-as-Judge / DeepEval (Pflicht) |
-| OPENROUTER_API_KEY | – | Zusätzliche Agenten via OpenRouter (optional) |
+| AGENT_API_KEY_2, _3, ... | – | Weitere Agenten, beliebiger Anbieter (optional) |
 
 ---
 

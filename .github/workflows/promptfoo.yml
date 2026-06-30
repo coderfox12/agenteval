@@ -45,8 +45,8 @@ jobs:
         run: pip install -e .
       - name: R0 – Smoke-Test (Judge + alle Agenten)
         env:
-          AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AGENT_API_KEY_1: ${{ secrets.AGENT_API_KEY_1 }}
+          AGENT_API_KEY_2: ${{ secrets.AGENT_API_KEY_2 }}
           JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
         run: python scripts/run_smoke_test.py
 
@@ -80,8 +80,8 @@ jobs:
       - name: R2/R3 – Security & Compliance (alle Agenten aus agents.yaml)
         continue-on-error: true
         env:
-          AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AGENT_API_KEY_1: ${{ secrets.AGENT_API_KEY_1 }}
+          AGENT_API_KEY_2: ${{ secrets.AGENT_API_KEY_2 }}
         run: python scripts/run_promptfoo_multi_agent.py
       - name: Ergebnisse hochladen
         uses: actions/upload-artifact@v7
@@ -119,8 +119,8 @@ jobs:
         run: pip install -r evals/functionality/requirements.txt
       - name: Funktionalität – Multi-Step Agent Eval (LangGraph + DeepEval)
         env:
-          AGENT_API_KEY:      ${{ secrets.AGENT_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AGENT_API_KEY_1: ${{ secrets.AGENT_API_KEY_1 }}
+          AGENT_API_KEY_2: ${{ secrets.AGENT_API_KEY_2 }}
           JUDGE_API_KEY:      ${{ secrets.JUDGE_API_KEY }}
           DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
           DEEPEVAL_DISABLE_DOTENV: "1"
