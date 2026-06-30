@@ -165,14 +165,13 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
-# Agent-Eval@OVB – generierte Eval-Artefakte (werden bei jedem Lauf neu erzeugt)
+# Agent-Eval@OVB – generierte Eval-Artefakte (werden bei jedem Lauf neu erzeugt,
+# landen gesammelt in results/: *_results_*.json, *_scorecard_*.json,
+# functionality_costs_*.json, report.html)
 .deepeval/
 **/.deepeval/
 .deepeval_telemetry.txt
-functionality_costs*.json
-*_results_*.json
-compliance_scorecard*.json
-report*.html
+results/
 
 # mkdocs documentation
 /site
@@ -198,7 +197,6 @@ cython_debug/
 #   option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 .claude/
-.benchmark_tmp.yaml
 
 # Abstra
 #   Abstra is an AI-powered process automation framework.

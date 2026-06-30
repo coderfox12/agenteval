@@ -22,7 +22,7 @@ pip install -r evals/functionality/requirements.txt   # DeepEval + LangGraph
 Zusätzlich nötig: **Node.js ≥ 20** (für promptfoo) muss installiert sein – sonst nichts.
 
 Danach entscheidest du dich für GENAU EINEN der beiden folgenden Wege. Beide führen
-am Ende zum selben `report.html`, rufen intern auch dieselben Skripte auf – der
+am Ende zum selben `results/report.html`, rufen intern auch dieselben Skripte auf – der
 Unterschied ist nur, *wie* du `.env`/`agents.yaml` befüllst und den Lauf startest.
 
 ### Weg 1: Terminal (von Hand konfigurieren)
@@ -34,7 +34,7 @@ cp .env.example .env
 #   (model, api_key_env, api_base – api_base ist Pflicht, siehe Kommentare in der Datei)
 
 make eval                     # Use Case 1 (Standard): D1+D2+D3 + HTML-Report
-# → report.html               (im Projekt-Root, direkt im Browser öffnen)
+# → results/report.html       (direkt im Browser öffnen)
 
 make eval USE_CASE=uc2        # optional: anderen Use Case evaluieren
 make eval-all                 # optional: alle vier Use Cases sequenziell
@@ -58,13 +58,14 @@ Von dort, der Reihe nach:
 1. **API & Modelle** – Agent- und Judge-API-Keys eintragen, „.env speichern“ klicken
 2. **Agenten** – Judge- und Agenten-Konfiguration (Modell, api_base, provider_pin) eintragen, „agents.yaml speichern“ klicken
 3. **Use Case & Evaluierung** – Use Case (UC0–UC4) wählen, gewünschte Dimensionen (D1/D2/D3) ankreuzen, „Evaluierung starten“ klicken – Log läuft live im Browser mit
-4. Nach Abschluss: **HTML-Report** direkt eingebettet sichtbar (Agenten-Vergleich, Radar-Chart) plus Button **„Report herunterladen (HTML)“** → das ist die fertige `report.html`-Datei, z. B. zum Versenden per Mail
+4. Nach Abschluss: **HTML-Report** direkt eingebettet sichtbar (Agenten-Vergleich, Radar-Chart) plus Button **„Report herunterladen (HTML)“** → das ist die fertige `results/report.html`-Datei, z. B. zum Versenden per Mail
 5. **Hilfe & Dokumentation** (Sidebar) – genau diese README, direkt in der App nachlesbar
 
 Weder `.env` noch `agents.yaml` müssen für Weg 2 vorher angelegt werden – die Web-App
 erzeugt beide Dateien selbst beim ersten Speichern. Da es ganz normale Dateien im
 Projekt-Root sind, wirken Änderungen über die Web-App sofort auch bei `make eval` im
-Terminal und umgekehrt – beide Wege teilen sich dieselbe Konfiguration.
+Terminal und umgekehrt – beide Wege teilen sich dieselbe Konfiguration und denselben
+`results/`-Ordner für alle erzeugten Ergebnis-Dateien.
 
 ---
 
@@ -114,27 +115,56 @@ UC-SPEZIFISCH (scope: uc_specific)     – nur für den gewählten UC
 ## Make-Targets
 
 ```bash
-make eval [USE_CASE=uc1]  # D2+D3+D1 + HTML-Report → report.html (Standard: uc1)
+make eval [USE_CASE=uc1]  # D2+D3+D1 + HTML-Report → results/report.html (Standard: uc1)
 make eval-all             # Alle 4 Use Cases sequenziell
 make smoke                # R0: Hello-World Smoke Test
 make security             # D2+D3: Security & Compliance für alle Agenten
 make compliance           # Alias für 'make security' (Runner deckt beides ab)
 make functionality        # D1: LangGraph + DeepEval, Agenten parallel (-n auto)
-make report               # HTML-Report erzeugen → report.html
-make benchmark            # Multi-Modell-Vergleich
+make report               # HTML-Report erzeugen → results/report.html
 make install              # pip install -e .
-make clean                # Generierte Ergebnisdateien löschen
+make clean                # results/-Ordner löschen
 ```
 
 ---
 
 ## Package-Struktur
 
+`agenteval_ovb/` ist bewusst klein gehalten: Es ist das EINZIGE, was `pip install -e .`
+tatsächlich installiert (siehe `pyproject.toml`) – die wiederverwendbare Bibliothekslogik
+plus die beiden CLI-Befehle `agenteval-report`/`agenteval-scorecard`. Alles andere liegt
+absichtlich daneben statt darin, weil es etwas anderes ist als installierbarer Bibliothekscode:
+
+- `evals/` sind Test-**Inhalte** (YAML-Suiten, Task-Definitionen, der LangGraph-Agent) –
+  werden direkt von `pytest`/`promptfoo` ausgeführt, nicht importiert.
+- `scripts/` sind eigenständig lauffähige Orchestrierungs-Skripte, die das Package benutzen.
+- `webapp/` ist eine komplett separate Streamlit-Anwendung, die nur Make-Targets/Skripte
+  per Subprozess aufruft.
+- `docs/` ist reine Referenzdokumentation, keine Python-Logik.
+
+Würde man das alles in `agenteval_ovb/` packen, würde `pip install -e .` plötzlich auch
+YAML-Testdaten, JS-Dateien und die ganze Web-App mit ausliefern – unnötig aufgebläht für
+etwas, das eigentlich nur drei kleine Python-Module sein soll.
+
+Aus demselben Grund liegt auch `promptfooconfig.yaml` im Root statt in `evals/`: `promptfoo`
+sucht standardmäßig nach genau dieser Datei im aktuellen Arbeitsverzeichnis (Default-Config,
+analog zu `package.json` bei npm). Sie ist bewusst die einzige Config mit diesem Namen – der
+günstige R0-Smoke-Test. Die eigentlichen D2/D3-Suiten in `evals/` heißen absichtlich anders
+und werden immer explizit per `--config <pfad>` angesteuert, da es davon viele gibt (pro
+Use Case, pro Scope).
+
 ```
-agenteval_ovb/                  ← installierbares Python-Package
+results/                        ← ALLE generierten Ergebnisdateien (gitignored, entsteht
+                                   beim ersten Lauf von selbst; siehe Reproduzierbarkeit)
+
+agenteval_ovb/                  ← installierbares Python-Package (das EINZIGE, was
+                                   pip install -e . tatsächlich verpackt)
   scorecard.py                  ← EU AI Act Scorecard-Generator (CLI: agenteval-scorecard)
   report.py                     ← HTML-Report-Generator (CLI: agenteval-report)
   pricing.py                    ← Kostenberechnung nach Modell
+
+webapp/                         ← separate Streamlit-App, ruft Make-Targets/Skripte auf
+  app.py                        ← Konfiguration (.env/agents.yaml) + Live-Ausführung im Browser
 
 evals/
   security/
@@ -161,9 +191,11 @@ evals/
 
 scripts/
   run_promptfoo_multi_agent.py  ← D2+D3-Runner (alle Agenten × Baseline + UC-Suite)
-  run_benchmark.js              ← Multi-Modell-Benchmark
+  run_smoke_test.py             ← R0-Smoke-Test (Judge + alle Agenten)
+  generate_tests_from_injecagent.py ← Generiert D2-Testfälle aus InjecAgent-Datensätzen
 
 agents.yaml                     ← Agenten-Konfiguration (Modell, API-Key-Env, Endpunkt)
+promptfooconfig.yaml            ← R0-Smoke-Test-Config (promptfoo-Default-Dateiname, daher Root)
 .github/workflows/promptfoo.yml ← CI-Pipeline (USE_CASE: uc1)
 ```
 
@@ -175,13 +207,14 @@ Alle Eval-Läufe verwenden `--no-cache` und `temperature: 0`. Der Use Case wird 
 Umgebungsvariable `USE_CASE` gesetzt (Default: `uc1`) — sowohl im Runner als auch im Report,
 sodass Producer und Consumer immer dieselbe Konfiguration verwenden.
 
-Jeder CI-Lauf speichert folgende Artefakte:
+Jeder Lauf (Terminal, Web-App oder CI) sammelt alle Artefakte in einem einzigen,
+gitignorten `results/`-Ordner:
 
 ```
-*_results_*.json                              # D2/D3 Ergebnisse pro (UC, Agent)
-compliance_scorecard_*.json                   # EU AI Act Scorecard pro Agent
-evals/functionality/functionality_costs_*.json # D1 Kosten/Metriken pro (UC, Agent)
-report.html                                   # Konsolidierter HTML-Report
+results/*_results_*.json          # D2/D3 Ergebnisse pro (UC, Agent)
+results/compliance_scorecard_*.json # EU AI Act Scorecard pro Agent
+results/functionality_costs_*.json  # D1 Kosten/Metriken pro (UC, Agent)
+results/report.html                 # Konsolidierter HTML-Report
 ```
 
 ---
@@ -189,8 +222,8 @@ report.html                                   # Konsolidierter HTML-Report
 ## CLI-Kommandos (nach `pip install -e .`)
 
 ```bash
-agenteval-scorecard compliance_results_uc1_gpt.json --use-case uc1
-agenteval-report --use-case uc1 --out report_uc1.html
+agenteval-scorecard results/compliance_results_uc1_gpt.json --use-case uc1
+agenteval-report --use-case uc1 --out results/report_uc1.html
 agenteval-report --help
 ```
 

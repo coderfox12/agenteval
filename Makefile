@@ -16,13 +16,9 @@
 #   - Python 3.11+   (für Funktionalitäts-Eval und Scorecard)
 #   - pip install -e . (einmalig, installiert agenteval-ovb als Package)
 #   - .env mit AGENT_API_KEY + JUDGE_API_KEY (siehe .env.example)
-#
-# Optionale Erweiterungen:
-#   - OPENROUTER_API_KEY       → für weitere Agenten in agents.yaml (Llama etc.)
-#   - MISTRAL_API_KEY          → für make benchmark (Mistral-Provider)
 
 .PHONY: all eval eval-all smoke security compliance \
-        functionality report report-html benchmark install clean
+        functionality report report-html install clean
 
 USE_CASE ?= uc1
 
@@ -31,7 +27,7 @@ all: eval
 
 eval: smoke security functionality report
 	@echo ""
-	@echo "✅ Alle Evals abgeschlossen (USE_CASE=$(USE_CASE)). Report: report.html"
+	@echo "✅ Alle Evals abgeschlossen (USE_CASE=$(USE_CASE)). Report: results/report.html"
 
 eval-all:
 	@for uc in uc1 uc2 uc3 uc4; do \
@@ -53,7 +49,7 @@ smoke:
 # ── R2/R3: Security + Compliance für alle Agenten gegen den gewählten UC ──────
 # run_promptfoo_multi_agent.py führt alle (Agent × Config)-Kombinationen
 # parallel aus (ThreadPoolExecutor um subprocess.run() – jeder promptfoo-Call
-# ist ein eigener OS-Prozess) und erzeugt *_results_$(USE_CASE)_{agent_id}.json
+# ist ein eigener OS-Prozess) und erzeugt results/*_results_$(USE_CASE)_{agent_id}.json
 # + Scorecards.
 security:
 	USE_CASE=$(USE_CASE) python scripts/run_promptfoo_multi_agent.py
@@ -83,14 +79,10 @@ functionality:
 
 # ── HTML-Report (Multi-Agent-Vergleich für den gewählten UC) ──────────────────
 report-html:
-	agenteval-report --use-case $(USE_CASE) --out report.html
+	agenteval-report --use-case $(USE_CASE) --out results/report.html
 
 report: report-html
-	@echo "📊 Report generiert: report.html"
-
-# ── Multi-Modell-Benchmark (Vendor Neutrality) ────────────────────────────────
-benchmark:
-	node scripts/run_benchmark.js
+	@echo "📊 Report generiert: results/report.html"
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 install:
@@ -98,5 +90,4 @@ install:
 
 # ── Aufräumen ─────────────────────────────────────────────────────────────────
 clean:
-	rm -f *_results_*.json compliance_scorecard_*.json report.html
-	rm -f evals/functionality/functionality_costs_*.json
+	rm -rf results

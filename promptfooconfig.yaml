@@ -1,12 +1,11 @@
-﻿# Haupt-Evaluierungskonfiguration
-# Eval-Konfigurationen in evals/:
-#   evals/security/     → R2: Sicherheits-Tests (AgentDojo / InjecAgent + Finance-Finance)
-#   evals/compliance/   → R3: EU AI Act / DORA Compliance
-#   evals/functionality/→ Funktionalitäts-Tests (in Arbeit)
+﻿# R0 – Smoke-Test-Konfiguration (siehe scripts/run_smoke_test.py).
+# Einfacher Hello-World-Check pro Agent + Judge, bevor kostenpflichtige
+# Suiten starten: falscher API-Key/Modellname/Endpunkt fällt hier sofort auf.
 #
-# Wirtschaftlichkeit (keine eigene Eval-Stufe – läuft auf jedem Eval-Output):
-#   npx promptfoo@latest eval --config evals/security/security_eval.yaml --output results.json
-#   node scripts/cost_report.js results.json
+# Die eigentlichen Eval-Konfigurationen liegen in evals/:
+#   evals/security/      → D2: Sicherheits-Tests (AgentDojo / InjecAgent + Finance-Baseline)
+#   evals/compliance/     → D3: EU AI Act Compliance
+#   evals/functionality/  → D1: LangGraph + DeepEval (UC0–UC4)
 #
 # Dokumentation (nicht ausführbar) in docs/:
 #   docs/security_taxonomy.yaml   → Angriffsklassen-Definitionen

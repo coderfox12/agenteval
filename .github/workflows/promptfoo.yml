@@ -110,8 +110,8 @@ jobs:
         with:
           name: security-compliance-results
           path: |
-            *_results_*.json
-            *_scorecard_*.json
+            results/*_results_*.json
+            results/*_scorecard_*.json
           if-no-files-found: warn
 
   # ── Funktionalität: LangGraph + DeepEval – alle Agenten ─────────────────────
@@ -164,7 +164,7 @@ jobs:
         if: always()
         with:
           name: functionality-results
-          path: evals/functionality/functionality_costs_*.json
+          path: results/functionality_costs_*.json
           if-no-files-found: warn
 
   # ── HTML-Report (braucht Ergebnisse aus BEIDEN parallelen Jobs) ─────────────
@@ -185,22 +185,19 @@ jobs:
         continue-on-error: true
         with:
           name: security-compliance-results
+          path: results
       - name: Funktionalitäts-Ergebnisse herunterladen
         uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: functionality-results
-          path: evals/functionality
+          path: results
       - name: Benchmark-Report HTML generieren
-        run: agenteval-report --out report.html
+        run: agenteval-report --out results/report.html
       - name: Alle Artefakte zusammenführen
         uses: actions/upload-artifact@v7
         if: always()
         with:
           name: eval-results
-          path: |
-            *_results_*.json
-            *_scorecard_*.json
-            evals/functionality/functionality_costs_*.json
-            report.html
+          path: results/
           if-no-files-found: warn

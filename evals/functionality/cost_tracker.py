@@ -1,7 +1,6 @@
 """
 Wirtschaftlichkeits-Tracking für den LangGraph-Agenten.
-Erfasst Token-Verbrauch und Latenz pro Task und gibt einen Report aus –
-analog zu scripts/cost_report.js, aber direkt aus LangGraph-Callbacks.
+Erfasst Token-Verbrauch und Latenz pro Task direkt aus den LangGraph-Callbacks.
 """
 
 import json

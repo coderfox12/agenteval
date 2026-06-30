@@ -4,16 +4,18 @@ HTML-Report-Generator für Agent-Eval@OVB.
 Liest alle JSON-Ergebnisdateien und erzeugt einen eigenständigen HTML-Report
 mit eingebettetem CSS (kein Internet nötig zum Anzeigen).
 
-CLI:
-    agenteval-report --out report.html
-    agenteval-report --security security_results_uc1_gpt.json
-                     --compliance compliance_results_uc1_gpt.json
-                     --scorecard compliance_scorecard_uc1_gpt.json
-                     --functionality evals/functionality/functionality_costs_uc1_gpt.json
-                     --use-case uc1
-                     --out report.html
+Alle Ergebnis-/Ausgabedateien liegen standardmäßig in results/.
 
-    python -m agenteval_ovb.report --out report.html
+CLI:
+    agenteval-report --out results/report.html
+    agenteval-report --security results/security_results_uc1_gpt.json
+                     --compliance results/compliance_results_uc1_gpt.json
+                     --scorecard results/compliance_scorecard_uc1_gpt.json
+                     --functionality results/functionality_costs_uc1_gpt.json
+                     --use-case uc1
+                     --out results/report.html
+
+    python -m agenteval_ovb.report --out results/report.html
 """
 
 import argparse
@@ -1335,13 +1337,14 @@ def _section_overall_score(agents_data: list[dict]) -> str:
 
 def generate_multi_agent_report(
     agents_config: list[dict],
-    functionality_dir: str = "evals/functionality",
+    functionality_dir: str = "results",
     security_paths: list[str] | None = None,
     compliance_path: str | None = None,
     scorecard_path: str | None = None,
-    out_path: str = "report.html",
+    out_path: str = "results/report.html",
     judge_model: str | None = None,
     use_case: str | None = None,
+    results_dir: str = "results",
 ) -> Path:
     """Erzeugt einen einzelnen HTML-Report für alle Agenten in agents_config.
 
@@ -1353,6 +1356,7 @@ def generate_multi_agent_report(
     _judge = judge_model or _load_judge_model_from_config() or os.environ.get("JUDGE_MODEL_NAME", "gpt-5.4-mini")
     uc = use_case  # Kürzel für Dateinamen-Suffix
     _sfx = f"{uc}_" if uc else ""
+    _results = Path(results_dir)
 
     # Daten pro Agent laden (Security, Compliance, Funktionalität)
     agents_data = []
@@ -1360,14 +1364,14 @@ def generate_multi_agent_report(
         agent_id = cfg["id"]
 
         # Security – per-(UC,Agent)-Datei; Finance-Tests sind vom Runner bereits eingemergt
-        sec_path = f"security_results_{_sfx}{agent_id}.json"
+        sec_path = _results / f"security_results_{_sfx}{agent_id}.json"
         sec_data = _parse_security(_promptfoo_results(
             _load_json(sec_path) or (_load_json(security_paths[0]) if security_paths else None)
         ), _judge)
 
         # Compliance – per-(UC,Agent)-Dateien, Fallback auf geteilte Dateien
-        comp_path      = f"compliance_results_{_sfx}{agent_id}.json"
-        scorecard_path_agent = f"compliance_scorecard_{_sfx}{agent_id}.json"
+        comp_path      = _results / f"compliance_results_{_sfx}{agent_id}.json"
+        scorecard_path_agent = _results / f"compliance_scorecard_{_sfx}{agent_id}.json"
         comp_results   = _promptfoo_results(
             _load_json(comp_path) or _load_json(compliance_path)
         )
@@ -1454,6 +1458,7 @@ function ovbExpandAll(){{document.querySelectorAll('.section-group.agent-section
 </html>"""
 
     out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     print(f"✅ Multi-Agent-Report gespeichert: {out.resolve()}")
     return out
@@ -1468,7 +1473,7 @@ def generate_report(
     compliance_path: str | None = None,
     scorecard_path: str | None = None,
     functionality_path: str | None = None,
-    out_path: str = "report.html",
+    out_path: str = "results/report.html",
     model_name: str | None = None,
     use_case: str | None = None,
 ) -> Path:
@@ -1554,6 +1559,7 @@ def generate_report(
 </html>"""
 
     out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     print(f"✅ Report gespeichert: {out.resolve()}")
     return out
@@ -1569,23 +1575,29 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Agent-Eval@OVB HTML-Report-Generator")
     parser.add_argument("--agents-config",    metavar="FILE", default="agents.yaml",
                         help="agents.yaml mit Agent-Konfigurationen (Multi-Agent-Modus)")
-    parser.add_argument("--functionality-dir", metavar="DIR",
-                        default="evals/functionality",
-                        help="Verzeichnis mit functionality_costs_{agent_id}.json-Dateien")
+    parser.add_argument("--results-dir",      metavar="DIR", default="results",
+                        help="Verzeichnis mit allen Ergebnis-/Ausgabedateien (Default: results)")
+    parser.add_argument("--functionality-dir", metavar="DIR", default=None,
+                        help="Verzeichnis mit functionality_costs_{agent_id}.json-Dateien (Default: --results-dir)")
     parser.add_argument("--security",         action="append", metavar="FILE",
                         help="Promptfoo Security-Ergebnis JSON (mehrfach verwendbar)")
-    parser.add_argument("--compliance",    metavar="FILE", default="compliance_results.json")
-    parser.add_argument("--scorecard",     metavar="FILE", default="compliance_scorecard.json")
+    parser.add_argument("--compliance",    metavar="FILE", default=None)
+    parser.add_argument("--scorecard",     metavar="FILE", default=None)
     parser.add_argument("--functionality", metavar="FILE",
                         help="Pfad zur functionality_costs_{uc}.json")
-    parser.add_argument("--out",           metavar="FILE", default="report.html")
+    parser.add_argument("--out",           metavar="FILE", default=None)
     parser.add_argument("--use-case",      metavar="UC",   default=os.environ.get("USE_CASE", "uc1"),
                         help="Use-Case-ID (uc1–uc4) für Header-Badge und UC-Kontext (Default: uc1)")
     args = parser.parse_args()
 
     uc = args.use_case
     _sfx = f"{uc}_" if uc else ""
-    security_paths = args.security or [f"security_results_{_sfx}".rstrip("_") + ".json"]
+    results_dir = args.results_dir
+    functionality_dir = args.functionality_dir or results_dir
+    compliance_path = args.compliance or f"{results_dir}/compliance_results.json"
+    scorecard_path = args.scorecard or f"{results_dir}/compliance_scorecard.json"
+    out_path = args.out or f"{results_dir}/report.html"
+    security_paths = args.security or [f"{results_dir}/security_results_{_sfx}".rstrip("_") + ".json"]
 
     # Multi-Agent-Modus: wenn agents.yaml existiert und kein expliziter
     # Einzel-Funktionalitätspfad gesetzt ist.
@@ -1595,25 +1607,26 @@ def main() -> None:
             agents_config = _yaml.safe_load(f)["agents"]
         generate_multi_agent_report(
             agents_config=agents_config,
-            functionality_dir=args.functionality_dir,
+            functionality_dir=functionality_dir,
             security_paths=security_paths,
-            compliance_path=args.compliance,
-            scorecard_path=args.scorecard,
-            out_path=args.out,
+            compliance_path=compliance_path,
+            scorecard_path=scorecard_path,
+            out_path=out_path,
             use_case=uc,
+            results_dir=results_dir,
         )
     else:
         # Einzelagent-Modus (Rückwärtskompatibilität / direkter Pfad)
         func_default = (
-            f"evals/functionality/functionality_costs_{uc}.json"
-            if uc else "evals/functionality/functionality_costs.json"
+            f"{results_dir}/functionality_costs_{uc}.json"
+            if uc else f"{results_dir}/functionality_costs.json"
         )
         generate_report(
             security_paths=security_paths,
-            compliance_path=args.compliance,
-            scorecard_path=args.scorecard,
+            compliance_path=compliance_path,
+            scorecard_path=scorecard_path,
             functionality_path=args.functionality or func_default,
-            out_path=args.out,
+            out_path=out_path,
             use_case=uc,
         )
 

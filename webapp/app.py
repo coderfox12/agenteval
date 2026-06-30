@@ -567,7 +567,7 @@ def _run_evaluation(
                 if not stopped():
                     eval_state.stage = "Report"
                     log("\n=== Report ===")
-                    run_to_log(f"agenteval-report --use-case {selected_uc} --out report.html", log, eval_state)
+                    run_to_log(f"agenteval-report --use-case {selected_uc} --out results/report.html", log, eval_state)
 
         if stopped():
             log("\n⏹ Abgebrochen.")
@@ -653,11 +653,11 @@ def _render_eval_status(selected_uc: str, eval_state: EvalState) -> None:
         else:
             st.success("Evaluierung abgeschlossen.")
 
-        report_path = ROOT / "report.html"
+        report_path = ROOT / "results" / "report.html"
         if report_path.exists():
             report_html = report_path.read_text(encoding="utf-8")
             st.markdown(
-                f"**Report** (`{report_path.name}`): Vergleichsübersicht aller Agenten "
+                f"**Report** (`results/{report_path.name}`): Vergleichsübersicht aller Agenten "
                 "inkl. Radar-Chart, darunter Detailauswertung je Agent."
             )
             st.download_button(
@@ -797,7 +797,7 @@ elif section == "Agenten":
                     "id",
                     help='Frei wählbare, eindeutige Kurzkennung ohne Leerzeichen, z. B. "deepseek-v4-flash". '
                          "Taucht in den Namen der erzeugten Ergebnis-Dateien auf (z. B. "
-                         "compliance_results_uc1_deepseek-v4-flash.json) – hat sonst keine technische "
+                         "results/compliance_results_uc1_deepseek-v4-flash.json) – hat sonst keine technische "
                          "Bedeutung und muss nicht zum Modellnamen passen.",
                 ),
                 "label": st.column_config.TextColumn(

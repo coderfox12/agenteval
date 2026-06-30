@@ -16,10 +16,10 @@ Baseline und UC-Suite werden getrennt ausgeführt und anschließend pro Dimensio
 in EINE Ergebnisdatei zusammengeführt – jeder Test mit metadata.scope. Dadurch
 bleiben Report und Scorecard unverändert (sie lesen die Standard-Dateinamen).
 
-Ausgabe-Dateien pro (Use Case, Agent):
-  security_results_{uc}_{agent_id}.json      (generic + uc_specific gemerged)
-  compliance_results_{uc}_{agent_id}.json    (generic + uc_specific gemerged)
-  compliance_scorecard_{uc}_{agent_id}.json
+Ausgabe-Dateien pro (Use Case, Agent), alle in results/:
+  results/security_results_{uc}_{agent_id}.json      (generic + uc_specific gemerged)
+  results/compliance_results_{uc}_{agent_id}.json    (generic + uc_specific gemerged)
+  results/compliance_scorecard_{uc}_{agent_id}.json
 
 Aufruf:
   USE_CASE=uc2 python scripts/run_promptfoo_multi_agent.py
@@ -46,6 +46,8 @@ from agenteval_ovb.promptfoo_utils import (
 )
 
 ROOT = Path(__file__).parent.parent
+RESULTS_DIR = ROOT / "results"
+RESULTS_DIR.mkdir(exist_ok=True)
 
 # .env laden (lokal nötig – in CI kommen die Secrets bereits als Env-Variablen).
 load_dotenv(ROOT / ".env")
@@ -203,7 +205,7 @@ def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dic
 def write_merged(results: list[dict], output: str) -> None:
     """Schreibt zusammengeführte Ergebnisse im promptfoo-Schema (results.results)."""
     payload = {"results": {"results": results}}
-    (ROOT / output).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    (RESULTS_DIR / output).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     n_gen = sum(1 for r in results if r.get("testCase", {}).get("metadata", {}).get("scope") == "generic")
     n_uc  = len(results) - n_gen
     print(f"   → {output}: {len(results)} Tests gemerged (generic={n_gen}, uc_specific={n_uc})")
@@ -212,10 +214,10 @@ def write_merged(results: list[dict], output: str) -> None:
 def run_scorecard(agent_id: str) -> None:
     """Erzeugt compliance_scorecard_{uc}_{agent_id}.json aus der gemergten Datei."""
     compliance_file = f"compliance_results_{USE_CASE}_{agent_id}.json"
-    if not (ROOT / compliance_file).exists():
+    if not (RESULTS_DIR / compliance_file).exists():
         print(f"⚠  Scorecard übersprungen – {compliance_file} nicht gefunden")
         return
-    subprocess.run(["agenteval-scorecard", str(ROOT / compliance_file), "--use-case", USE_CASE])
+    subprocess.run(["agenteval-scorecard", str(RESULTS_DIR / compliance_file), "--use-case", USE_CASE])
 
 
 def main() -> None:

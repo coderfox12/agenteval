@@ -8,7 +8,7 @@ Zwei orthogonale Dimensionen werden hier zusammengeführt:
   - AGENTEN (agents.yaml): WOMIT getestet wird – jedes Modell/Endpunkt wird
     gegen denselben Use Case geprüft. Erlaubt Modellvergleich (z.B. GPT vs. Llama).
 
-Pro (Agent × Task) entsteht eine eigene functionality_costs_{uc}_{agent_id}.json.
+Pro (Agent × Task) entsteht eine eigene results/functionality_costs_{uc}_{agent_id}.json.
 
 Pro-UC-Metriken:
   UC1/UC2: tool_correctness, task_completion, answer_relevancy
@@ -44,8 +44,12 @@ from agenteval_ovb.pricing import price_per_token, validate_agents_config
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_RESULTS_DIR = _REPO_ROOT / "results"
+_RESULTS_DIR.mkdir(exist_ok=True)
+
 # .env laden bevor Env-Variablen ausgelesen werden
-load_dotenv(Path(__file__).parent.parent.parent / ".env")
+load_dotenv(_REPO_ROOT / ".env")
 
 from agent.graph import UseCaseAgent
 from usecases.registry import get_use_case
@@ -129,7 +133,7 @@ def _get_agent(cfg: dict) -> tuple[UseCaseAgent, CostTracker]:
                     provider_pin=cfg.get("provider_pin"),
                 )
                 _trackers[agent_id] = CostTracker(
-                    output_path=f"functionality_costs_{_UC['id']}_{agent_id}.json",
+                    output_path=str(_RESULTS_DIR / f"functionality_costs_{_UC['id']}_{agent_id}.json"),
                     use_case=_UC["id"],
                     metrics=_UC["metrics"],
                     core_metrics=_UC.get("core_metrics", []),
