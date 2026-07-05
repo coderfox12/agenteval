@@ -1494,7 +1494,7 @@ def generate_multi_agent_report(
     {logo_html}
     <div>
       <h1>Multi-Agent Report &nbsp;{uc_badge}</h1>
-      <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now} &nbsp;|&nbsp; {n_agents} Agenten getestet</p>
+      <p>Erstellt: {now} &nbsp;|&nbsp; {n_agents} Agenten getestet</p>
     </div>
   </div>
 </header>
@@ -1608,7 +1608,7 @@ def generate_report(
     {logo_html}
     <div>
       <h1>Benchmark Report &nbsp;{model_badge}&nbsp;{uc_badge}</h1>
-      <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now}</p>
+      <p>Erstellt: {now}</p>
     </div>
   </div>
 </header>

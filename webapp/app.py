@@ -269,7 +269,10 @@ sidebar_status = _sidebar_status()
 with st.sidebar:
     st.markdown(
         f'<a class="sidebar-logo-link" href="?page=api" target="_self">'
-        f'<img src="{logo_uri}" alt="agenteval Logo – zur Startseite" width="220"/></a>',
+        # logo.svg wurde auf den sichtbaren Inhalt zugeschnitten (viewBox
+        # 480x120 -> 240x120, siehe Kommentar dort) - width hier halbiert,
+        # damit die Sidebar-Höhe des Logos unverändert bleibt.
+        f'<img src="{logo_uri}" alt="agenteval Logo – zur Startseite" width="110"/></a>',
         unsafe_allow_html=True,
     )
     if logo_file.name == "logo_placeholder.svg":
