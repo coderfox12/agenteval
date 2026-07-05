@@ -273,13 +273,19 @@ _CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: __FONT__;
        background: __LIGHTGREY__; color: #2d3436; line-height: 1.5; }
-header { background: __NAVY__; color: #fff; padding: 28px 20px; }
-header .inner { max-width: 1100px; margin: 0 auto; display: flex;
-                align-items: center; gap: 18px; }
-header .header-logo-wrap { background: #fff; border-radius: 6px;
-                           padding: 6px 12px; display: inline-flex;
+/* Kein horizontales Padding mehr direkt auf header selbst: header .inner und
+   .container centern beide via max-width:1100px + margin:auto gegen die volle
+   Viewport-Breite und tragen ihr Padding jeweils selbst (siehe .container
+   weiter unten) – Padding auf BEIDEN Ebenen (hier + im Kind) hätte sonst zu
+   unterschiedlich breiten effektiven Boxen geführt und Header-Inhalt und
+   Container-Inhalt liefen links/rechts nicht mehr bündig. */
+header { background: __NAVY__; color: #fff; padding: 28px 0; }
+header .inner { max-width: 1100px; margin: 0 auto; padding: 0 20px;
+                display: flex; align-items: center; gap: 18px; }
+header .header-logo-wrap { background: #fff; border-radius: 10px;
+                           padding: 10px 18px; display: inline-flex;
                            align-items: center; flex-shrink: 0; }
-header .header-logo { height: 32px; width: auto; display: block; }
+header .header-logo { height: 56px; width: auto; display: block; }
 header h1 { font-size: 1.6rem; font-weight: 700; }
 header p  { font-size: .85rem; opacity: .75; margin-top: 4px; }
 .container { max-width: 1100px; margin: 0 auto; padding: 32px 20px; }
@@ -1487,7 +1493,7 @@ def generate_multi_agent_report(
   <div class="inner">
     {logo_html}
     <div>
-      <h1>Agent-Eval@OVB – Multi-Agent Report &nbsp;{uc_badge}</h1>
+      <h1>Multi-Agent Report &nbsp;{uc_badge}</h1>
       <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now} &nbsp;|&nbsp; {n_agents} Agenten getestet</p>
     </div>
   </div>
@@ -1601,7 +1607,7 @@ def generate_report(
   <div class="inner">
     {logo_html}
     <div>
-      <h1>Agent-Eval@OVB – Benchmark Report &nbsp;{model_badge}&nbsp;{uc_badge}</h1>
+      <h1>Benchmark Report &nbsp;{model_badge}&nbsp;{uc_badge}</h1>
       <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now}</p>
     </div>
   </div>
