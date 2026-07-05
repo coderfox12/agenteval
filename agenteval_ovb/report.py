@@ -276,7 +276,10 @@ body { font-family: __FONT__;
 header { background: __NAVY__; color: #fff; padding: 28px 20px; }
 header .inner { max-width: 1100px; margin: 0 auto; display: flex;
                 align-items: center; gap: 18px; }
-header .header-logo { height: 42px; width: auto; flex-shrink: 0; }
+header .header-logo-wrap { background: #fff; border-radius: 6px;
+                           padding: 6px 12px; display: inline-flex;
+                           align-items: center; flex-shrink: 0; }
+header .header-logo { height: 32px; width: auto; display: block; }
 header h1 { font-size: 1.6rem; font-weight: 700; }
 header p  { font-size: .85rem; opacity: .75; margin-top: 4px; }
 .container { max-width: 1100px; margin: 0 auto; padding: 32px 20px; }
@@ -1466,7 +1469,10 @@ def generate_multi_agent_report(
     )
     blocks = "".join(_agent_block(e) for e in agents_data)
     logo_uri = _logo_data_uri()
-    logo_html = f'<img class="header-logo" src="{logo_uri}" alt="OVB Logo">' if logo_uri else ""
+    logo_html = (
+        f'<div class="header-logo-wrap"><img class="header-logo" src="{logo_uri}" alt="OVB Logo"></div>'
+        if logo_uri else ""
+    )
 
     html = f"""<!DOCTYPE html>
 <html lang="de">
@@ -1577,7 +1583,10 @@ def generate_report(
     )
     uc_badge = f'<span class="model-badge">{uc_id}</span>'
     logo_uri = _logo_data_uri()
-    logo_html = f'<img class="header-logo" src="{logo_uri}" alt="OVB Logo">' if logo_uri else ""
+    logo_html = (
+        f'<div class="header-logo-wrap"><img class="header-logo" src="{logo_uri}" alt="OVB Logo"></div>'
+        if logo_uri else ""
+    )
 
     html = f"""<!DOCTYPE html>
 <html lang="de">
