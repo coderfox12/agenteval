@@ -17,18 +17,21 @@ from streamlit.testing.v1 import AppTest
 
 APP_PATH = Path(__file__).parent / "app.py"
 
-# Reihenfolge der Sidebar-Radio-Optionen in app.py.
-SECTIONS = ["Agenten", "Use Case & Evaluierung"]
+# Navigation läuft über den URL-Query-Parameter "page" (siehe PAGE_SLUGS in
+# app.py), nicht mehr über ein st.radio-Widget – die Sidebar besteht seit der
+# Umstellung auf frei einfärbbare Status-Punkte aus reinen HTML-Links.
+PAGE_SLUGS = ["agenten", "usecase"]
 
 
 def main() -> None:
     at = AppTest.from_file(str(APP_PATH))
     at.run(timeout=30)
-    assert not at.exception, f"API & Modelle: {list(at.exception)}"
+    assert not at.exception, f"API-Keys: {list(at.exception)}"
 
-    for section in SECTIONS:
-        at.sidebar.radio[0].set_value(section).run(timeout=30)
-        assert not at.exception, f"{section}: {list(at.exception)}"
+    for slug in PAGE_SLUGS:
+        at.query_params["page"] = slug
+        at.run(timeout=30)
+        assert not at.exception, f"page={slug}: {list(at.exception)}"
 
     print("OK – webapp/app.py lädt alle Bereiche fehlerfrei.")
 

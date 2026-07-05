@@ -19,14 +19,46 @@ CLI:
 """
 
 import argparse
+import base64
 import json
 import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from agenteval_ovb.branding import (
+    OVB_DANGER,
+    OVB_FONT_STACK,
+    OVB_GREY,
+    OVB_LIGHTGREY,
+    OVB_NAVY,
+    OVB_SKY,
+    OVB_SUCCESS,
+)
 from agenteval_ovb.pricing import calc_cost_usd
 from agenteval_ovb.promptfoo_utils import extract_promptfoo_results as _promptfoo_results
+
+_PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _logo_data_uri() -> str | None:
+    """OVB-Logo als Base64-Data-URI fürs Einbetten in den Report-Header.
+
+    Gleiche Datei wie die Web-App (webapp/assets/logo.png bzw. .svg) – kein
+    Platzhalter-Fallback hier (anders als in der Web-App): ein Report ohne
+    eigenes Logo sieht schlicht so aus wie vor dieser Änderung, statt einen
+    generischen Platzhalter in ein verschicktes/archiviertes Ergebnis
+    einzubetten.
+    """
+    assets_dir = _PACKAGE_ROOT / "webapp" / "assets"
+    for name in ("logo.png", "logo.svg"):
+        path = assets_dir / name
+        if path.exists():
+            mime = "image/svg+xml" if path.suffix == ".svg" else "image/png"
+            encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+            return f"data:{mime};base64,{encoded}"
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Daten-Loader
@@ -233,40 +265,46 @@ _UC_NAMES: dict[str, str] = {
 # HTML-Bausteine
 # ---------------------------------------------------------------------------
 
+# Farb-/Schrift-Platzhalter statt f-string: die vielen wörtlichen "{"/"}" der
+# CSS-Regeln blieben sonst als Python-Format-Felder unterescaped. .replace()
+# am Ende löst die Platzhalter gegen die gemeinsamen OVB-Konstanten
+# (agenteval_ovb/branding.py) auf – dieselben Werte wie in webapp/app.py.
 _CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-       background: #f5f6fa; color: #2d3436; line-height: 1.5; }
-header { background: #1a2744; color: #fff; padding: 28px 20px; }
-header .inner { max-width: 1100px; margin: 0 auto; }
+body { font-family: __FONT__;
+       background: __LIGHTGREY__; color: #2d3436; line-height: 1.5; }
+header { background: __NAVY__; color: #fff; padding: 28px 20px; }
+header .inner { max-width: 1100px; margin: 0 auto; display: flex;
+                align-items: center; gap: 18px; }
+header .header-logo { height: 42px; width: auto; flex-shrink: 0; }
 header h1 { font-size: 1.6rem; font-weight: 700; }
 header p  { font-size: .85rem; opacity: .75; margin-top: 4px; }
 .container { max-width: 1100px; margin: 0 auto; padding: 32px 20px; }
-h2 { font-size: 1.15rem; font-weight: 700; color: #1a2744;
-     border-left: 4px solid #0984e3; padding-left: 12px; margin: 36px 0 16px; }
-h3 { font-size: .95rem; font-weight: 600; color: #636e72; margin-bottom: 10px; }
+h2 { font-size: 1.15rem; font-weight: 700; color: __NAVY__;
+     border-left: 4px solid __SKY__; padding-left: 12px; margin: 36px 0 16px; }
+h3 { font-size: .95rem; font-weight: 600; color: __GREY__; margin-bottom: 10px; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
-.card { background: #fff; border-radius: 10px; padding: 20px 22px;
-        box-shadow: 0 1px 4px rgba(0,0,0,.08); display: flex; flex-direction: column; gap: 10px; }
-.card .lbl { font-size: .95rem; font-weight: 700; color: #1a2744; }
-.card .val { font-size: 1.9rem; font-weight: 700; color: #0984e3; }
+.card { background: #fff; border-radius: 8px; padding: 20px 22px;
+        box-shadow: 0 2px 6px rgba(0,0,0,.08); display: flex; flex-direction: column; gap: 10px; }
+.card .lbl { font-size: .95rem; font-weight: 700; color: __NAVY__; }
+.card .val { font-size: 1.9rem; font-weight: 700; color: __SKY__; }
 .card .pct-row { display: flex; align-items: center; gap: 8px; }
 .card .pct-bar-wrap { flex: 1; background: #e0e0e0; border-radius: 4px; height: 6px; }
-.card .pct-bar { height: 6px; border-radius: 4px; background: #0984e3; }
-.card .pct-bar.ok  { background: #00b894; }
+.card .pct-bar { height: 6px; border-radius: 4px; background: __SKY__; }
+.card .pct-bar.ok  { background: __SUCCESS__; }
 .card .pct-bar.warn { background: #fdcb6e; }
-.card .pct-bar.err  { background: #d63031; }
+.card .pct-bar.err  { background: __DANGER__; }
 .card .pct-txt { font-size: .8rem; font-weight: 700; white-space: nowrap; }
-.card.ok  .val { color: #00b894; }
+.card.ok  .val { color: __SUCCESS__; }
 .card.warn .val { color: #fdcb6e; }
-.card.err  .val { color: #d63031; }
-.model-badge { display: inline-block; background: #0984e3; color: #fff;
+.card.err  .val { color: __DANGER__; }
+.model-badge { display: inline-block; background: __SKY__; color: #fff;
                border-radius: 6px; padding: 3px 12px; font-size: .8rem;
                font-weight: 700; margin-left: 12px; vertical-align: middle; }
 table { width: 100%; border-collapse: collapse; background: #fff;
-        border-radius: 10px; overflow: hidden;
-        box-shadow: 0 1px 4px rgba(0,0,0,.08); font-size: .88rem; }
-th { background: #1a2744; color: #fff; text-align: left;
+        border-radius: 8px; overflow: hidden;
+        box-shadow: 0 2px 6px rgba(0,0,0,.08); font-size: .88rem; }
+th { background: __NAVY__; color: #fff; text-align: left;
      padding: 10px 14px; font-weight: 600; font-size: .8rem; }
 td { padding: 9px 14px; border-bottom: 1px solid #f0f0f0; }
 tr:last-child td { border-bottom: none; }
@@ -277,17 +315,17 @@ tr:hover td { background: #f7f9fc; }
 .badge.warn { background: #fff3cd; color: #856404; }
 .badge.err  { background: #f8d7da; color: #721c24; }
 .bar-wrap { background: #e0e0e0; border-radius: 4px; height: 8px; min-width: 80px; }
-.bar      { height: 8px; border-radius: 4px; background: #0984e3; }
-.bar.ok   { background: #00b894; }
-.bar.err  { background: #d63031; }
+.bar      { height: 8px; border-radius: 4px; background: __SKY__; }
+.bar.ok   { background: __SUCCESS__; }
+.bar.err  { background: __DANGER__; }
 .section  { margin-bottom: 8px; }
-.section-group { background: #fff; border-radius: 14px;
-                 box-shadow: 0 3px 18px rgba(0,0,0,.10);
+.section-group { background: #fff; border-radius: 12px;
+                 box-shadow: 0 4px 16px rgba(0,0,0,.10);
                  margin-bottom: 52px; overflow: hidden; }
 .section-group-body { padding: 28px 32px; }
 .section-group-body > h2:first-child { margin-top: 0; }
 .agent-divider { margin: 0; padding: 20px 28px;
-                 background: linear-gradient(135deg, #1a2744 0%, #2d4880 100%);
+                 background: linear-gradient(135deg, __NAVY__ 0%, __SKY__ 100%);
                  color: #fff; font-size: 1.05rem; font-weight: 700;
                  cursor: pointer; user-select: none; }
 .agent-divider .agent-model { font-size: .82rem; font-weight: 400;
@@ -297,11 +335,11 @@ tr:hover td { background: #f7f9fc; }
 .section-group.collapsed .toggle-arrow { transform: rotate(-180deg); }
 .section-group.collapsed .section-group-body { display: none; }
 .ovb-collapse-bar { display: flex; gap: 16px; margin: 32px 0 20px; }
-.ovb-collapse-btn { font-size: .8rem; color: #0984e3; cursor: pointer;
+.ovb-collapse-btn { font-size: .8rem; color: __SKY__; cursor: pointer;
                     background: none; border: none; padding: 0; text-decoration: underline; }
-.chart-wrap { background: #fff; border-radius: 10px; padding: 24px 28px;
-              box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 16px; }
-.chart-title { font-size: .82rem; font-weight: 700; color: #636e72;
+.chart-wrap { background: #fff; border-radius: 8px; padding: 24px 28px;
+              box-shadow: 0 2px 6px rgba(0,0,0,.08); margin-bottom: 16px; }
+.chart-title { font-size: .82rem; font-weight: 700; color: __GREY__;
                text-transform: uppercase; letter-spacing: .05em; margin-bottom: 18px; }
 .chart-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .chart-label { width: 180px; font-size: .85rem; font-weight: 600;
@@ -312,16 +350,18 @@ tr:hover td { background: #f7f9fc; }
 .chart-bar-fill { height: 100%; border-radius: 6px; transition: width .3s;
                   display: flex; align-items: center; padding-left: 8px;
                   font-size: .75rem; font-weight: 700; color: #fff; white-space: nowrap; }
-.chart-bar-fill.ok   { background: #00b894; }
+.chart-bar-fill.ok   { background: __SUCCESS__; }
 .chart-bar-fill.warn { background: #fdcb6e; color: #856404; }
-.chart-bar-fill.err  { background: #d63031; }
+.chart-bar-fill.err  { background: __DANGER__; }
 .chart-legend { display: flex; gap: 20px; margin-top: 6px; flex-wrap: wrap; }
 .chart-legend-item { display: flex; align-items: center; gap: 6px;
-                     font-size: .78rem; color: #636e72; }
+                     font-size: .78rem; color: __GREY__; }
 .chart-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
 .charts-grid { display: flex; flex-direction: column; gap: 16px; margin-bottom: 4px; }
 footer { text-align: center; color: #b2bec3; font-size: .78rem; padding: 32px 0; }
-"""
+""".replace("__NAVY__", OVB_NAVY).replace("__SKY__", OVB_SKY).replace("__GREY__", OVB_GREY) \
+   .replace("__LIGHTGREY__", OVB_LIGHTGREY).replace("__SUCCESS__", OVB_SUCCESS) \
+   .replace("__DANGER__", OVB_DANGER).replace("__FONT__", OVB_FONT_STACK)
 
 
 def _classify(rate: float, threshold: float) -> str:
@@ -465,7 +505,7 @@ def _scope_summary(by_scope: dict) -> str:
     parts = [p for p in parts if p]
     if not parts:
         return ""
-    return ('<p style="margin:2px 0 12px;font-size:.82rem;color:#636e72">'
+    return ('<p style="margin:2px 0 12px;font-size:.82rem;color:#6c757d">'
             'Herkunft der Tests: ' + " &nbsp; ".join(parts) + '</p>')
 
 
@@ -584,14 +624,14 @@ def _section_compliance(comp_data: dict, comp_stats: dict, scorecard: dict | Non
 def _section_functionality(func_data: dict) -> str:
     if not func_data:
         return ("<h2>Dimension 1 – Funktionalität</h2>"
-                "<p style='color:#636e72; margin-top:12px'>Keine Daten vorhanden.</p>")
+                "<p style='color:#6c757d; margin-top:12px'>Keine Daten vorhanden.</p>")
 
     records = func_data.get("records", [])
     summary = func_data.get("summary", {})
 
     if not records:
         return ("<h2>Dimension 1 – Funktionalität</h2>"
-                "<p style='color:#636e72; margin-top:12px'>Keine Task-Daten vorhanden.</p>")
+                "<p style='color:#6c757d; margin-top:12px'>Keine Task-Daten vorhanden.</p>")
 
     # Dynamische Metrik-Spalten je nach Use Case (aus dem JSON gelesen).
     # Fallback auf die drei Standardmetriken, falls kein metrics-Feld vorhanden.
@@ -658,7 +698,7 @@ def _section_functionality(func_data: dict) -> str:
                 f'<tr style="background:#fff8f8">'
                 f'<td><code>{task_id}</code></td>'
                 f'<td>{err_badge}</td>'
-                f'<td colspan="{n_metric_cols}" style="color:#636e72;font-size:.82rem">'
+                f'<td colspan="{n_metric_cols}" style="color:#6c757d;font-size:.82rem">'
                 f'{short_err}{time_info}</td>'
                 f'<td>{err_cost}</td><td>–</td></tr>'
             )
@@ -704,18 +744,18 @@ def _section_functionality(func_data: dict) -> str:
     total_cols = 2 + n_metric_cols + 2  # Task + Status + Metriken + Kosten + Latenz
     table_rows = ("".join(rows)
                   if rows else
-                  f"<tr><td colspan='{total_cols}' style='color:#636e72'>Keine Task-Daten</td></tr>")
+                  f"<tr><td colspan='{total_cols}' style='color:#6c757d'>Keine Task-Daten</td></tr>")
 
     def _metric_th(key: str) -> str:
         lbl = _METRIC_LABELS.get(key, key)
         if key in core_keys:
-            lbl += ' <span style="font-size:.7rem;font-weight:400;color:#0984e3">Kern</span>'
+            lbl += ' <span style="font-size:.7rem;font-weight:400;color:#00b7e5">Kern</span>'
         return f"<th>{lbl}</th>"
     metric_headers = "".join(_metric_th(k) for k in metric_keys)
 
     core_note = ""
     if core_keys:
-        core_note = ('<p style="margin:2px 0 12px;font-size:.82rem;color:#636e72">'
+        core_note = ('<p style="margin:2px 0 12px;font-size:.82rem;color:#6c757d">'
                      'Metrik-Logik: <strong>Kern</strong> = UC-übergreifend vergleichbar; '
                      'übrige Metriken sind UC-spezifisch gewählt.</p>')
 
@@ -785,7 +825,7 @@ def _section_eval_overhead(
 
     return (
         f"<h2>Evaluierungs-Overhead</h2>"
-        f"<p style='color:#636e72;font-size:.85rem;margin-bottom:16px'>"
+        f"<p style='color:#6c757d;font-size:.85rem;margin-bottom:16px'>"
         f"Judge-Kosten entstehen durch LLM-as-Judge-Bewertungen (llm-rubric / DeepEval). "
         f"Das Judge-Modell ist unabhängig vom getesteten Modell fest auf "
         f"<strong>{judge_model}</strong> fixiert, um Vergleichbarkeit zwischen "
@@ -855,7 +895,7 @@ def _section_eval_overhead_all(agents_data: list[dict], judge_model: str) -> str
     )
 
     return (
-        f"<p style='color:#636e72;font-size:.85rem;margin-bottom:16px'>"
+        f"<p style='color:#6c757d;font-size:.85rem;margin-bottom:16px'>"
         f"Kumulierte Judge-Kosten über alle Agenten. Judge-Modell: <strong>{judge_model}</strong>. "
         f"Alle Werte sind exakt aus den tatsächlichen Token-Zahlen je Judge-Aufruf berechnet "
         f"(D1: DeepEval evaluation_cost, D2/D3: promptfoo tokensUsed). "
@@ -889,7 +929,7 @@ def _radar_svg(entries: list[dict]) -> str:
     ]
     n_axes = len(AXES)
     angles = [-math.pi / 2 + i * 2 * math.pi / n_axes for i in range(n_axes)]
-    COLORS = ["#0984e3", "#00b894", "#e17055", "#6c5ce7", "#fd79a8"]
+    COLORS = ["#00b7e5", "#28a745", "#e17055", "#6c5ce7", "#fd79a8"]
 
     def pt(axis_i: int, frac: float) -> tuple[float, float]:
         a = angles[axis_i]
@@ -932,7 +972,7 @@ def _radar_svg(entries: list[dict]) -> str:
             anchor, dx = "middle", 0
         svg.append(
             f'<text x="{lx + dx:.0f}" y="{ly:.0f}" font-size="11" font-weight="600" '
-            f'fill="#1a2744" text-anchor="{anchor}" dominant-baseline="middle">{label}</text>'
+            f'fill="#003366" text-anchor="{anchor}" dominant-baseline="middle">{label}</text>'
         )
 
     # Agent-Polygone (Fläche + Umriss)
@@ -985,7 +1025,7 @@ def _chart_bar(label: str, pct: float, cls: str, value_str: str) -> str:
         f'{value_str if width > 15 else ""}'
         f'</div>'
         f'</div>'
-        f'<span style="font-size:.78rem;color:#636e72;width:48px;text-align:right">{value_str}</span>'
+        f'<span style="font-size:.78rem;color:#6c757d;width:48px;text-align:right">{value_str}</span>'
         f'</div>'
     )
 
@@ -1101,7 +1141,7 @@ def _section_comparison(agents_data: list[dict]) -> str:
         rows.append(
             f"<tr>"
             f"<td><strong>{e['label']}</strong><br>"
-            f"<small style='color:#636e72'>{e['model']}</small></td>"
+            f"<small style='color:#6c757d'>{e['model']}</small></td>"
             f"<td>{func_badge}</td>"
             f"<td>{_pct_badge(e['sec_pass'],  e['sec_total'],  0.9)}</td>"
             f"<td>{_pct_badge(e['comp_pass'], e['comp_total'], 0.8)}</td>"
@@ -1200,7 +1240,7 @@ def _section_overall_score(agents_data: list[dict]) -> str:
 
     return (
         "<h2>Gesamtbewertung</h2>"
-        "<p style='color:#636e72;font-size:.85rem;margin-bottom:20px'>"
+        "<p style='color:#6c757d;font-size:.85rem;margin-bottom:20px'>"
         "Passe die Gewichtung der vier Dimensionen an dein Evaluationsziel an. "
         "Mittlere Position entspricht gleicher Gewichtung (je 25,0&thinsp;%). "
         "D4 bewertet Wirtschaftlichkeit als Kehrwert der Gesamtkosten – "
@@ -1216,27 +1256,27 @@ def _section_overall_score(agents_data: list[dict]) -> str:
         ".ovb-slider-wrap input[type=range]::-webkit-slider-thumb{"
           "-webkit-appearance:none;appearance:none;"
           "width:20px;height:20px;border-radius:50%;"
-          "background:#0984e3;cursor:pointer;border:2px solid #fff;"
+          "background:#00b7e5;cursor:pointer;border:2px solid #fff;"
           "box-shadow:0 1px 4px rgba(0,0,0,.3)}"
         ".ovb-slider-wrap input[type=range]::-moz-range-thumb{"
           "width:20px;height:20px;border-radius:50%;"
-          "background:#0984e3;cursor:pointer;border:2px solid #fff;"
+          "background:#00b7e5;cursor:pointer;border:2px solid #fff;"
           "box-shadow:0 1px 4px rgba(0,0,0,.3)}"
         ".ovb-ctick{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);"
           "display:flex;flex-direction:column;align-items:center;pointer-events:none}"
         ".ovb-ctick-line{width:1px;height:6px;background:#b2bec3}"
         ".ovb-ctick-lbl{font-size:.65rem;color:#b2bec3;white-space:nowrap;margin-top:1px}"
-        ".ovb-wpct{width:48px;text-align:right;font-size:.9rem;font-weight:700;color:#0984e3;flex-shrink:0}"
+        ".ovb-wpct{width:48px;text-align:right;font-size:.9rem;font-weight:700;color:#00b7e5;flex-shrink:0}"
         ".ovb-cards{display:flex;flex-wrap:wrap;gap:14px;margin-top:20px}"
         ".ovb-card{background:#fff;border:1px solid #e0e0e0;border-radius:10px;"
           "padding:16px 20px;min-width:160px;flex:1}"
-        ".ovb-card .oc-lbl{font-size:.78rem;color:#636e72;margin-bottom:2px}"
+        ".ovb-card .oc-lbl{font-size:.78rem;color:#6c757d;margin-bottom:2px}"
         ".ovb-card .oc-mdl{font-size:.72rem;color:#b2bec3;margin-bottom:10px}"
         ".ovb-card .oc-score{font-size:2.2rem;font-weight:700;line-height:1}"
-        ".ovb-card .oc-dim{font-size:.72rem;color:#636e72;margin-top:6px}"
+        ".ovb-card .oc-dim{font-size:.72rem;color:#6c757d;margin-top:6px}"
         ".ovb-card .oc-bar-bg{background:#f1f2f6;border-radius:4px;height:8px;margin-top:10px;overflow:hidden}"
         ".ovb-card .oc-bar{height:100%;border-radius:4px;transition:width .25s}"
-        ".ovb-reset{margin-top:10px;font-size:.78rem;color:#0984e3;cursor:pointer;"
+        ".ovb-reset{margin-top:10px;font-size:.78rem;color:#00b7e5;cursor:pointer;"
           "background:none;border:none;padding:0;text-decoration:underline}"
         "</style>"
         "<div class='ovb-weight-row'>"
@@ -1280,7 +1320,7 @@ def _section_overall_score(agents_data: list[dict]) -> str:
         f"<script>"
         f"(function(){{"
         f"  const AGENTS={data_js};"
-        f"  const COLS=['#00b894','#0984e3','#fdcb6e','#e17055','#a29bfe','#636e72'];"
+        f"  const COLS=['#28a745','#00b7e5','#fdcb6e','#e17055','#a29bfe','#6c757d'];"
         f"  const validCosts=AGENTS.map(a=>a.cost_raw).filter(c=>c>0);"
         f"  const minCost=validCosts.length?Math.min(...validCosts):0;"
         f"  AGENTS.forEach(a=>{{a.d4=(a.cost_raw>0&&minCost>0)?+(minCost/a.cost_raw).toFixed(4):null;}});"
@@ -1425,6 +1465,8 @@ def generate_multi_agent_report(
         "</div>"
     )
     blocks = "".join(_agent_block(e) for e in agents_data)
+    logo_uri = _logo_data_uri()
+    logo_html = f'<img class="header-logo" src="{logo_uri}" alt="OVB Logo">' if logo_uri else ""
 
     html = f"""<!DOCTYPE html>
 <html lang="de">
@@ -1437,8 +1479,11 @@ def generate_multi_agent_report(
 <body>
 <header>
   <div class="inner">
-    <h1>Agent-Eval@OVB – Multi-Agent Report &nbsp;{uc_badge}</h1>
-    <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now} &nbsp;|&nbsp; {n_agents} Agenten getestet</p>
+    {logo_html}
+    <div>
+      <h1>Agent-Eval@OVB – Multi-Agent Report &nbsp;{uc_badge}</h1>
+      <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now} &nbsp;|&nbsp; {n_agents} Agenten getestet</p>
+    </div>
   </div>
 </header>
 <div class="container">
@@ -1531,6 +1576,8 @@ def generate_report(
         or "uc1"
     )
     uc_badge = f'<span class="model-badge">{uc_id}</span>'
+    logo_uri = _logo_data_uri()
+    logo_html = f'<img class="header-logo" src="{logo_uri}" alt="OVB Logo">' if logo_uri else ""
 
     html = f"""<!DOCTYPE html>
 <html lang="de">
@@ -1543,8 +1590,11 @@ def generate_report(
 <body>
 <header>
   <div class="inner">
-    <h1>Agent-Eval@OVB – Benchmark Report &nbsp;{model_badge}&nbsp;{uc_badge}</h1>
-    <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now}</p>
+    {logo_html}
+    <div>
+      <h1>Agent-Eval@OVB – Benchmark Report &nbsp;{model_badge}&nbsp;{uc_badge}</h1>
+      <p>OVB Holding AG × TU Darmstadt &nbsp;|&nbsp; Erstellt: {now}</p>
+    </div>
   </div>
 </header>
 <div class="container">

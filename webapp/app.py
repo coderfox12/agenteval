@@ -35,6 +35,16 @@ import yaml
 from streamlit.runtime.scriptrunner import add_script_run_ctx
 from dotenv import dotenv_values
 
+from agenteval_ovb.branding import (
+    OVB_DANGER,
+    OVB_GREY,
+    OVB_LIGHTGREY,
+    OVB_NAVY,
+    OVB_RADIUS,
+    OVB_SKY,
+    OVB_SUCCESS,
+)
+
 # ─── Pfade ─────────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,18 +73,10 @@ st.set_page_config(
 )
 
 
-# ─── OVB-Design-Tokens (1:1 aus den :root-CSS-Variablen von ovb.de) ────────
-# --primary:#036  --ovb-sky:#00b7e5  --secondary:#6c757d
-# --ovb-lightGrey:#f2f2f2  --success:#28a745  --danger:#EC312B
-# Schrift dort: "Stag Sans LCG Web" (lizenziert, nicht einbettbar) -> Fallback.
-
-OVB_NAVY = "#003366"
-OVB_SKY = "#00b7e5"
-OVB_GREY = "#6c757d"
-OVB_LIGHTGREY = "#f2f2f2"
-OVB_SUCCESS = "#28a745"
-OVB_DANGER = "#EC312B"
-OVB_RADIUS = "0.25rem"
+# ─── OVB-Design-Tokens ──────────────────────────────────────────────────────
+# Werte kommen aus agenteval_ovb/branding.py (gemeinsam mit dem HTML-Report),
+# damit Web-App und Report dieselbe Palette nutzen und nicht unabhängig
+# voneinander auseinanderdriften.
 
 st.markdown(
     f"""
