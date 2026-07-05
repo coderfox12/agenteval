@@ -4,10 +4,13 @@
 #   #00b7e5 Cyan (Akzent/Interaktion)
 #   #8bbf18 Grün (Erfolg/Akzent)
 
+# backgroundColor bewusst grau statt weiß: die Sidebar wird per CSS (app.py)
+# explizit auf Weiß erzwungen, dadurch heben sich die weißen Boxen mit
+# Rahmen/Schatten im Hauptbereich sichtbar vom grauen Hintergrund ab.
 [theme]
 base = "light"
 primaryColor = "#00b7e5"
-backgroundColor = "#ffffff"
+backgroundColor = "#f2f2f2"
 secondaryBackgroundColor = "#f2f2f2"
 textColor = "#212529"
 font = "sans serif"
