@@ -279,15 +279,17 @@ body { font-family: __FONT__;
    weiter unten) – Padding auf BEIDEN Ebenen (hier + im Kind) hätte sonst zu
    unterschiedlich breiten effektiven Boxen geführt und Header-Inhalt und
    Container-Inhalt liefen links/rechts nicht mehr bündig. */
-header { background: __NAVY__; color: #fff; padding: 28px 0; }
+/* Weiß statt Navy: konsistent mit ovb.de und der Web-App, deren Sidebar
+   (mit demselben Logo) ebenfalls weiß ist, keine farbige Kopfleiste. Dadurch
+   entfällt auch die separate weiße Box ums Logo (siehe .header-logo weiter
+   unten) – sie lag direkt auf weißem Grund. */
+header { background: #fff; color: __NAVY__; padding: 28px 0;
+         border-bottom: 1px solid #e5e5e5; }
 header .inner { max-width: 1100px; margin: 0 auto; padding: 0 20px;
                 display: flex; align-items: center; gap: 18px; }
-header .header-logo-wrap { background: #fff; border-radius: 10px;
-                           padding: 10px 18px; display: inline-flex;
-                           align-items: center; flex-shrink: 0; }
-header .header-logo { height: 56px; width: auto; display: block; }
+header .header-logo { height: 56px; width: auto; display: block; flex-shrink: 0; }
 header h1 { font-size: 1.6rem; font-weight: 700; }
-header p  { font-size: .85rem; opacity: .75; margin-top: 4px; }
+header p  { font-size: .85rem; color: __GREY__; margin-top: 4px; }
 .container { max-width: 1100px; margin: 0 auto; padding: 32px 20px; }
 h2 { font-size: 1.15rem; font-weight: 700; color: __NAVY__;
      border-left: 4px solid __SKY__; padding-left: 12px; margin: 36px 0 16px; }
@@ -1476,7 +1478,7 @@ def generate_multi_agent_report(
     blocks = "".join(_agent_block(e) for e in agents_data)
     logo_uri = _logo_data_uri()
     logo_html = (
-        f'<div class="header-logo-wrap"><img class="header-logo" src="{logo_uri}" alt="OVB Logo"></div>'
+        f'<img class="header-logo" src="{logo_uri}" alt="OVB Logo">'
         if logo_uri else ""
     )
 
@@ -1590,7 +1592,7 @@ def generate_report(
     uc_badge = f'<span class="model-badge">{uc_id}</span>'
     logo_uri = _logo_data_uri()
     logo_html = (
-        f'<div class="header-logo-wrap"><img class="header-logo" src="{logo_uri}" alt="OVB Logo"></div>'
+        f'<img class="header-logo" src="{logo_uri}" alt="OVB Logo">'
         if logo_uri else ""
     )
 
