@@ -1468,7 +1468,7 @@ def generate_multi_agent_report(
 
     # Kein section-group-Wrapper (kein Karten-Look, nicht einklappbar wie die
     # Agenten-Blöcke unten) – gehört inhaltlich zur Übersicht zusammen mit
-    # Gesamtbewertung direkt darunter, die ebenfalls ungerahmt ist.
+    # dem Agenten-Vergleich, der ebenfalls ungerahmt ist.
     comparison_html = _section_comparison(agents_data)
     overall_html    = _section_overall_score(agents_data)
     # Einklappbar wie die Agenten-Blöcke, ganz unten platziert – nur ein
@@ -1515,8 +1515,8 @@ def generate_multi_agent_report(
   </div>
 </header>
 <div class="container">
-  {comparison_html}
   {overall_html}
+  {comparison_html}
   {collapse_bar}
   {blocks}
   {overhead_all}
