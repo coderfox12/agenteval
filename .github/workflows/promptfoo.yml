@@ -34,7 +34,15 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Web-App-Abhängigkeiten installieren
-        run: pip install -r webapp/requirements.txt
+        # --no-deps für agenteval_ovb selbst: webapp/app.py importiert seit
+        # branding.py (gemeinsame OVB-Farbkonstanten mit dem HTML-Report)
+        # erstmals direkt aus dem Hauptpaket, branding.py selbst hat aber
+        # keine eigenen Abhängigkeiten – ein voller "pip install -e ." würde
+        # unnötig die schweren Laufzeit-Deps (langgraph, langchain, ...)
+        # installieren, nur um dieses eine Modul importierbar zu machen.
+        run: |
+          pip install -r webapp/requirements.txt
+          pip install -e . --no-deps
       - name: Web-App lädt fehlerfrei (alle Bereiche, kein echter Eval-Lauf)
         run: python webapp/test_smoke.py
 
