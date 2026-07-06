@@ -19,3 +19,24 @@ def extract_promptfoo_results(data: dict | None) -> list[dict]:
     if not data:
         return []
     return data.get("results", {}).get("results", data.get("results", []))
+
+
+def is_provider_error(r: dict) -> bool:
+    """Erkennt ob ein Promptfoo-Ergebnis ein Provider-/API-Fehler war
+    (z. B. Quota erschöpft, Timeout) und keine echte Agenten-Antwort enthält.
+
+    Gemeinsam genutzt von agenteval_ovb.report (Anzeige/Zählung im Report)
+    und scripts/run_promptfoo_multi_agent.py (Entscheidung, ob ein erneuter
+    Versuch per --retry-errors sinnvoll ist) – nur Provider-/API-Fehler
+    sollen erneut versucht werden, keine inhaltlich korrekten Testfehlschläge
+    (z. B. ein Sicherheitstest, der zeigt, dass sich der Agent jailbreaken ließ).
+    """
+    resp   = r.get("response") or {}
+    output = str(resp.get("output", "") or "")
+    # Explizites Fehlerfeld im Response-Objekt
+    if resp.get("error"):
+        return True
+    # Promptfoo-Fehlerpräfix im Output (tritt bei 429 / Provider-Down auf)
+    if output.lstrip().startswith("[ERROR]"):
+        return True
+    return False

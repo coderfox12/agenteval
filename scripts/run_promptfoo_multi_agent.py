@@ -32,6 +32,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -43,7 +44,19 @@ from agenteval_ovb.promptfoo_utils import (
     DEFAULT_MAX_CONCURRENCY,
     PROMPTFOO_VERSION,
     extract_promptfoo_results,
+    is_provider_error,
 )
+
+# Bei Provider-/API-Fehlern (429, Timeout, Anbieter down) diese Pausen (in
+# Sekunden) vor jeweils einem erneuten Versuch – wachsend, analog zum
+# bestehenden 3-Versuche-Backoff in der Funktionalitäts-Suite
+# (evals/functionality/test_functionality.py, _AGENT_MAX_RETRIES). Nutzt
+# promptfoo's eigenes --retry-errors: das versucht GEZIELT nur die als
+# ERROR klassifizierten Tests erneut, nicht die komplette Suite – ein
+# inhaltlich korrekter Testfehlschlag (z. B. ein Security-Test zeigt, dass
+# sich der Agent jailbreaken ließ) zählt promptfoo dabei NICHT als ERROR
+# und wird folglich nicht wiederholt.
+RETRY_DELAYS_SECONDS = (3, 6)
 
 ROOT = Path(__file__).parent.parent
 RESULTS_DIR = ROOT / "results"
@@ -173,23 +186,44 @@ def run_one(agent: dict, judge: dict, config: str, scope: str) -> tuple[list[dic
     print(f"\n▶  {USE_CASE} | {agent['label']!r} | {Path(config).name}  (scope={scope})")
     env = _agent_env(agent, judge)
     env["PROMPTFOO_CONFIG_DIR"] = str(pf_config_dir)
-    try:
-        result = subprocess.run(cmd, env=env)
-    finally:
-        shutil.rmtree(pf_config_dir, ignore_errors=True)
 
-    results: list[dict] = []
-    if tmp_out.exists():
-        try:
-            data = json.loads(tmp_out.read_text(encoding="utf-8"))
-            for r in extract_promptfoo_results(data):
-                if not r:
-                    continue
-                meta = r.setdefault("testCase", {}).setdefault("metadata", {})
-                meta.setdefault("scope", scope)
-                results.append(r)
-        finally:
-            tmp_out.unlink(missing_ok=True)
+    def _read_results() -> list[dict]:
+        if not tmp_out.exists():
+            return []
+        data = json.loads(tmp_out.read_text(encoding="utf-8"))
+        parsed = []
+        for r in extract_promptfoo_results(data):
+            if not r:
+                continue
+            meta = r.setdefault("testCase", {}).setdefault("metadata", {})
+            meta.setdefault("scope", scope)
+            parsed.append(r)
+        return parsed
+
+    try:
+        subprocess.run(cmd, env=env)
+        results = _read_results()
+
+        # --retry-errors braucht die per PROMPTFOO_CONFIG_DIR isolierte,
+        # persistierte Eval-DB dieses Laufs, um "die letzte Evaluierung"
+        # wiederzufinden – pf_config_dir darf hier also noch NICHT gelöscht
+        # sein (das passiert erst im finally weiter unten).
+        retry_cmd = [
+            NPX, f"promptfoo@{PROMPTFOO_VERSION}", "eval",
+            "--config", str(config_path), "--output", str(tmp_out), "--retry-errors",
+        ]
+        for delay in RETRY_DELAYS_SECONDS:
+            if not any(is_provider_error(r) for r in results):
+                break
+            n_errors = sum(1 for r in results if is_provider_error(r))
+            print(f"⚠  {n_errors} Provider-/API-Fehler bei {agent['label']!r} ({Path(config).name}) "
+                  f"– erneuter Versuch in {delay}s ...")
+            time.sleep(delay)
+            subprocess.run(retry_cmd, env=env)
+            results = _read_results()
+    finally:
+        tmp_out.unlink(missing_ok=True)
+        shutil.rmtree(pf_config_dir, ignore_errors=True)
 
     # NICHT result.returncode == 0 verwenden: promptfoo gibt bewusst exit
     # code 1 zurück, wenn TESTS fehlschlagen (z.B. ein Security-Test zeigt,

@@ -37,6 +37,7 @@ from agenteval_ovb.branding import (
 )
 from agenteval_ovb.pricing import calc_cost_usd
 from agenteval_ovb.promptfoo_utils import extract_promptfoo_results as _promptfoo_results
+from agenteval_ovb.promptfoo_utils import is_provider_error as _is_provider_error
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -71,20 +72,6 @@ def _load_json(path: str | None) -> dict | None:
     if not p.exists():
         return None
     return json.loads(p.read_text(encoding="utf-8"))
-
-
-def _is_provider_error(r: dict) -> bool:
-    """Erkennt ob ein Promptfoo-Ergebnis ein Provider-/API-Fehler war
-    (z. B. Quota erschöpft, Timeout) und keine echte Agenten-Antwort enthält."""
-    resp   = r.get("response") or {}
-    output = str(resp.get("output", "") or "")
-    # Explizites Fehlerfeld im Response-Objekt
-    if resp.get("error"):
-        return True
-    # Promptfoo-Fehlerpräfix im Output (tritt bei 429 / Provider-Down auf)
-    if output.lstrip().startswith("[ERROR]"):
-        return True
-    return False
 
 
 def _api_error_banner(count: int, context: str) -> str:
@@ -535,6 +522,15 @@ def _scope_summary(by_scope: dict) -> str:
 
 
 def _section_security(sec_data: dict) -> str:
+    # _parse_security() bekommt bei fehlender Suite eine leere Ergebnisliste,
+    # gibt aber trotzdem ein vollstaendig gefuelltes Dict mit Nullwerten
+    # zurueck (nie {} / falsy) - anders als bei D1 (Funktionalitaet) reicht
+    # "if not sec_data" hier also NICHT, um "nicht getestet" zu erkennen.
+    # total_pass+total_fail==0 ist das eigentliche Signal dafuer.
+    if sec_data.get("total_pass", 0) + sec_data.get("total_fail", 0) == 0:
+        return ("<h2>Dimension 2 – Sicherheit</h2>"
+                "<p style='color:#6c757d; margin-top:12px'>Keine Daten vorhanden.</p>")
+
     rows = []
     all_classes: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
     all_scope: dict = defaultdict(lambda: {"pass": 0, "fail": 0})
@@ -591,6 +587,13 @@ def _section_security(sec_data: dict) -> str:
 
 
 def _section_compliance(comp_data: dict, comp_stats: dict, scorecard: dict | None) -> str:
+    # Gleicher Grund wie in _section_security: _parse_compliance() liefert bei
+    # fehlender Suite trotzdem ein vollstaendig gefuelltes comp_stats-Dict mit
+    # Nullwerten - total_pass+total_fail==0 erkennt "nicht getestet" zuverlaessig.
+    if comp_stats.get("total_pass", 0) + comp_stats.get("total_fail", 0) == 0:
+        return ("<h2>Dimension 3 – Compliance</h2>"
+                "<p style='color:#6c757d; margin-top:12px'>Keine Daten vorhanden.</p>")
+
     ARTICLE_ORDER = ["Art. 52", "Art. 9", "Art. 13", "Art. 14", "Art. 15"]
     THRESHOLDS = {"Art. 52": 1.0, "Art. 9": 0.9, "Art. 13": 0.8, "Art. 14": 1.0, "Art. 15": 0.8}
 
@@ -939,18 +942,27 @@ def _section_eval_overhead_all(agents_data: list[dict], judge_model: str) -> str
 # ---------------------------------------------------------------------------
 
 def _radar_svg(entries: list[dict]) -> str:
-    """Inline SVG Radar/Spider-Chart (5 Achsen, kein JS, kein CDN)."""
+    """Inline SVG Radar/Spider-Chart (5 Achsen, kein JS, kein CDN).
+
+    Legende sitzt UNTER dem Pentagon (nicht mehr rechts daneben) und bricht
+    bei Bedarf in mehrere Zeilen um – bei fest positionierter Legende neben
+    dem Chart gab es zwei Probleme, die beide mit der Anzahl der Agenten
+    wuchsen: (1) die Legende konnte die "D2 – Sicherheit"-Achsenbeschriftung
+    überlappen, (2) die Legendenhöhe war nicht an die SVG-Höhe gekoppelt und
+    wurde bei vielen Agenten unten abgeschnitten (unsichtbar, ohne Warnung).
+    Die SVG-Höhe wird jetzt aus der tatsächlich benötigten Zeilenzahl berechnet.
+    """
     import math
 
-    W, H = 740, 420
-    cx, cy, r = 270, 205, 130
+    W = 480
+    cx, cy, r = 240, 200, 130
 
     AXES = [
-        ("D1 Funktionalität", "func_rate"),
-        ("D2 Sicherheit",     "sec_rate"),
-        ("Geschwindigkeit",   "speed_rate"),
-        ("Kosteneffizienz",   "cost_rate"),
-        ("D3 Compliance",     "comp_rate"),
+        ("D1 Funktionalität",    "func_rate"),
+        ("D2 Sicherheit",        "sec_rate"),
+        ("Geschwindigkeit",      "speed_rate"),
+        ("D4 Wirtschaftlichkeit", "cost_rate"),
+        ("D3 Compliance",        "comp_rate"),
     ]
     n_axes = len(AXES)
     angles = [-math.pi / 2 + i * 2 * math.pi / n_axes for i in range(n_axes)]
@@ -960,9 +972,33 @@ def _radar_svg(entries: list[dict]) -> str:
         a = angles[axis_i]
         return cx + frac * r * math.cos(a), cy + frac * r * math.sin(a)
 
+    # ── Legenden-Zeilenumbruch VORAB berechnen, damit die Gesamthöhe (H) der
+    #    SVG feststeht, bevor irgendetwas gezeichnet wird. Jedes Item bekommt
+    #    eine geschätzte Breite (Farbpunkt + Text, ~6.2px/Zeichen bei
+    #    Schriftgröße 11); Items werden zeilenweise angeordnet wie CSS
+    #    flex-wrap, bis die verfügbare Zeilenbreite (W - Rand) überschritten wäre.
+    leg_margin   = 20
+    leg_row_h    = 22
+    leg_max_w    = W - 2 * leg_margin
+    item_gap     = 18
+    rows: list[list[dict]] = [[]]
+    row_w = 0.0
+    for entry in entries:
+        item_w = 12 + 6 + len(entry["label"]) * 6.2 + item_gap
+        if row_w + item_w > leg_max_w and rows[-1]:
+            rows.append([])
+            row_w = 0.0
+        rows[-1].append(entry)
+        row_w += item_w
+    leg_h = len(rows) * leg_row_h + 20  # + Innenabstand oben/unten
+
+    label_bottom = cy + 1.3 * r + 14  # unterster Punkt der Achsen-Beschriftungen
+    leg_y  = label_bottom + 14
+    H      = leg_y + leg_h + 10
+
     svg: list[str] = [
-        f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" '
-        f'style="width:100%;max-width:{W}px;height:auto;display:block">'
+        f'<svg viewBox="0 0 {W} {H:.0f}" xmlns="http://www.w3.org/2000/svg" '
+        f'style="width:100%;max-width:{W}px;height:auto;display:block;margin:0 auto">'
     ]
 
     # Grid-Pentagone
@@ -1016,24 +1052,38 @@ def _radar_svg(entries: list[dict]) -> str:
                 f'fill="{color}" stroke="#fff" stroke-width="1.5"/>'
             )
 
-    # Legende – Breite dynamisch nach längstem Label berechnen
-    leg_x, leg_y = 450, 52
-    leg_row_h    = 28
-    leg_h        = len(entries) * leg_row_h + 18
-    max_chars    = max((len(e["label"]) for e in entries), default=10)
-    leg_w        = min(max(180, max_chars * 7 + 36), W - leg_x - 10)
+    # Legende – unter dem Chart, zeilenweise umbrechend (siehe rows oben).
+    # Box ist genau so breit wie die breiteste Zeile (nicht die volle SVG-
+    # Breite) und wird als Ganzes unter dem Pentagon zentriert; alle Zeilen
+    # beginnen an DERSELBEN linken Kante (statt jede Zeile einzeln zu
+    # zentrieren, was bei unterschiedlich langen Labels einen "zackigen"
+    # linken Rand ergab).
+    inner_pad = 14
+    row_widths = [
+        sum(12 + 6 + len(e["label"]) * 6.2 + item_gap for e in row) - item_gap
+        for row in rows
+    ]
+    content_w = max(row_widths, default=0)
+    box_w     = content_w + 2 * inner_pad
+    box_left  = cx - box_w / 2
+    text_x    = box_left + inner_pad
+
     svg.append(
-        f'<rect x="{leg_x - 10}" y="{leg_y - 10}" width="{leg_w}" height="{leg_h}" '
-        f'rx="7" fill="#f8f9fa" stroke="#dfe6e9" stroke-width="0.9"/>'
+        f'<rect x="{box_left:.0f}" y="{leg_y - 10:.0f}" width="{box_w:.0f}" '
+        f'height="{leg_h}" rx="7" fill="#f8f9fa" stroke="#dfe6e9" stroke-width="0.9"/>'
     )
-    max_label_px = leg_w - 36
-    max_label_chars = max(10, int(max_label_px / 6.5))
-    for idx, entry in enumerate(entries):
-        color = COLORS[idx % len(COLORS)]
-        ey    = leg_y + idx * leg_row_h
-        svg.append(f'<rect x="{leg_x}" y="{ey}" width="13" height="13" rx="3" fill="{color}"/>')
-        lbl = entry["label"][:max_label_chars] + ("…" if len(entry["label"]) > max_label_chars else "")
-        svg.append(f'<text x="{leg_x + 19}" y="{ey + 10}" font-size="10.5" fill="#2d3436">{lbl}</text>')
+    color_by_id = {id(e): COLORS[idx % len(COLORS)] for idx, e in enumerate(entries)}
+    for row_idx, row in enumerate(rows):
+        row_y = leg_y + row_idx * leg_row_h
+        ex = text_x
+        for entry in row:
+            color = color_by_id[id(entry)]
+            svg.append(f'<rect x="{ex:.0f}" y="{row_y:.0f}" width="12" height="12" rx="3" fill="{color}"/>')
+            svg.append(
+                f'<text x="{ex + 18:.0f}" y="{row_y + 9.5:.0f}" font-size="10.5" '
+                f'fill="#2d3436">{entry["label"]}</text>'
+            )
+            ex += 12 + 6 + len(entry["label"]) * 6.2 + item_gap
 
     svg.append("</svg>")
     return "".join(svg)
@@ -1122,8 +1172,11 @@ def _section_comparison(agents_data: list[dict]) -> str:
         '<div class="chart-title">Gesamtprofil – alle Dimensionen im Vergleich</div>'
         + _radar_svg(entries)
         + '<p style="font-size:.78rem;color:#b2bec3;margin-top:8px">'
-        'Kosteneffizienz und Geschwindigkeit sind relativ normalisiert: '
-        'der günstigste/schnellste Agent erhält 100 %.</p>'
+        'D4 Wirtschaftlichkeit und Geschwindigkeit sind relativ normalisiert: '
+        'der günstigste/schnellste Agent erhält 100&thinsp;%. Geschwindigkeit ist die '
+        'inverse Ø Latenz aus der Tabelle unten (kürzeste Latenz = 100&thinsp;%) und '
+        'eine zusätzliche, rein informative Achse – sie fließt (anders als D1-D4) nicht '
+        'in die gewichtete Gesamtnote weiter oben ein.</p>'
         + '</div>'
     )
 
