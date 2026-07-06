@@ -286,8 +286,8 @@ body { font-family: __FONT__;
 header { background: #fff; color: __NAVY__; padding: 28px 0;
          border-bottom: 1px solid #e5e5e5; }
 header .inner { max-width: 1100px; margin: 0 auto; padding: 0 20px;
-                display: flex; align-items: center; gap: 18px; }
-header .header-logo { height: 56px; width: auto; display: block; flex-shrink: 0; }
+                display: flex; align-items: center; gap: 32px; }
+header .header-logo { height: 74px; width: auto; display: block; flex-shrink: 0; }
 header h1 { font-size: 1.6rem; font-weight: 700; }
 header p  { font-size: .85rem; color: __GREY__; margin-top: 4px; }
 .container { max-width: 1100px; margin: 0 auto; padding: 32px 20px; }
@@ -370,6 +370,20 @@ tr:hover td { background: #f7f9fc; }
 .chart-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
 .charts-grid { display: flex; flex-direction: column; gap: 16px; margin-bottom: 4px; }
 footer { text-align: center; color: #b2bec3; font-size: .78rem; padding: 32px 0; }
+/* "Box-in-Box" vermeiden: .card/table/.chart-wrap innerhalb einer bereits
+   weissen .section-group-Karte (pro Agent bzw. Judge-Zusammenfassung)
+   bekommen KEINEN eigenen weissen Hintergrund + Schatten mehr - das erzeugte
+   zwei uebereinanderliegende, konkurrierende Kartenebenen. Eine leichte
+   Grautoenung (nur bei .card) zeigt weiterhin eine Gruppierung, Tabelle/Chart
+   sitzen einfach flach auf der umschliessenden weissen Flaeche. Die
+   Top-Level-Nutzung derselben Klassen (Agenten-Vergleich ganz oben, direkt
+   auf dem grauen Seiten-Hintergrund, kein .section-group darum) behaelt ihre
+   eigene Karten-Optik – dort ist nur EINE Ebene im Spiel. */
+.section-group-body .card { background: __LIGHTGREY__; box-shadow: none; }
+.section-group-body table { background: none; box-shadow: none;
+                            border-radius: 0; border: 1px solid #e5e5e5; }
+.section-group-body .chart-wrap { background: none; box-shadow: none;
+                                  padding: 20px 0; }
 """.replace("__NAVY__", OVB_NAVY).replace("__SKY__", OVB_SKY).replace("__GREY__", OVB_GREY) \
    .replace("__LIGHTGREY__", OVB_LIGHTGREY).replace("__SUCCESS__", OVB_SUCCESS) \
    .replace("__DANGER__", OVB_DANGER).replace("__FONT__", OVB_FONT_STACK)
