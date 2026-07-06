@@ -1127,8 +1127,10 @@ def _section_comparison(agents_data: list[dict]) -> str:
         + '</div>'
     )
 
-    # ── Balkendiagramme (eine Kachel pro Dimension) ───────────────────────
-    def _chart(title: str, rate_key: str, pass_key: str, total_key: str, threshold: float) -> str:
+    # ── Balkendiagramme (D1-D3 in EINER gemeinsamen Box statt drei einzelnen –
+    #    drei nebeneinanderstehende, gleich aussehende Kacheln wirkten wie
+    #    unnötig viele separate Boxen für im Grunde dieselbe Art Inhalt).
+    def _chart_body(title: str, rate_key: str, pass_key: str, total_key: str, threshold: float) -> str:
         bars = "".join(
             _chart_bar(
                 label=e["label"],
@@ -1138,19 +1140,15 @@ def _section_comparison(agents_data: list[dict]) -> str:
             )
             for e in entries
         )
-        return (
-            f'<div class="chart-wrap">'
-            f'<div class="chart-title">{title}</div>'
-            f'{bars}'
-            f'</div>'
-        )
+        return f'<div class="chart-title">{title}</div>{bars}'
 
     charts = (
+        '<div class="chart-wrap">'
         '<div class="charts-grid">'
-        + _chart("D1 – Funktionalität",  "func_rate", "func_pass", "func_total", 0.8)
-        + _chart("D2 – Sicherheit",       "sec_rate",  "sec_pass",  "sec_total",  0.9)
-        + _chart("D3 – Compliance",       "comp_rate", "comp_pass", "comp_total", 0.8)
-        + '</div>'
+        + _chart_body("D1 – Funktionalität",  "func_rate", "func_pass", "func_total", 0.8)
+        + _chart_body("D2 – Sicherheit",       "sec_rate",  "sec_pass",  "sec_total",  0.9)
+        + _chart_body("D3 – Compliance",       "comp_rate", "comp_pass", "comp_total", 0.8)
+        + '</div></div>'
     )
 
     # ── Vergleichstabelle ─────────────────────────────────────────────────
@@ -1188,7 +1186,18 @@ def _section_comparison(agents_data: list[dict]) -> str:
         + "</tbody></table>"
     )
 
-    return "<h2>Agenten-Vergleich</h2>" + radar + charts + "<br>" + table
+    # Alles in EINER Karte statt fünf einzelnen weißen Schatten-Boxen
+    # nebeneinander (Radar, drei Balkendiagramme, Tabelle) – dieselbe
+    # section-group-Behandlung wie bei den Agenten-Blöcken unten, die
+    # .section-group-body .card/table/.chart-wrap-Regeln flachen radar/
+    # charts/table hier automatisch mit ab (siehe _CSS).
+    return (
+        '<div class="section-group">'
+        '<div class="section-group-body">'
+        '<h2>Agenten-Vergleich</h2>'
+        + radar + charts + table
+        + '</div></div>'
+    )
 
 
 def _agent_block(entry: dict) -> str:
@@ -1264,44 +1273,52 @@ def _section_overall_score(agents_data: list[dict]) -> str:
     data_js = _json.dumps(scores, ensure_ascii=False)
 
     return (
+        '<div class="section-group">'
+        '<div class="section-group-body">'
         "<h2>Gesamtbewertung</h2>"
-        "<p style='color:#6c757d;font-size:.85rem;margin-bottom:20px'>"
+        "<p style='color:#6c757d;font-size:.85rem;margin-bottom:24px'>"
         "Passe die Gewichtung der vier Dimensionen an dein Evaluationsziel an. "
         "Mittlere Position entspricht gleicher Gewichtung (je 25,0&thinsp;%). "
         "D4 bewertet Wirtschaftlichkeit als Kehrwert der Gesamtkosten – "
         "der günstigste Agent erhält 100&thinsp;%. "
         "Die Gesamtnote aktualisiert sich sofort beim Ziehen der Regler.</p>"
         "<style>"
-        ".ovb-weight-row{display:flex;align-items:center;gap:12px;margin:12px 0}"
-        ".ovb-wlabel{width:220px;font-size:.85rem;color:#2d3436;flex-shrink:0}"
-        ".ovb-slider-wrap{position:relative;flex:1;padding-bottom:20px}"
+        # Zeilen vorher schief: .ovb-slider-wrap hatte padding-bottom:20px als
+        # Reserveplatz fuer die absolut positionierte "Standard"-Markierung -
+        # dieses Padding zaehlte aber bei align-items:center mit, wodurch der
+        # Regler (nur im oberen Teil der eigenen, dadurch zu hohen Box) hoeher
+        # sass als Label/Prozentzahl daneben. Tick jetzt per top:100% UNTER der
+        # (nun genau reglerhohen) Box positioniert, zaehlt nicht mehr zur Zeilenhoehe.
+        ".ovb-weight-row{display:flex;align-items:center;gap:16px;margin:0 0 34px}"
+        ".ovb-wlabel{width:220px;font-size:.92rem;font-weight:600;color:#003366;flex-shrink:0}"
+        ".ovb-slider-wrap{position:relative;flex:1}"
         ".ovb-slider-wrap input[type=range]{"
-          "width:100%;-webkit-appearance:none;appearance:none;"
+          "display:block;width:100%;margin:0;-webkit-appearance:none;appearance:none;"
           "height:6px;border-radius:3px;background:#dfe6e9;outline:none;cursor:pointer}"
         ".ovb-slider-wrap input[type=range]::-webkit-slider-thumb{"
           "-webkit-appearance:none;appearance:none;"
-          "width:20px;height:20px;border-radius:50%;"
+          "width:22px;height:22px;border-radius:50%;"
           "background:#00b7e5;cursor:pointer;border:2px solid #fff;"
           "box-shadow:0 1px 4px rgba(0,0,0,.3)}"
         ".ovb-slider-wrap input[type=range]::-moz-range-thumb{"
-          "width:20px;height:20px;border-radius:50%;"
+          "width:22px;height:22px;border-radius:50%;"
           "background:#00b7e5;cursor:pointer;border:2px solid #fff;"
           "box-shadow:0 1px 4px rgba(0,0,0,.3)}"
-        ".ovb-ctick{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);"
+        ".ovb-ctick{position:absolute;top:100%;margin-top:8px;left:50%;transform:translateX(-50%);"
           "display:flex;flex-direction:column;align-items:center;pointer-events:none}"
         ".ovb-ctick-line{width:1px;height:6px;background:#b2bec3}"
         ".ovb-ctick-lbl{font-size:.65rem;color:#b2bec3;white-space:nowrap;margin-top:1px}"
-        ".ovb-wpct{width:48px;text-align:right;font-size:.9rem;font-weight:700;color:#00b7e5;flex-shrink:0}"
-        ".ovb-cards{display:flex;flex-wrap:wrap;gap:14px;margin-top:20px}"
-        ".ovb-card{background:#fff;border:1px solid #e0e0e0;border-radius:10px;"
-          "padding:16px 20px;min-width:160px;flex:1}"
-        ".ovb-card .oc-lbl{font-size:.78rem;color:#6c757d;margin-bottom:2px}"
-        ".ovb-card .oc-mdl{font-size:.72rem;color:#b2bec3;margin-bottom:10px}"
-        ".ovb-card .oc-score{font-size:2.2rem;font-weight:700;line-height:1}"
-        ".ovb-card .oc-dim{font-size:.72rem;color:#6c757d;margin-top:6px}"
-        ".ovb-card .oc-bar-bg{background:#f1f2f6;border-radius:4px;height:8px;margin-top:10px;overflow:hidden}"
+        ".ovb-wpct{width:56px;text-align:right;font-size:1.1rem;font-weight:700;color:#00b7e5;flex-shrink:0}"
+        ".ovb-cards{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px}"
+        ".ovb-card{background:#f2f2f2;border-radius:10px;"
+          "padding:18px 22px;min-width:160px;flex:1}"
+        ".ovb-card .oc-lbl{font-size:.8rem;font-weight:600;color:#003366;margin-bottom:2px}"
+        ".ovb-card .oc-mdl{font-size:.72rem;color:#6c757d;margin-bottom:10px}"
+        ".ovb-card .oc-score{font-size:2.6rem;font-weight:700;line-height:1}"
+        ".ovb-card .oc-dim{font-size:.74rem;color:#6c757d;margin-top:8px}"
+        ".ovb-card .oc-bar-bg{background:#e0e0e0;border-radius:4px;height:8px;margin-top:10px;overflow:hidden}"
         ".ovb-card .oc-bar{height:100%;border-radius:4px;transition:width .25s}"
-        ".ovb-reset{margin-top:10px;font-size:.78rem;color:#00b7e5;cursor:pointer;"
+        ".ovb-reset{margin-top:14px;font-size:.78rem;color:#00b7e5;cursor:pointer;"
           "background:none;border:none;padding:0;text-decoration:underline}"
         "</style>"
         "<div class='ovb-weight-row'>"
@@ -1397,6 +1414,7 @@ def _section_overall_score(agents_data: list[dict]) -> str:
         f"  ovbRecalc();"
         f"}})();"
         f"</script>"
+        '</div></div>'
     )
 
 
@@ -1466,9 +1484,10 @@ def generate_multi_agent_report(
         f'&nbsp;<span style="font-size:.95rem;font-weight:400;opacity:.85">{uc_name}</span>'
     ) if uc else ""
 
-    # Kein section-group-Wrapper (kein Karten-Look, nicht einklappbar wie die
-    # Agenten-Blöcke unten) – gehört inhaltlich zur Übersicht zusammen mit
-    # dem Agenten-Vergleich, der ebenfalls ungerahmt ist.
+    # overall_html bleibt bewusst ungerahmt (kein Karten-Look, nicht
+    # einklappbar wie die Agenten-Blöcke unten) – es ist die Kurzfassung ganz
+    # oben. _section_comparison bringt dagegen seine eigene section-group-Karte
+    # mit (fasst Radar/Charts/Tabelle in einer Box statt fünf einzelnen).
     comparison_html = _section_comparison(agents_data)
     overall_html    = _section_overall_score(agents_data)
     # Einklappbar wie die Agenten-Blöcke, ganz unten platziert – nur ein
