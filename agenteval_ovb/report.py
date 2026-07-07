@@ -20,11 +20,14 @@ CLI:
 
 import argparse
 import base64
+import html
 import json
 import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
+
+import yaml
 
 from agenteval_ovb.branding import (
     OVB_DANGER,
@@ -72,6 +75,47 @@ def _load_json(path: str | None) -> dict | None:
     if not p.exists():
         return None
     return json.loads(p.read_text(encoding="utf-8"))
+
+
+def _load_task_texts(use_case: str | None) -> dict[str, str]:
+    """Lädt description + input je Task-ID aus der zugehörigen tasks.yaml.
+
+    Nur für die Tooltip-Anzeige im Funktionalitäts-Report gedacht: der Nutzer
+    sieht sonst in der Tabelle nur die Task-ID (z. B. "UC1-07") und muss dafür
+    ins Repo schauen, um zu wissen, was der Test eigentlich prüft.
+    """
+    if not use_case:
+        return {}
+    base = _PACKAGE_ROOT / "evals" / "functionality" / "usecases"
+    matches = sorted(base.glob(f"{use_case}_*/tasks.yaml"))
+    if not matches:
+        return {}
+    try:
+        data = yaml.safe_load(matches[0].read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    texts: dict[str, str] = {}
+    for t in (data or {}).get("tasks", []):
+        tid = t.get("id")
+        if not tid:
+            continue
+        description = (t.get("description") or "").strip()
+        task_input = " ".join((t.get("input") or "").split())
+        texts[tid] = f"{description}\n{task_input}" if description else task_input
+    return texts
+
+
+def _task_id_cell(task_id: str, task_texts: dict[str, str]) -> str:
+    """Task-ID, optional mit Hover-Tooltip (Beschreibung + Input des Tests)."""
+    text = task_texts.get(task_id)
+    if not text:
+        return f"<code>{task_id}</code>"
+    tip = html.escape(text, quote=True)
+    return (
+        f'<code>{task_id}</code> '
+        f'<span title="{tip}" style="cursor:help;color:#6c757d" '
+        f'aria-label="Was prüft dieser Test?">❓</span>'
+    )
 
 
 def _api_error_banner(count: int, context: str) -> str:
@@ -674,6 +718,7 @@ def _section_functionality(func_data: dict) -> str:
     metric_keys = func_data.get("metrics") or ["tool_correctness", "task_completion", "answer_relevancy"]
     core_keys = set(func_data.get("core_metrics") or [])
     n_metric_cols = len(metric_keys)
+    task_texts = _load_task_texts(func_data.get("use_case"))
 
     err_records = [r for r in records if r.get("error")]
     # Marker-Substring aus der Fehlermeldung in agent/graph.py – unterscheidet
@@ -724,7 +769,7 @@ def _section_functionality(func_data: dict) -> str:
             err_cost = f"${r['cost_usd']:.4f}" if r.get("cost_usd") else "–"
             rows.append(
                 f'<tr style="background:#fff8f8">'
-                f'<td><code>{task_id}</code></td>'
+                f'<td>{_task_id_cell(task_id, task_texts)}</td>'
                 f'<td>{err_badge}</td>'
                 f'<td colspan="{n_metric_cols}" style="color:#6c757d;font-size:.82rem">'
                 f'{short_err}{time_info}</td>'
@@ -747,7 +792,7 @@ def _section_functionality(func_data: dict) -> str:
 
             metric_cells = "".join(f"<td>{_fmt(r.get(k))}</td>" for k in metric_keys)
             rows.append(
-                f"<tr><td>{task_id}</td><td>{badge}</td>"
+                f"<tr><td>{_task_id_cell(task_id, task_texts)}</td><td>{badge}</td>"
                 f"{metric_cells}"
                 f"<td>${cost:.4f}</td><td>{_fmt_int(latency)} ms</td></tr>"
             )
