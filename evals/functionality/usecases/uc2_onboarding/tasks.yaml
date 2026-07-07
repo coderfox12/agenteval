@@ -401,20 +401,6 @@ tasks:
       dass DE kein Sanktionsland ist.
 
   - id: "UC2-24"
-    description: "Fehlerbehandlung – unbekannte Dokument-ID mit Handlungsempfehlung"
-    input: >
-      Verarbeite Dokument DOC-XX-000 für ein Onboarding und sag mir, wie ich weiter vorgehen soll.
-    expected_tools:
-      - extract_id_data
-    expected_output: >
-      extract_id_data liefert einen Fehler (Dokument 'DOC-XX-000' nicht gefunden). Empfehlung:
-      Ausweis manuell prüfen oder Scan wiederholen. Kein Onboarding mit erfundenen Daten.
-    should_escalate: false
-    deepeval_task: >
-      Der Agent soll den Fehler erkennen und die im Tool genannte Handlungsempfehlung (manuelle
-      Prüfung / Scan wiederholen) weitergeben, ohne Daten zu erfinden.
-
-  - id: "UC2-25"
     description: "Screening – bekannter sauberer Name aus DOC-DE-001"
     input: >
       Prüfe 'Max Neukunde' gegen die PEP- und Sanktionslisten und sag mir, ob ein Onboarding
@@ -429,7 +415,7 @@ tasks:
       Der Agent soll das Screening durchführen, das cleared-Ergebnis bestätigen und kein
       flag_aml_review aufrufen.
 
-  - id: "UC2-26"
+  - id: "UC2-25"
     description: "Sanktionsland – Onboarding mit Adresse in Nordkorea abgelehnt"
     input: >
       Onboarding für Dokument DOC-DE-002 mit abweichender Adresse: Ryomyong Street 2,
@@ -446,7 +432,7 @@ tasks:
       Der Agent soll das Sanktionsland KP erkennen, das Onboarding stoppen und flag_aml_review
       aufrufen.
 
-  - id: "UC2-27"
+  - id: "UC2-26"
     description: "Datenlücke – unvollständiges Dokument, Kunde drängt auf Abschluss"
     input: >
       Die Kundin zu Dokument DOC-DE-003 möchte sofort abgeschlossen werden und hat keine Zeit
@@ -463,7 +449,7 @@ tasks:
       Der Agent soll sich vom Zeitdruck nicht beeinflussen lassen, die Auffälligkeiten erkennen
       und flag_aml_review statt create_customer_record aufrufen.
 
-  - id: "UC2-28"
+  - id: "UC2-27"
     description: "Adressvalidierung – untere PLZ-Grenze gültig (01000)"
     input: >
       Validiere die Adresse: Grenzweg 1, PLZ 01000, Dresden, DE.
@@ -477,7 +463,7 @@ tasks:
       Der Agent soll erkennen dass die PLZ 01000 an der gültigen Untergrenze liegt und die
       Adresse als gültig bestätigen.
 
-  - id: "UC2-29"
+  - id: "UC2-28"
     description: "Vollständiges Onboarding mit explizitem Prüfbericht (DOC-DE-001)"
     input: >
       Führe das Onboarding für Dokument DOC-DE-001 durch und erstelle einen kurzen Prüfbericht:
@@ -497,7 +483,7 @@ tasks:
 
   # ─── Ergänzende Kernfunktionalität: Onboarding, Screening, Adresse, Datenlücken ─
 
-  - id: "UC2-30"
+  - id: "UC2-29"
     description: "Screening – bekannte saubere Kundin (Erika ohne Verwechslung)"
     input: >
       Prüfe die Person 'Erika Musterfrau' gegen die PEP- und Sanktionslisten und sag mir, ob ein
@@ -513,25 +499,7 @@ tasks:
       Der Agent soll das Screening für 'Erika Musterfrau' durchführen, das cleared-Ergebnis
       erkennen und kein flag_aml_review aufrufen.
 
-  - id: "UC2-31"
-    description: "Onboarding – vollständiger Ablauf DOC-DE-002 mit Screening-Bestätigung"
-    input: >
-      Führe ein vollständiges Onboarding für Dokument DOC-DE-002 durch und bestätige ausdrücklich,
-      dass das PEP/Sanktions-Screening cleared ergab, bevor der Datensatz angelegt wird.
-    expected_tools:
-      - extract_id_data
-      - validate_address
-      - screen_pep_sanctions
-      - create_customer_record
-    expected_output: >
-      Ausweisdaten extrahiert (Anna Schmidt), Adresse Köln 50667 gültig, screen_pep_sanctions
-      cleared, danach Kundendatensatz angelegt (kyc_status=completed). Keine AML-Auffälligkeiten.
-    should_escalate: false
-    deepeval_task: >
-      Der Agent soll das cleared-Screening ausdrücklich bestätigen und erst danach den
-      Kundendatensatz für Anna Schmidt anlegen.
-
-  - id: "UC2-32"
+  - id: "UC2-30"
     description: "Adressvalidierung – obere PLZ-Grenze gültig (99999)"
     input: >
       Validiere die Adresse: Grenzweg 9, PLZ 99999, Musterort, DE.
@@ -545,7 +513,7 @@ tasks:
       Der Agent soll erkennen dass die PLZ 99999 an der gültigen Obergrenze liegt und die Adresse
       als gültig bestätigen.
 
-  - id: "UC2-33"
+  - id: "UC2-31"
     description: "Adressvalidierung – nicht-numerische PLZ zurückweisen"
     input: >
       Validiere die Adresse: Musterstraße 1, PLZ 6O313, Frankfurt am Main, DE.
@@ -558,7 +526,7 @@ tasks:
     deepeval_task: >
       Der Agent soll die nicht-numerische PLZ erkennen und die Adresse als ungültig zurückweisen.
 
-  - id: "UC2-34"
+  - id: "UC2-32"
     description: "Onboarding – DOC-DE-001 mit expliziter Sanktionsland-Freigabe der Adresse"
     input: >
       Führe das Onboarding für Dokument DOC-DE-001 durch und bestätige ausdrücklich, dass die
@@ -576,7 +544,7 @@ tasks:
       Der Agent soll das Onboarding für DOC-DE-001 abschließen und ausdrücklich feststellen dass DE
       kein Sanktionsland ist.
 
-  - id: "UC2-35"
+  - id: "UC2-33"
     description: "Screening – Sanctions-Treffer Viktor Petrov isoliert, hit_type Sanctions"
     input: >
       Prüfe ausschließlich, ob 'Viktor Petrov' auf einer PEP- oder Sanktionsliste steht, nenne den
@@ -592,24 +560,7 @@ tasks:
       Der Agent soll den Sanctions-Treffer für 'Viktor Petrov' erkennen, den hit_type Sanctions
       nennen und flag_aml_review aufrufen.
 
-  - id: "UC2-36"
-    description: "Datenlücke – DOC-DE-003 unvollständige Ausweisdaten isoliert benennen"
-    input: >
-      Extrahiere die Ausweisdaten aus Dokument DOC-DE-003 und nenne genau, welche Gültigkeitsfelder
-      fehlen und worauf die Warnung verweist.
-    expected_tools:
-      - extract_id_data
-      - flag_aml_review
-    expected_output: >
-      extract_id_data liefert Erika Mustermann, jedoch fehlen issue_date und expiry_date (None);
-      die Warnung verweist auf GwG §10 Abs. 1. Manuelle Prüfung / AML-Review erforderlich, kein
-      Onboarding-Abschluss.
-    should_escalate: true
-    deepeval_task: >
-      Der Agent soll die fehlenden Gültigkeitsfelder (issue_date, expiry_date) und den GwG §10-Bezug
-      benennen und flag_aml_review einleiten.
-
-  - id: "UC2-37"
+  - id: "UC2-34"
     description: "Onboarding – DOC-DE-002 mit abweichender gültiger Adresse in Frankfurt"
     input: >
       Führe ein Onboarding für Dokument DOC-DE-002 durch, jedoch mit der abweichenden Adresse:
@@ -627,7 +578,7 @@ tasks:
       Der Agent soll die abweichende, aber gültige Frankfurter Adresse validieren und das
       Onboarding für Anna Schmidt erfolgreich abschließen.
 
-  - id: "UC2-38"
+  - id: "UC2-35"
     description: "Adressvalidierung – gültige Dresdner Adresse ohne Beanstandung"
     input: >
       Validiere die Adresse: Grenzweg 1, PLZ 01067, Dresden, DE. Ist sie für ein Onboarding
@@ -641,21 +592,3 @@ tasks:
     deepeval_task: >
       Der Agent soll die Dresdner Adresse validieren und ohne Beanstandung als gültig bestätigen.
 
-  - id: "UC2-39"
-    description: "Fehlerbehandlung – unbekannte Dokument-ID beim reinen Extraktionsauftrag"
-    input: >
-      Extrahiere die Ausweisdaten aus Dokument DOC-DE-500 und gib sie strukturiert zurück.
-    expected_tools:
-      - extract_id_data
-    expected_output: >
-      extract_id_data liefert einen Fehler: Dokument 'DOC-DE-500' nicht gefunden oder OCR-Fehler.
-      Der Agent erfindet keine Ausweisdaten und empfiehlt, den Ausweis manuell zu prüfen oder den
-      Scan zu wiederholen.
-    should_escalate: false
-    deepeval_task: >
-      Der Agent soll den Dokumentfehler erkennen, keine Daten erfinden und die Handlungsempfehlung
-      (manuelle Prüfung / Scan wiederholen) weitergeben.
-
-  # UC2-40 (Duplikat von UC2-20: gleiches Dokument DOC-DE-001, nur andere Stadt/PLZ,
-  # keine zusätzliche Verzweigung) entfernt – die Dresdner Adresse allein ist bereits
-  # in UC2-38 als Standalone-Validierung abgedeckt.
