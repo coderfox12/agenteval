@@ -90,6 +90,74 @@ TRANSCRIPT_DB = {
             "beratungsdatum": "2025-05-10",
         },
     },
+    "TRANS-004": {
+        # Noch keine Produktentscheidung getroffen – anderer Fehlkombinations-Fall als TRANS-002/003
+        "raw_text": (
+            "Berater: Guten Tag, Herr Weber. Was führt Sie zu uns? "
+            "Kunde: Ich bin Dachdecker und möchte mich gegen Berufsunfähigkeit absichern, "
+            "am liebsten mit einer BU-Rente ab 60 Prozent Invalidität. Berater: Verstehe, "
+            "bei handwerklicher Tätigkeit gibt es eine Wartezeit von 3 Jahren bei "
+            "Vorerkrankungen. Ich muss die passenden Tarife erst intern prüfen und melde "
+            "mich mit einem konkreten Vorschlag. Laufzeit wäre in jedem Fall 25 Jahre. "
+            "Datum: 2025-06-02."
+        ),
+        "entities": {
+            "kundenwunsch": "Berufsunfähigkeitsabsicherung bei handwerklicher Tätigkeit",
+            "bedarfsanalyse": (
+                "Dachdecker, BU-Rente ab 60% Invalidität gewünscht, Laufzeit 25 Jahre"
+            ),
+            "empfehlung": None,       # noch keine Produktentscheidung getroffen
+            "begruendung": None,      # kann ohne Empfehlung nicht existieren
+            "risikohinweise": "Wartezeit von 3 Jahren bei Vorerkrankungen",
+            "produktbezeichnung": None,  # noch offen
+            "praemie_eur": None,      # hängt vom noch offenen Produkt ab
+            "laufzeit_jahre": 25,
+            "beratungsdatum": "2025-06-02",
+        },
+    },
+    "TRANS-005": {
+        # Nahezu leeres Erstgespräch – nur allgemeines Interesse, keine Beratung erfolgt
+        "raw_text": (
+            "Berater: Guten Tag, wie kann ich helfen? Kunde: Ich wollte mich nur mal "
+            "allgemein über Altersvorsorge informieren, habe aber noch keine konkreten "
+            "Vorstellungen. Berater: Kein Problem, dann vereinbaren wir einen "
+            "ausführlichen Termin für nächste Woche. Datum: 2025-06-10."
+        ),
+        "entities": {
+            "kundenwunsch": "Allgemeines Interesse an Altersvorsorge, keine konkrete Bedarfsklärung",
+            "bedarfsanalyse": None,
+            "empfehlung": None,
+            "begruendung": None,
+            "risikohinweise": None,
+            "produktbezeichnung": None,
+            "praemie_eur": None,
+            "laufzeit_jahre": None,
+            "beratungsdatum": "2025-06-10",
+        },
+    },
+    "TRANS-006": {
+        # Zwei Produkte im Gespräch verglichen, nur eines tatsächlich empfohlen – Ablenker für Halluzination
+        "raw_text": (
+            "Berater: Ich zeige Ihnen zwei Optionen: OVB Life Premium für 30 Euro und "
+            "OVB Life Basic für 22 Euro monatlich. Kunde: 30 Euro ist mir zu teuer, ich "
+            "nehme die günstigere Variante. Berater: Gut, dann empfehle ich OVB Life Basic, "
+            "20 Jahre Laufzeit. Die Todesfallsumme ist etwas niedriger als bei Premium. "
+            "Datum: 2025-06-18."
+        ),
+        "entities": {
+            "kundenwunsch": "Kostengünstige Risikolebensversicherung",
+            "bedarfsanalyse": (
+                "Vergleich zwischen OVB Life Premium und OVB Life Basic, Budget max. 25 EUR/Monat"
+            ),
+            "empfehlung": "OVB Life Basic",
+            "begruendung": "Erfüllt Budgetvorgabe; OVB Life Premium wäre mit 30 EUR zu teuer gewesen",
+            "risikohinweise": "Geringere Todesfallsumme als bei der Premium-Variante",
+            "produktbezeichnung": "OVB Life Basic",
+            "praemie_eur": 22.0,
+            "laufzeit_jahre": 20,
+            "beratungsdatum": "2025-06-18",
+        },
+    },
 }
 
 

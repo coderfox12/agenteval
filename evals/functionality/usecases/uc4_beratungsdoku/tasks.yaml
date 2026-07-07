@@ -7,7 +7,6 @@ tasks:
 
   - id: "UC4-01"
     description: "Vollständiges Protokoll – alle Pflichtfelder vorhanden"
-    category: "protocol_generation"
     input: >
       Erstelle aus Transkript TRANS-001 ein vollständiges Beratungsprotokoll
       nach §61 VVG mit allen Pflichtfeldern.
@@ -28,7 +27,6 @@ tasks:
 
   - id: "UC4-02"
     description: "Unvollständiges Transkript – fehlende Pflichtfelder melden"
-    category: "missing_fields"
     input: >
       Erstelle aus Transkript TRANS-002 ein Beratungsprotokoll nach §61 VVG.
     expected_tools:
@@ -49,7 +47,6 @@ tasks:
 
   - id: "UC4-03"
     description: "Halluzinations-Test: Nicht genannte Felder dürfen nicht erfunden werden"
-    category: "hallucination"
     input: >
       Erstelle aus Transkript TRANS-003 ein vollständiges Beratungsprotokoll.
     expected_tools:
@@ -69,7 +66,6 @@ tasks:
 
   - id: "UC4-04"
     description: "Pflichtfeld-Vollständigkeits-Check ohne Protokoll-Generierung"
-    category: "field_check"
     input: >
       Prüfe ob Transkript TRANS-001 alle §61-VVG-Pflichtfelder enthält.
       Erstelle noch kein vollständiges Protokoll.
@@ -88,7 +84,6 @@ tasks:
 
   - id: "UC4-05"
     description: "Vollständiges Protokoll – strukturierte Ausgabe mit allen vier Abschnitten"
-    category: "protocol_generation"
     input: >
       Erstelle aus Transkript TRANS-001 ein §61-VVG-Beratungsprotokoll und gib die vier
       Abschnitte (Kundenwunsch, Empfehlung, Konditionen, Risikohinweise) strukturiert aus.
@@ -107,7 +102,6 @@ tasks:
 
   - id: "UC4-06"
     description: "Extraktion – nur Entitäten aus TRANS-001 auslesen"
-    category: "extraction"
     input: >
       Extrahiere ausschließlich die §61-VVG-relevanten Entitäten aus Transkript TRANS-001
       und gib sie strukturiert zurück. Erstelle noch kein Protokoll.
@@ -124,7 +118,6 @@ tasks:
 
   - id: "UC4-07"
     description: "Pflichtfeld-Check – Vollständigkeit von TRANS-001 bestätigen"
-    category: "field_check"
     input: >
       Prüfe mit dem Pflichtfeld-Check, ob Transkript TRANS-001 alle §61-VVG-Pflichtfelder enthält,
       und nenne die Vollständigkeitsquote.
@@ -142,7 +135,6 @@ tasks:
 
   - id: "UC4-08"
     description: "Vollständiges Protokoll – expliziter Konformitätsnachweis"
-    category: "protocol_generation"
     input: >
       Erstelle aus TRANS-001 ein Beratungsprotokoll und bestätige ausdrücklich die
       §61-VVG-Konformität mit Verweis auf die enthaltenen Pflichtfelder.
@@ -163,7 +155,6 @@ tasks:
 
   - id: "UC4-09"
     description: "Fehlende Felder – TRANS-002 mit Nachpflege-Anforderung"
-    category: "missing_fields"
     input: >
       Erstelle aus Transkript TRANS-002 ein Beratungsprotokoll nach §61 VVG und melde alle
       fehlenden Pflichtfelder zur Nachpflege.
@@ -183,7 +174,6 @@ tasks:
 
   - id: "UC4-10"
     description: "Pflichtfeld-Check – TRANS-002, Unvollständigkeit ohne Protokoll"
-    category: "field_check"
     input: >
       Prüfe mit dem Pflichtfeld-Check, welche §61-VVG-Pflichtfelder in Transkript TRANS-002 fehlen.
       Erstelle noch kein Protokoll.
@@ -201,7 +191,6 @@ tasks:
 
   - id: "UC4-11"
     description: "Fehlende Felder – TRANS-002, Fokus auf Risikohinweise"
-    category: "missing_fields"
     input: >
       Erstelle aus TRANS-002 ein Protokoll und prüfe insbesondere, ob die Risikohinweise
       dokumentiert sind. Leite bei Lücken die Nachpflege ein.
@@ -221,7 +210,6 @@ tasks:
 
   - id: "UC4-12"
     description: "Halluzinations-Abwehr – TRANS-002, fehlende Begründung nicht erfinden"
-    category: "hallucination"
     input: >
       Erstelle aus Transkript TRANS-002 ein vollständiges Beratungsprotokoll mit Begründung der
       Empfehlung.
@@ -243,7 +231,6 @@ tasks:
 
   - id: "UC4-13"
     description: "Halluzinations-Abwehr – TRANS-003, Prämie nicht erfinden"
-    category: "hallucination"
     input: >
       Erstelle aus Transkript TRANS-003 ein Beratungsprotokoll inklusive der monatlichen Prämie.
     expected_tools:
@@ -262,7 +249,6 @@ tasks:
 
   - id: "UC4-14"
     description: "Halluzinations-Abwehr – TRANS-003, Laufzeit nicht erfinden"
-    category: "hallucination"
     input: >
       Erstelle aus Transkript TRANS-003 ein vollständiges Protokoll und trage die Vertragslaufzeit ein.
     expected_tools:
@@ -281,7 +267,6 @@ tasks:
 
   - id: "UC4-15"
     description: "Pflichtfeld-Check – TRANS-003, fehlende Konditionen benennen"
-    category: "field_check"
     input: >
       Prüfe mit dem Pflichtfeld-Check, welche Felder in Transkript TRANS-003 fehlen.
       Noch kein Protokoll erstellen.
@@ -299,7 +284,6 @@ tasks:
 
   - id: "UC4-16"
     description: "Halluzinations-Abwehr – TRANS-003, beide Konditionen fehlen"
-    category: "hallucination"
     input: >
       Erstelle aus TRANS-003 ein Protokoll mit Prämie und Laufzeit und melde fehlende Angaben.
     expected_tools:
@@ -319,7 +303,6 @@ tasks:
 
   - id: "UC4-17"
     description: "Fehlerbehandlung – unbekannte Transkript-ID"
-    category: "error_handling"
     input: >
       Erstelle aus Transkript TRANS-999 ein Beratungsprotokoll nach §61 VVG.
     expected_tools:
@@ -335,7 +318,6 @@ tasks:
 
   - id: "UC4-18"
     description: "Halluzinations-Abwehr – TRANS-003, Fokus nur auf tatsächlich Genanntes"
-    category: "hallucination"
     input: >
       Fasse für TRANS-003 zusammen, welche Angaben der Kunde tatsächlich gemacht hat, und erstelle
       dann ein Protokoll.
@@ -355,7 +337,6 @@ tasks:
 
   - id: "UC4-19"
     description: "Vollständiges Protokoll – TRANS-001 mit Prämien- und Laufzeitangabe"
-    category: "protocol_generation"
     input: >
       Erstelle aus TRANS-001 ein Protokoll und weise Prämie und Laufzeit explizit aus.
     expected_tools:
@@ -373,7 +354,6 @@ tasks:
 
   - id: "UC4-20"
     description: "Fehlende Felder – TRANS-002, Nachpflege-Frist kommunizieren"
-    category: "missing_fields"
     input: >
       Erstelle aus TRANS-002 ein Protokoll, melde die fehlenden Felder und nenne dem Berater die
       Nachpflege-Frist.
@@ -392,7 +372,6 @@ tasks:
 
   - id: "UC4-21"
     description: "Vollständiges Protokoll – TRANS-001, Kundenwunsch und Bedarfsanalyse betonen"
-    category: "protocol_generation"
     input: >
       Erstelle aus TRANS-001 ein Protokoll und stelle Kundenwunsch und Bedarfsanalyse besonders
       heraus.
@@ -411,7 +390,6 @@ tasks:
 
   - id: "UC4-22"
     description: "Pflichtfeld-Check – TRANS-002, exakte Nennung fehlender Felder"
-    category: "field_check"
     input: >
       Welche §61-VVG-Pflichtfelder fehlen in TRANS-002? Gib nur die Liste der fehlenden Felder aus.
     expected_tools:
@@ -428,7 +406,6 @@ tasks:
 
   - id: "UC4-23"
     description: "Halluzinations-Abwehr – TRANS-003, keine Renditeversprechen erfinden"
-    category: "hallucination"
     input: >
       Erstelle aus TRANS-003 ein Protokoll und nenne die im Gespräch zugesagte erwartete Rendite.
     expected_tools:
@@ -447,7 +424,6 @@ tasks:
 
   - id: "UC4-24"
     description: "Robustheit – Paraphrasierter Auftrag für TRANS-001"
-    category: "robustness"
     input: >
       Bring das Beratungsgespräch mit der ID TRANS-001 in die vorgeschriebene Protokollform
       nach §61 VVG.
@@ -466,7 +442,6 @@ tasks:
 
   - id: "UC4-25"
     description: "Fehlende Felder – TRANS-002, Protokoll mit Platzhaltern betonen"
-    category: "missing_fields"
     input: >
       Erstelle aus TRANS-002 ein Protokoll, in dem fehlende Angaben deutlich als nachzupflegen
       gekennzeichnet sind, und melde sie.
@@ -486,7 +461,6 @@ tasks:
 
   - id: "UC4-26"
     description: "Extraktion – TRANS-002, fehlende Felder bereits bei Extraktion sichtbar"
-    category: "extraction"
     input: >
       Extrahiere die Entitäten aus TRANS-002 und zeige, welche Felder als nicht besprochen (None)
       markiert sind.
@@ -503,7 +477,6 @@ tasks:
 
   - id: "UC4-27"
     description: "Vollständiges Protokoll – TRANS-001, Beratungsdatum ausweisen"
-    category: "protocol_generation"
     input: >
       Erstelle aus TRANS-001 ein Protokoll und weise das Beratungsdatum aus.
     expected_tools:
@@ -521,7 +494,6 @@ tasks:
 
   - id: "UC4-28"
     description: "Pflichtfeld-Check – TRANS-001 vs. Anforderung, Vollständigkeitsquote"
-    category: "field_check"
     input: >
       Wie hoch ist die Pflichtfeld-Vollständigkeit von TRANS-001 nach §61 VVG?
     expected_tools:
@@ -540,7 +512,6 @@ tasks:
 
   - id: "UC4-29"
     description: "Vollständiges Protokoll – TRANS-001, Empfehlung und Begründung ausweisen"
-    category: "protocol_generation"
     input: >
       Erstelle aus TRANS-001 ein Protokoll und weise Empfehlung und Begründung explizit aus.
     expected_tools:
@@ -558,7 +529,6 @@ tasks:
 
   - id: "UC4-30"
     description: "Pflichtfeld-Check – TRANS-003, exakte Nennung fehlender Konditionen"
-    category: "field_check"
     input: >
       Welche §61-VVG-Pflichtfelder fehlen in TRANS-003? Gib nur die Liste der fehlenden Felder aus.
     expected_tools:
@@ -575,7 +545,6 @@ tasks:
 
   - id: "UC4-31"
     description: "Extraktion – TRANS-003, nicht besprochene Konditionsfelder benennen"
-    category: "extraction"
     input: >
       Extrahiere die Entitäten aus TRANS-003 und zeige, welche Felder als nicht besprochen (None)
       markiert sind.
@@ -592,7 +561,6 @@ tasks:
 
   - id: "UC4-32"
     description: "Fehlende Felder – TRANS-002, Vollständigkeitsquote im Protokoll ausweisen"
-    category: "missing_fields"
     input: >
       Erstelle aus TRANS-002 ein Protokoll, nenne die Vollständigkeitsquote nach §61 VVG und melde
       die fehlenden Felder.
@@ -612,7 +580,6 @@ tasks:
 
   - id: "UC4-33"
     description: "Vollständiges Protokoll – TRANS-001, Produktbezeichnung explizit ausweisen"
-    category: "protocol_generation"
     input: >
       Erstelle aus TRANS-001 ein Protokoll und weise die exakte Produktbezeichnung aus.
     expected_tools:
@@ -630,7 +597,6 @@ tasks:
 
   - id: "UC4-34"
     description: "Halluzinations-Abwehr – TRANS-002, fehlende Bedarfsanalyse nicht erfinden"
-    category: "hallucination"
     input: >
       Erstelle aus TRANS-002 ein vollständiges Protokoll und dokumentiere die Bedarfsanalyse.
     expected_tools:
@@ -649,7 +615,6 @@ tasks:
 
   - id: "UC4-35"
     description: "Fehlende Felder – TRANS-003, Nachpflege der Konditionen einleiten"
-    category: "missing_fields"
     input: >
       Erstelle aus TRANS-003 ein Protokoll und melde die fehlenden Konditionsfelder zur Nachpflege.
     expected_tools:
@@ -668,7 +633,6 @@ tasks:
 
   - id: "UC4-36"
     description: "Robustheit – paraphrasierter Auftrag für TRANS-002 mit Nachpflege"
-    category: "robustness"
     input: >
       Bring das Beratungsgespräch mit der ID TRANS-002 in die vorgeschriebene Protokollform nach
       §61 VVG und melde, was noch fehlt.
@@ -687,7 +651,6 @@ tasks:
 
   - id: "UC4-37"
     description: "Pflichtfeld-Check – TRANS-003, Vollständigkeitsquote nennen"
-    category: "field_check"
     input: >
       Wie hoch ist die Pflichtfeld-Vollständigkeit von TRANS-003 nach §61 VVG?
     expected_tools:
@@ -704,7 +667,6 @@ tasks:
 
   - id: "UC4-38"
     description: "Halluzinations-Abwehr – TRANS-003, kein Rückkaufswert-Hinweis erfinden"
-    category: "hallucination"
     input: >
       Erstelle aus TRANS-003 ein Protokoll und nenne den im Gespräch dokumentierten Risikohinweis.
     expected_tools:
@@ -723,7 +685,6 @@ tasks:
 
   - id: "UC4-39"
     description: "Vollständiges Protokoll – TRANS-001, Konformität und alle vier Abschnitte"
-    category: "protocol_generation"
     input: >
       Erstelle aus TRANS-001 ein vollständiges §61-VVG-Protokoll mit allen vier Abschnitten und
       bestätige die Konformität.
@@ -739,3 +700,112 @@ tasks:
     deepeval_task: >
       Der Agent soll ein vollständiges, §61-VVG-konformes Protokoll mit allen vier Abschnitten aus
       TRANS-001 erstellen und die Konformität bestätigen.
+
+  # ─── Neue Fälle: noch keine Produktentscheidung (TRANS-004) ─────────────────
+
+  - id: "UC4-40"
+    description: "Noch keine Produktentscheidung – Empfehlung darf nicht erfunden werden"
+    input: >
+      Erstelle aus Transkript TRANS-004 ein Beratungsprotokoll nach §61 VVG.
+    expected_tools:
+      - extract_dialogue_entities
+      - check_required_fields
+      - generate_protocol
+      - flag_missing_information
+    expected_output: >
+      Protokoll mit empfehlung, begruendung und produktbezeichnung als [FEHLT], da im Gespräch noch
+      keine Produktentscheidung getroffen wurde. Der Agent erfindet kein Produkt und keine Prämie.
+      flag_missing_information mit 4 fehlenden Feldern aufgerufen. vvg_compliant=False.
+    should_escalate: true
+    deepeval_task: >
+      Der Agent darf keine Produktempfehlung, Begründung oder Prämie erfinden, wenn der Berater
+      im Transkript noch keine Entscheidung getroffen hat. Diese Felder müssen als fehlend markiert
+      und über flag_missing_information gemeldet werden.
+
+  - id: "UC4-41"
+    description: "Pflichtfeld-Check TRANS-004 – andere Fehlkombination als TRANS-002/003"
+    input: >
+      Prüfe die Pflichtfeld-Vollständigkeit von TRANS-004 nach §61 VVG.
+    expected_tools:
+      - extract_dialogue_entities
+      - check_required_fields
+    expected_output: >
+      check_required_fields ergibt rund 56 % Vollständigkeit (5 von 9 Feldern) und compliant=False.
+      Es fehlen empfehlung, begruendung, produktbezeichnung und praemie_eur – eine andere Kombination
+      als bei TRANS-002 (fehlende Begründung/Risikohinweise) oder TRANS-003 (fehlende Konditionen).
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll die vier fehlenden Felder von TRANS-004 korrekt benennen und darf sie nicht mit
+      der Fehlkombination von TRANS-002 oder TRANS-003 verwechseln.
+
+  # ─── Neue Fälle: nahezu leeres Erstgespräch (TRANS-005) ─────────────────────
+
+  - id: "UC4-42"
+    description: "Nahezu leeres Erstgespräch – sofortige Eskalation statt Platzhalter-Protokoll"
+    input: >
+      Erstelle aus Transkript TRANS-005 ein Beratungsprotokoll nach §61 VVG.
+    expected_tools:
+      - extract_dialogue_entities
+      - check_required_fields
+      - generate_protocol
+      - flag_missing_information
+    expected_output: >
+      Nur kundenwunsch und beratungsdatum sind vorhanden (rund 22 % Vollständigkeit), die übrigen
+      7 Pflichtfelder fehlen. Der Agent erstellt kein Protokoll mit erfundenen Inhalten, markiert
+      alle 7 fehlenden Felder als [FEHLT] und ruft flag_missing_information auf. vvg_compliant=False.
+    should_escalate: true
+    deepeval_task: >
+      Bei einem nahezu leeren Erstgespräch ohne konkrete Beratung soll der Agent keine Bedarfsanalyse,
+      Empfehlung oder Konditionen erfinden, sondern alle 7 fehlenden Pflichtfelder korrekt melden.
+
+  - id: "UC4-43"
+    description: "Pflichtfeld-Check TRANS-005 – niedrigste Vollständigkeitsquote im Datensatz"
+    input: >
+      Wie hoch ist die Pflichtfeld-Vollständigkeit von TRANS-005 nach §61 VVG?
+    expected_tools:
+      - extract_dialogue_entities
+      - check_required_fields
+    expected_output: >
+      check_required_fields ergibt rund 22 % Vollständigkeit (2 von 9 Feldern: kundenwunsch,
+      beratungsdatum) und compliant=False für TRANS-005.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll die niedrige Vollständigkeitsquote (rund 22 %) korrekt ermitteln, ohne die
+      fehlenden Felder mit Inhalten aus anderen Transkripten zu verwechseln.
+
+  # ─── Neuer Fall: zwei verglichene Produkte, nur eines empfohlen (TRANS-006) ─
+
+  - id: "UC4-44"
+    description: "Halluzinations-Abwehr – nur das tatsächlich empfohlene Produkt nennen"
+    input: >
+      Erstelle aus Transkript TRANS-006 ein Beratungsprotokoll nach §61 VVG. Im Gespräch wurden
+      zwei Produkte verglichen.
+    expected_tools:
+      - extract_dialogue_entities
+      - check_required_fields
+      - generate_protocol
+    expected_output: >
+      Als empfehlung und produktbezeichnung erscheint ausschließlich "OVB Life Basic" (22 EUR,
+      20 Jahre) – das im Gespräch tatsächlich gewählte Produkt. "OVB Life Premium" wird höchstens
+      in der Begründung als verworfene Alternative erwähnt, nicht als Empfehlung. Alle 9 Pflichtfelder
+      vorhanden, vvg_compliant=True.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent muss zwischen dem verglichenen, aber abgelehnten Produkt (OVB Life Premium) und dem
+      tatsächlich empfohlenen Produkt (OVB Life Basic) unterscheiden und darf sie im Protokoll nicht
+      verwechseln oder vermischen.
+
+  - id: "UC4-45"
+    description: "Extraktion TRANS-006 – Konditionen des empfohlenen, nicht des verglichenen Produkts"
+    input: >
+      Extrahiere die §61-VVG-relevanten Entitäten aus TRANS-006. Erstelle noch kein Protokoll.
+    expected_tools:
+      - extract_dialogue_entities
+    expected_output: >
+      Extrahierte Konditionen gehören zum empfohlenen Produkt OVB Life Basic: praemie_eur=22,
+      laufzeit_jahre=20. Die 30-EUR-Prämie von OVB Life Premium (der verworfenen Alternative) wird
+      nicht als praemie_eur übernommen.
+    should_escalate: false
+    deepeval_task: >
+      Der Agent soll ausschließlich die Konditionen des empfohlenen Produkts (OVB Life Basic)
+      extrahieren und nicht mit denen der verglichenen, aber abgelehnten Alternative verwechseln.
