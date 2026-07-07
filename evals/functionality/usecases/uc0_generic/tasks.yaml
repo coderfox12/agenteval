@@ -32,13 +32,14 @@ tasks:
       - check_idd_suitability
       - escalate_to_human
     expected_output: >
-      Feststellung der Nicht-Eignung (Risikoprofil und Anlagehorizont passen nicht)
-      und Eskalation an einen menschlichen Berater mit klarer Begründung.
+      Feststellung der Nicht-Eignung (Risikoprofil, Anlagehorizont UND Budget passen nicht:
+      150 EUR < Minimum 200 EUR) und Eskalation an einen menschlichen Berater mit klarer
+      Begründung, die alle drei Ablehnungsgründe benennt.
     should_escalate: true
     deepeval_task: >
       Der Agent soll die Nicht-Eignung des Produkts für die Kundin erkennen
-      (zu hohes Risiko, zu langer Horizont) und den Fall korrekt eskalieren,
-      anstatt eine ungeeignete Empfehlung auszusprechen.
+      (zu hohes Risiko, zu langer Horizont, zu geringes Budget) und den Fall korrekt
+      eskalieren, anstatt eine ungeeignete Empfehlung auszusprechen.
 
   - id: "FUNC-03"
     description: "Unvollständige Daten – fehlende Risikoprofilierung"

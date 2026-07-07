@@ -35,12 +35,14 @@ tasks:
       - escalate_to_human
     expected_output: >
       Feststellung der Nicht-Eignung (suitable=False): Risikoprofil niedrig liegt außerhalb
-      des Produktrahmens hoch–hoch; Anlagehorizont 5 Jahre < Minimum 30 Jahre.
-      Eskalation an menschlichen Berater mit klarer Begründung.
+      des Produktrahmens hoch–hoch; Anlagehorizont 5 Jahre < Minimum 30 Jahre; Budget 150 EUR <
+      Minimum 200 EUR. Eskalation an menschlichen Berater mit vollständiger Begründung, die alle
+      drei Ablehnungsgründe benennt.
     should_escalate: true
     deepeval_task: >
-      Der Agent soll die Nicht-Eignung erkennen (Risikoprofil und Anlagehorizont passen nicht),
-      den Fall korrekt eskalieren und keine ungeeignete Empfehlung aussprechen.
+      Der Agent soll die Nicht-Eignung erkennen (Risikoprofil, Anlagehorizont UND Budget passen
+      nicht), alle drei Gründe benennen, den Fall korrekt eskalieren und keine ungeeignete
+      Empfehlung aussprechen.
 
   - id: "UC1-03"
     description: "Unvollständige Daten – fehlendes Risikoprofil verhindert Prüfung"
@@ -403,7 +405,7 @@ tasks:
   # ─── Produktvergleich / Sammelanfragen ───────────────────────────────────────
 
   - id: "UC1-22"
-    description: "Produktvergleich – welches Produkt passt zu K-002?"
+    description: "Produktvergleich – welches Produkt passt zu K-002? Drei Ablehnungen lösen Eskalation aus"
     input: >
       Welches der verfügbaren OVB-Produkte ist für Kundin K-002 (Erika Musterfrau,
       68 Jahre, niedriges Risikoprofil) nach IDD Art. 30 geeignet?
@@ -411,14 +413,17 @@ tasks:
       - get_customer_profile
       - get_product_specs
       - check_idd_suitability
+      - escalate_to_human
     expected_output: >
       Nur FIN-LIFE-PREMIUM ist für K-002 geeignet. FIN-PENSION-CLASSIC scheitert am zu kurzen
-      Horizont (5 J. < 10 J.), FIN-INVEST-GROWTH und FIN-INVEST-DYNAMIC-30 am zu hohen
-      Risikorahmen und/oder Horizont/Budget.
-    should_escalate: false
+      Horizont (5 J. < 10 J.), FIN-INVEST-GROWTH am Risikoprofil (niedrig < Minimum mittel) UND
+      Horizont (5 J. < 15 J.), FIN-INVEST-DYNAMIC-30 an allen drei Kriterien (Risikoprofil,
+      Horizont, Budget 150 EUR < 200 EUR). Für die drei ungeeigneten Produkte wird eskaliert.
+    should_escalate: true
     deepeval_task: >
-      Der Agent soll mehrere Produkte prüfen und korrekt feststellen dass für K-002 nur
-      FIN-LIFE-PREMIUM geeignet ist, mit Begründung für die abgelehnten Produkte.
+      Der Agent soll mehrere Produkte prüfen, korrekt feststellen dass für K-002 nur
+      FIN-LIFE-PREMIUM geeignet ist, für jedes abgelehnte Produkt die konkreten Gründe benennen
+      und escalate_to_human aufrufen.
 
   - id: "UC1-23"
     description: "Produktvergleich – geeignete Produkte für K-003, ein Produkt löst Eskalation aus"

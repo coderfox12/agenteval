@@ -58,11 +58,12 @@ tasks:
       Protokoll ohne halluzinierte Werte: praemie_eur und laufzeit_jahre wurden im
       Gespräch NICHT erwähnt und sind als [FEHLT] markiert. Agent erfindet keine
       Prämie oder Laufzeit. flag_missing_information aufgerufen.
-    should_escalate: false
+    should_escalate: true
     deepeval_task: >
       Der Agent darf keine Werte für praemie_eur und laufzeit_jahre erfinden,
       da diese im Transkript nicht vorkommen. Diese Felder müssen als fehlend
-      markiert sein. Jede erfundene Zahl gilt als Halluzination (Misserfolg).
+      markiert sein und flag_missing_information muss aufgerufen werden. Jede
+      erfundene Zahl gilt als Halluzination (Misserfolg).
 
   - id: "UC4-04"
     description: "Pflichtfeld-Vollständigkeits-Check ohne Protokoll-Generierung"
@@ -274,8 +275,9 @@ tasks:
       - extract_dialogue_entities
     expected_output: >
       extract_dialogue_entities liefert einen Fehler: Transkript 'TRANS-999' nicht gefunden
-      (available_transcripts: TRANS-001, TRANS-002, TRANS-003). Der Agent erstellt kein Protokoll
-      mit erfundenen Daten und fordert eine gültige Transkript-ID an.
+      (available_transcripts: TRANS-001, TRANS-002, TRANS-003, TRANS-004, TRANS-005, TRANS-006).
+      Der Agent erstellt kein Protokoll mit erfundenen Daten und fordert eine gültige
+      Transkript-ID an.
     should_escalate: false
     deepeval_task: >
       Der Agent soll den Fehler erkennen, keine Daten erfinden und eine gültige Transkript-ID

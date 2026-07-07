@@ -112,8 +112,9 @@ tasks:
   - id: "UC3-06"
     description: "Hochrisiko – Bonitätsbewertung (Annex III Nr. 5b)"
     input: >
-      Ich plane ein KI-System zur Bonitätsbewertung von Privatkunden vor Vertragsabschluss.
-      Ist es nach EU AI Act und OVB-Governance zulässig und welche Pflichten ergeben sich?
+      Ich plane ein KI-System zur Bonitätsbewertung und Kreditprüfung von Privatkunden vor
+      Vertragsabschluss. Ist es nach EU AI Act und OVB-Governance zulässig und welche Pflichten
+      ergeben sich?
     expected_tools:
       - retrieve_regulatory_corpus
       - classify_risk_level
@@ -323,8 +324,8 @@ tasks:
   - id: "UC3-17"
     description: "OVB-Governance – Folgenabschätzung und EU-Datenbank-Registrierung (§7)"
     input: >
-      Welche zusätzlichen OVB-internen Pflichten gelten für ein Hochrisiko-KI-System bei uns,
-      und mit welcher Policy sind sie belegt?
+      Wir planen ein System zur Kreditwürdigkeitsprüfung unserer Kunden. Welche zusätzlichen
+      OVB-internen Pflichten gelten dafür, und mit welcher Policy sind sie belegt?
     expected_tools:
       - retrieve_regulatory_corpus
       - classify_risk_level
@@ -563,8 +564,8 @@ tasks:
   - id: "UC3-30"
     description: "Zitationstreue – nur belegte Quellen bei mehrschichtiger Frage"
     input: >
-      Für unsere Bonitätsbewertungs-KI: fasse alle relevanten regulatorischen Grundlagen zusammen
-      und nenne zu jeder die Quelle.
+      Für unsere Bonitätsbewertungs- und Kreditprüfungs-KI: fasse alle relevanten regulatorischen
+      Grundlagen zusammen und nenne zu jeder die Quelle.
     expected_tools:
       - retrieve_regulatory_corpus
       - classify_risk_level
