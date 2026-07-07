@@ -421,7 +421,7 @@ tasks:
       FIN-LIFE-PREMIUM geeignet ist, mit Begründung für die abgelehnten Produkte.
 
   - id: "UC1-23"
-    description: "Produktvergleich – geeignete Produkte für K-003"
+    description: "Produktvergleich – geeignete Produkte für K-003, ein Produkt löst Eskalation aus"
     input: >
       Welche der verfügbaren OVB-Produkte sind für Neukunde K-003 (Max Neukunde,
       hohes Risikoprofil, 30 Jahre Horizont) nach IDD Art. 30 geeignet?
@@ -429,17 +429,20 @@ tasks:
       - get_customer_profile
       - get_product_specs
       - check_idd_suitability
+      - escalate_to_human
     expected_output: >
       Geeignet für K-003 sind FIN-INVEST-GROWTH, FIN-LIFE-PREMIUM und FIN-INVEST-DYNAMIC-30.
       FIN-PENSION-CLASSIC ist nicht geeignet, da das hohe Risikoprofil außerhalb des Rahmens
-      niedrig–mittel liegt.
-    should_escalate: false
+      niedrig–mittel liegt; für dieses ungeeignete Produkt wird eskaliert (Pflichtschritt bei
+      ungeeignetem Produkt), obwohl die anderen drei Produkte ohne Weiteres geeignet sind.
+    should_escalate: true
     deepeval_task: >
-      Der Agent soll die drei geeigneten Produkte für K-003 identifizieren und
-      FIN-PENSION-CLASSIC korrekt als nicht geeignet ausschließen.
+      Der Agent soll die drei geeigneten Produkte für K-003 identifizieren, FIN-PENSION-CLASSIC
+      korrekt als nicht geeignet ausschließen und für dieses eine Produkt escalate_to_human
+      aufrufen.
 
   - id: "UC1-24"
-    description: "Produktvergleich – geeignete Produkte für K-001"
+    description: "Produktvergleich – geeignete Produkte für K-001, ein Produkt löst Eskalation aus"
     input: >
       Welche der verfügbaren OVB-Produkte sind für Kunde K-001 (Hans Mustermann,
       mittleres Risikoprofil, 20 Jahre Horizont) nach IDD Art. 30 geeignet?
@@ -447,14 +450,16 @@ tasks:
       - get_customer_profile
       - get_product_specs
       - check_idd_suitability
+      - escalate_to_human
     expected_output: >
       Geeignet für K-001 sind FIN-PENSION-CLASSIC, FIN-INVEST-GROWTH und FIN-LIFE-PREMIUM.
       FIN-INVEST-DYNAMIC-30 ist nicht geeignet (Risikoprofil mittel außerhalb hoch–hoch,
-      Horizont 20 J. < 30 J.).
-    should_escalate: false
+      Horizont 20 J. < 30 J.); für dieses ungeeignete Produkt wird eskaliert (Pflichtschritt bei
+      ungeeignetem Produkt), obwohl die anderen drei Produkte ohne Weiteres geeignet sind.
+    should_escalate: true
     deepeval_task: >
-      Der Agent soll die drei geeigneten Produkte für K-001 identifizieren und
-      FIN-INVEST-DYNAMIC-30 korrekt ausschließen.
+      Der Agent soll die drei geeigneten Produkte für K-001 identifizieren, FIN-INVEST-DYNAMIC-30
+      korrekt ausschließen und für dieses eine Produkt escalate_to_human aufrufen.
 
   # ─── Robustheit / Eskalationslogik ───────────────────────────────────────────
 
