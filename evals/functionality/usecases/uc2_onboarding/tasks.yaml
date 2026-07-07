@@ -656,20 +656,6 @@ tasks:
       Der Agent soll den Dokumentfehler erkennen, keine Daten erfinden und die Handlungsempfehlung
       (manuelle Prüfung / Scan wiederholen) weitergeben.
 
-  - id: "UC2-40"
-    description: "Onboarding – DOC-DE-001 mit gültiger abweichender Adresse in Dresden"
-    input: >
-      Führe ein Onboarding für Dokument DOC-DE-001 durch, jedoch mit der neuen, aktuellen Adresse:
-      Grenzweg 1, PLZ 01067, Dresden, DE.
-    expected_tools:
-      - extract_id_data
-      - validate_address
-      - screen_pep_sanctions
-      - create_customer_record
-    expected_output: >
-      Ausweisdaten extrahiert (Max Neukunde), neue Adresse Dresden 01067 mit validate_address als
-      gültig bestätigt, Screening cleared, Kundendatensatz angelegt.
-    should_escalate: false
-    deepeval_task: >
-      Der Agent soll die abweichende, aber gültige Dresdner Adresse validieren und das Onboarding
-      für Max Neukunde erfolgreich abschließen.
+  # UC2-40 (Duplikat von UC2-20: gleiches Dokument DOC-DE-001, nur andere Stadt/PLZ,
+  # keine zusätzliche Verzweigung) entfernt – die Dresdner Adresse allein ist bereits
+  # in UC2-38 als Standalone-Validierung abgedeckt.
