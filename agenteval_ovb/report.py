@@ -105,17 +105,33 @@ def _load_task_texts(use_case: str | None) -> dict[str, str]:
     return texts
 
 
-def _task_id_cell(task_id: str, task_texts: dict[str, str]) -> str:
-    """Task-ID, optional mit Hover-Tooltip (Beschreibung + Input des Tests)."""
+def _task_id_cell(task_id: str, task_texts: dict[str, str], total_cols: int) -> tuple[str, str]:
+    """Task-ID mit Klapp-Pfeil; gibt (Zellen-HTML, zusätzliche Tabellenzeile) zurück.
+
+    Die Erklärung (Beschreibung + Input des Tests) klappt als EIGENE Zeile über
+    die volle Tabellenbreite auf, nicht als schmale Box innerhalb der ID-Zelle
+    (dafür reicht <details> allein nicht, da es auf die eigene Zelle beschränkt
+    bleibt) – daher eine <tr colspan> auf derselben Ebene wie die Datenzeile,
+    per kleinem JS-Toggle ein-/ausgeblendet.
+    """
     text = task_texts.get(task_id)
     if not text:
-        return f"<code>{task_id}</code>"
-    tip = html.escape(text, quote=True)
-    return (
-        f'<code>{task_id}</code> '
-        f'<span title="{tip}" style="cursor:help;color:#6c757d" '
-        f'aria-label="Was prüft dieser Test?">❓</span>'
+        return f'<span style="white-space:nowrap"><code>{task_id}</code></span>', ""
+    tip = html.escape(text)
+    # white-space:nowrap verhindert, dass ID + Pfeil bei knapper Spaltenbreite
+    # auf zwei Zeilen umbrechen (sah abgehackt aus) - erzwingt stattdessen,
+    # dass die Task-Spalte sich an den Inhalt anpasst.
+    cell = (
+        f'<span style="white-space:nowrap"><code>{task_id}</code> '
+        f'<button type="button" class="ovb-task-arrow" onclick="ovbToggleTip(this)" '
+        f'aria-label="Was prüft dieser Test?">▶</button></span>'
     )
+    tip_row = (
+        f'<tr class="ovb-task-tip-row" style="display:none">'
+        f'<td colspan="{total_cols}"><div class="ovb-task-tip-body">{tip}</div></td>'
+        f'</tr>'
+    )
+    return cell, tip_row
 
 
 def _api_error_banner(count: int, context: str) -> str:
@@ -361,6 +377,13 @@ tr:hover td { background: #f7f9fc; }
 .bar.ok   { background: __SUCCESS__; }
 .bar.err  { background: __DANGER__; }
 .section  { margin-bottom: 8px; }
+.ovb-task-arrow { background: none; border: none; padding: 0; margin-left: 4px;
+         cursor: pointer; color: __SKY__; font-size: .65rem; display: inline-block;
+         transition: transform .15s ease; vertical-align: middle; }
+.ovb-task-arrow.ovb-arrow-open { transform: rotate(90deg); color: __NAVY__; }
+.ovb-task-tip-row td { padding: 4px 8px 14px !important; border-top: none !important; }
+.ovb-task-tip-body { font-size: .82rem; color: #6c757d; white-space: pre-line;
+         text-align: left; line-height: 1.5; }
 .section-group { background: #fff; border-radius: 12px;
                  box-shadow: 0 4px 16px rgba(0,0,0,.10);
                  margin-bottom: 52px; overflow: hidden; }
@@ -718,6 +741,7 @@ def _section_functionality(func_data: dict) -> str:
     metric_keys = func_data.get("metrics") or ["tool_correctness", "task_completion", "answer_relevancy"]
     core_keys = set(func_data.get("core_metrics") or [])
     n_metric_cols = len(metric_keys)
+    total_cols = 2 + n_metric_cols + 2  # Task + Status + Metriken + Kosten + Latenz
     task_texts = _load_task_texts(func_data.get("use_case"))
 
     err_records = [r for r in records if r.get("error")]
@@ -767,13 +791,15 @@ def _section_functionality(func_data: dict) -> str:
             # diese Kosten anzeigen statt sie wie bei echten API-Fehlern auf "–"
             # zu setzen.
             err_cost = f"${r['cost_usd']:.4f}" if r.get("cost_usd") else "–"
+            id_cell, tip_row = _task_id_cell(task_id, task_texts, total_cols)
             rows.append(
                 f'<tr style="background:#fff8f8">'
-                f'<td>{_task_id_cell(task_id, task_texts)}</td>'
+                f'<td>{id_cell}</td>'
                 f'<td>{err_badge}</td>'
                 f'<td colspan="{n_metric_cols}" style="color:#6c757d;font-size:.82rem">'
                 f'{short_err}{time_info}</td>'
                 f'<td>{err_cost}</td><td>–</td></tr>'
+                f'{tip_row}'
             )
         else:
             passed     = r.get("passed")
@@ -791,10 +817,12 @@ def _section_functionality(func_data: dict) -> str:
                 return f"{v:.2f}" if v is not None else "–"
 
             metric_cells = "".join(f"<td>{_fmt(r.get(k))}</td>" for k in metric_keys)
+            id_cell, tip_row = _task_id_cell(task_id, task_texts, total_cols)
             rows.append(
-                f"<tr><td>{_task_id_cell(task_id, task_texts)}</td><td>{badge}</td>"
+                f"<tr><td>{id_cell}</td><td>{badge}</td>"
                 f"{metric_cells}"
                 f"<td>${cost:.4f}</td><td>{_fmt_int(latency)} ms</td></tr>"
+                f"{tip_row}"
             )
 
     # ── Kennzahlen-Karten ─────────────────────────────────────────────────────
@@ -814,7 +842,6 @@ def _section_functionality(func_data: dict) -> str:
         _card(f"{_fmt_int(avg_latency)} ms", "Ø Latenz"),
     ]
 
-    total_cols = 2 + n_metric_cols + 2  # Task + Status + Metriken + Kosten + Latenz
     table_rows = ("".join(rows)
                   if rows else
                   f"<tr><td colspan='{total_cols}' style='color:#6c757d'>Keine Task-Daten</td></tr>")
@@ -842,6 +869,12 @@ def _section_functionality(func_data: dict) -> str:
         + metric_headers
         + "<th>Modell-Kosten (USD)</th><th>Latenz</th>"
         + "</tr></thead><tbody>" + table_rows + "</tbody></table>"
+        + "<script>function ovbToggleTip(btn){"
+          "var row=btn.closest('tr').nextElementSibling;"
+          "var isOpen=row.style.display!=='none';"
+          "row.style.display=isOpen?'none':'table-row';"
+          "btn.classList.toggle('ovb-arrow-open',!isOpen);"
+          "}</script>"
     )
 
 
@@ -1537,12 +1570,24 @@ def generate_multi_agent_report(
     judge_model: str | None = None,
     use_case: str | None = None,
     results_dir: str = "results",
+    include_functionality: bool = True,
+    include_security: bool = True,
+    include_compliance: bool = True,
 ) -> Path:
     """Erzeugt einen einzelnen HTML-Report für alle Agenten in agents_config.
 
     Oben steht der Agenten-Vergleich, darunter folgen die Einzelauswertungen.
     Wenn use_case gesetzt ist, werden die UC-spezifischen Ergebnisdateien
     geladen (Schema: *_results_{uc}_{agent_id}.json).
+
+    include_functionality/include_security/include_compliance: Dimension
+    bewusst NICHT von der Platte laden, selbst wenn eine Ergebnisdatei dort
+    existiert – wichtig, wenn der Aufrufer (Web-App) für DIESEN Lauf nur einen
+    Teil der Suiten ausgewählt hat. Ohne dieses Flag würde der Report sonst
+    eine z. B. Wochen alte, zufällig noch vorhandene Ergebnisdatei einer
+    NICHT ausgewählten Dimension einlesen und als aktuelles Ergebnis anzeigen
+    (der Report bleibt trotzdem vollständig sichtbar, die Dimension zeigt dann
+    einfach "Keine Daten vorhanden" statt fremder Alt-Daten).
     """
     security_paths = security_paths or []
     _judge = judge_model or _load_judge_model_from_config() or os.environ.get("JUDGE_MODEL_NAME", "gpt-5.4-mini")
@@ -1555,24 +1600,34 @@ def generate_multi_agent_report(
     for cfg in agents_config:
         agent_id = cfg["id"]
 
-        # Security – per-(UC,Agent)-Datei; Finance-Tests sind vom Runner bereits eingemergt
-        sec_path = _results / f"security_results_{_sfx}{agent_id}.json"
-        sec_data = _parse_security(_promptfoo_results(
-            _load_json(sec_path) or (_load_json(security_paths[0]) if security_paths else None)
-        ), _judge)
+        if include_security:
+            # Security – per-(UC,Agent)-Datei; Finance-Tests sind vom Runner bereits eingemergt
+            sec_path = _results / f"security_results_{_sfx}{agent_id}.json"
+            sec_data = _parse_security(_promptfoo_results(
+                _load_json(sec_path) or (_load_json(security_paths[0]) if security_paths else None)
+            ), _judge)
+        else:
+            sec_data = _parse_security([], _judge)
 
-        # Compliance – per-(UC,Agent)-Dateien, Fallback auf geteilte Dateien
-        comp_path      = _results / f"compliance_results_{_sfx}{agent_id}.json"
-        scorecard_path_agent = _results / f"compliance_scorecard_{_sfx}{agent_id}.json"
-        comp_results   = _promptfoo_results(
-            _load_json(comp_path) or _load_json(compliance_path)
-        )
-        comp_data, comp_stats = _parse_compliance(comp_results, _judge)
-        scorecard = _load_json(scorecard_path_agent) or _load_json(scorecard_path)
+        if include_compliance:
+            # Compliance – per-(UC,Agent)-Dateien, Fallback auf geteilte Dateien
+            comp_path      = _results / f"compliance_results_{_sfx}{agent_id}.json"
+            scorecard_path_agent = _results / f"compliance_scorecard_{_sfx}{agent_id}.json"
+            comp_results   = _promptfoo_results(
+                _load_json(comp_path) or _load_json(compliance_path)
+            )
+            comp_data, comp_stats = _parse_compliance(comp_results, _judge)
+            scorecard = _load_json(scorecard_path_agent) or _load_json(scorecard_path)
+        else:
+            comp_data, comp_stats = _parse_compliance([], _judge)
+            scorecard = None
 
-        # Funktionalität
-        func_path = Path(functionality_dir) / f"functionality_costs_{_sfx}{agent_id}.json"
-        func_data = _parse_func_costs(_load_json(str(func_path)))
+        if include_functionality:
+            # Funktionalität
+            func_path = Path(functionality_dir) / f"functionality_costs_{_sfx}{agent_id}.json"
+            func_data = _parse_func_costs(_load_json(str(func_path)))
+        else:
+            func_data = _parse_func_costs(None)
 
         agents_data.append({
             "id":         agent_id,
@@ -1797,6 +1852,13 @@ def main() -> None:
     parser.add_argument("--out",           metavar="FILE", default=None)
     parser.add_argument("--use-case",      metavar="UC",   default=os.environ.get("USE_CASE", "uc1"),
                         help="Use-Case-ID (uc1–uc4) für Header-Badge und UC-Kontext (Default: uc1)")
+    parser.add_argument("--skip-functionality", action="store_true",
+                        help="Funktionalitäts-Dimension NICHT laden, auch wenn eine Ergebnisdatei "
+                             "existiert (z. B. weil dieser Lauf die Suite nicht ausgeführt hat)")
+    parser.add_argument("--skip-security", action="store_true",
+                        help="Sicherheits-Dimension NICHT laden, auch wenn eine Ergebnisdatei existiert")
+    parser.add_argument("--skip-compliance", action="store_true",
+                        help="Compliance-Dimension NICHT laden, auch wenn eine Ergebnisdatei existiert")
     args = parser.parse_args()
 
     uc = args.use_case
@@ -1823,6 +1885,9 @@ def main() -> None:
             out_path=out_path,
             use_case=uc,
             results_dir=results_dir,
+            include_functionality=not args.skip_functionality,
+            include_security=not args.skip_security,
+            include_compliance=not args.skip_compliance,
         )
     else:
         # Einzelagent-Modus (Rückwärtskompatibilität / direkter Pfad)

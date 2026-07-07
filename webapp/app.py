@@ -26,6 +26,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -408,6 +409,21 @@ def strip_ansi(text: str) -> str:
     return ANSI_RE.sub("", text)
 
 
+def _fmt_elapsed(started_at: float | None, end: float | None = None) -> str:
+    """Verstrichene Zeit seit Laufbeginn als 'm:ss' (bzw. 'h:mm:ss').
+
+    end=None -> live bis jetzt (waehrend der Lauf noch aktiv ist); ein fester
+    end-Zeitpunkt (eval_state.stopped_at) friert die Anzeige nach Laufende ein."""
+    if started_at is None:
+        return "0:00"
+    total_seconds = int((end if end is not None else time.monotonic()) - started_at)
+    hours, rem = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"
+
+
 class EvalState:
     """Geteilter Zustand zwischen Hintergrund-Thread und Hauptthread.
 
@@ -438,6 +454,20 @@ class EvalState:
         self.any_failed = False
         self.error: str | None = None
         self.was_running = False
+        # Für die Laufzeit-Anzeige: Der Stufen-Fortschrittsbalken springt nur
+        # in groben Sprüngen (z. B. bleibt waehrend der ganzen Funktionalitaets-
+        # Stufe stehen, die mehrere Minuten dauern kann) und wirkt dadurch wie
+        # eingefroren. Eine mitlaufende Sekundenanzeige zeigt zusaetzlich, dass
+        # noch etwas passiert. stopped_at friert die Anzeige nach Laufende ein -
+        # sonst wuerde _fmt_elapsed(started_at) bei jedem Rerun weiterzaehlen.
+        self.started_at: float | None = None
+        self.stopped_at: float | None = None
+        # True nur, wenn DIESER Lauf tatsaechlich agenteval-report ausgefuehrt
+        # hat (mind. eine Suite ausgewaehlt). Verhindert, dass nach einem
+        # reinen Smoke-Test der (dann unveraenderte, u.U. sehr alte)
+        # results/report.html automatisch angezeigt wird, als waere er
+        # gerade frisch erzeugt worden.
+        self.report_generated = False
 
 
 def _kill_process_tree(proc: subprocess.Popen | None) -> None:
@@ -495,10 +525,19 @@ def run_command(cmd: str, eval_state: EvalState, cwd: Path | None = None, extra_
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        encoding="utf-8",
-        errors="replace",
+        # BEWUSST binär statt text=True: Ein Text-Stream mit den Standard-
+        # "universal newlines" behandelt einzelne "\r" (Fortschrittsbalken von
+        # DeepEval/tqdm etc., die im echten Terminal dieselbe Zeile
+        # ueberschreiben) genau wie "\n" als Zeilenende. Dadurch wurde JEDES
+        # Prozent-Update zu einer eigenen, dauerhaften Log-Zeile - bei
+        # hunderten Updates pro Task explodierte die Zeilenzahl (UI wurde
+        # bei jedem Sekunden-Tick immer langsamer, bis der Lauf abbrach).
+        # Im Binaer-Modus splittet die Zeilen-Iteration nur auf echtes "\n";
+        # "\r"-Zwischenstaende landen in _reader() als Teil derselben Zeile
+        # und werden dort auf den letzten Stand VOR dem naechsten "\n"
+        # reduziert (wie ein echtes Terminal es auch anzeigen wuerde).
+        # Kein bufsize-Override: "line buffered" (bufsize=1) gilt laut
+        # Doku nur im Text-Modus - im Binaer-Modus normale Pufferung nutzen.
     )
     assert process.stdout is not None
     eval_state.current_process = process
@@ -507,8 +546,14 @@ def run_command(cmd: str, eval_state: EvalState, cwd: Path | None = None, extra_
 
     def _reader() -> None:
         try:
-            for raw_line in process.stdout:
-                line_queue.put(raw_line)
+            for raw_bytes in process.stdout:
+                decoded = raw_bytes.decode("utf-8", errors="replace")
+                # Zeilenende (\n bzw. \r\n) entfernen, BEVOR auf "\r" (Fortschritts-
+                # Overwrite) reduziert wird - sonst wuerde eine simple Windows-
+                # Zeile "text\r\n" faelschlich auf "" kollabieren.
+                decoded = decoded.rstrip("\n").rstrip("\r")
+                decoded = decoded.split("\r")[-1]
+                line_queue.put(decoded)
         except Exception:
             pass
         finally:
@@ -516,6 +561,19 @@ def run_command(cmd: str, eval_state: EvalState, cwd: Path | None = None, extra_
 
     reader = threading.Thread(target=_reader, daemon=True)
     reader.start()
+
+    # pytest meldet jeden zur Laufzeit uebersprungenen Test (pytest.skip() im
+    # Testkoerper, z. B. weil ein Agent zuvor einen API-Fehler hatte) zusaetzlich
+    # als mehrzeiligen Block ("Test X was skipped. Reason: (datei, zeile,
+    # 'Skipped: ...')") - unabhaengig von -v/-p no:warnings/-rN. Bei vielen
+    # parametrisierten Tests, die wegen DESSELBEN Agent-Fehlers alle skippen,
+    # wiederholt sich dieser Block dutzende Male mit identischem Inhalt, der
+    # ohnehin schon im WIRTSCHAFTLICHKEIT-Bericht pro Task sichtbar ist.
+    # Hier zu einer einzigen Zusammenfassung am Ende kollabieren.
+    _skip_block_re = re.compile(r"^Test .+ was skipped\.")
+    in_skip_block = False
+    skip_block_lines = 0
+    suppressed_blocks = 0
 
     while True:
         if eval_state.stop_requested:
@@ -527,7 +585,29 @@ def run_command(cmd: str, eval_state: EvalState, cwd: Path | None = None, extra_
             continue
         if raw_line is None:
             break
-        yield strip_ansi(raw_line.rstrip("\n"))
+        line = strip_ansi(raw_line)
+
+        if in_skip_block:
+            skip_block_lines += 1
+            # Block endet auf der Zeile, die den Reason-Tuple-String schliesst,
+            # oder spaetestens nach einer Sicherheitsgrenze (falls das Muster
+            # doch mal abweicht) - sonst wuerde echte Ausgabe verschluckt.
+            if line.rstrip().endswith('")') or skip_block_lines > 20:
+                in_skip_block = False
+                suppressed_blocks += 1
+            continue
+        if _skip_block_re.match(line):
+            in_skip_block = True
+            skip_block_lines = 0
+            continue
+
+        yield line
+
+    if suppressed_blocks:
+        yield (
+            f"({suppressed_blocks} übersprungene Tests wegen vorheriger Agent-Fehler "
+            f"ausgeblendet – Details siehe Kosten-/Task-Übersicht oben)"
+        )
 
     try:
         process.stdout.close()
@@ -656,7 +736,10 @@ def _run_evaluation(
         s["label"] for s, on in ((SECURITY_STAGE, security_checked), (COMPLIANCE_STAGE, compliance_checked)) if on
     )
     # Stufenliste für die Fortschrittsanzeige – nur die tatsächlich
-    # ausgewählten Suiten, Smoke und Report laufen immer.
+    # ausgewählten Suiten, Smoke und Report laufen immer. Der Report zeigt
+    # dabei nur die Dimensionen mit Daten aus DIESEM Lauf (siehe --skip-*-Flags
+    # unten) - bei reinem Smoke-Test also einen vollständigen, aber inhaltlich
+    # leeren Report, statt versehentlich Alt-Daten eines früheren Laufs zu zeigen.
     eval_state.stages = [
         SMOKE_LABEL,
         *([FUNCTIONALITY_STAGE["label"]] if func_checked else []),
@@ -694,7 +777,13 @@ def _run_evaluation(
                     set_stage(FUNCTIONALITY_STAGE["label"])
                     log(f"\n=== {FUNCTIONALITY_STAGE['label']} (Use Case {selected_uc}) ===")
                     exit_code = run_to_log(
-                        f"{py} -m pytest test_functionality.py -v",
+                        # Kein -v: bei 400+ parametrisierten Tests (mehrere UCs x
+                        # Agenten x Metriken) erzeugt -v eine eigene Zeile PRO
+                        # Einzeltest - die kompakte Punkt-Notation (._sF...) reicht
+                        # fuer den Live-Log, Details stehen im WIRTSCHAFTLICHKEIT-
+                        # Bericht weiter unten. --tb=line kuerzt Fehler-Tracebacks
+                        # auf eine Zeile statt vollem Quellcode + Captured-Output.
+                        f"{py} -m pytest test_functionality.py --tb=line",
                         log,
                         eval_state,
                         cwd=ROOT / "evals" / "functionality",
@@ -718,8 +807,22 @@ def _run_evaluation(
                 if not stopped():
                     set_stage("Report")
                     log("\n=== Report ===")
-                    run_to_log(f"agenteval-report --use-case {selected_uc} --out results/report.html", log, eval_state)
+                    # --skip-* fuer NICHT ausgewaehlte Suiten: agenteval-report
+                    # soll fuer diese Dimensionen "keine Daten" zeigen, statt
+                    # eine zufaellig noch vorhandene Ergebnisdatei eines
+                    # frueheren, separaten Laufs faelschlich als Ergebnis
+                    # DIESES Laufs einzulesen.
+                    skip_flags = (
+                        ("" if func_checked else " --skip-functionality")
+                        + ("" if security_checked else " --skip-security")
+                        + ("" if compliance_checked else " --skip-compliance")
+                    )
+                    run_to_log(
+                        f"agenteval-report --use-case {selected_uc} --out results/report.html{skip_flags}",
+                        log, eval_state,
+                    )
                     _archive_report(selected_uc)
+                    eval_state.report_generated = True
 
         if stopped():
             log("\n⏹ Abgebrochen.")
@@ -763,6 +866,8 @@ def _render_eval_status(selected_uc: str, eval_state: EvalState) -> None:
     # liest hier nur eval_state-Attribute, kein st.session_state[...] – sicher.
     if eval_state.was_running and not running:
         eval_state.was_running = False
+        if eval_state.started_at is not None:
+            eval_state.stopped_at = time.monotonic()
         st.rerun()
     eval_state.was_running = running
 
@@ -770,23 +875,30 @@ def _render_eval_status(selected_uc: str, eval_state: EvalState) -> None:
     stopped_flag = eval_state.stop_requested
 
     if running:
-        label = f"{eval_state.stage or 'Evaluierung'} läuft ..."
+        elapsed = _fmt_elapsed(eval_state.started_at)
+        label = f"{eval_state.stage or 'Evaluierung'} läuft ... ({elapsed})"
         state = "running"
         if eval_state.stages:
             total = len(eval_state.stages)
             current = eval_state.stage_index + 1
-            st.progress(current / total, text=f"Schritt {current} von {total}: {eval_state.stage}")
+            st.progress(
+                current / total,
+                text=f"Schritt {current} von {total}: {eval_state.stage} – {elapsed} verstrichen",
+            )
     elif eval_state.error:
-        label = "Smoke-Test fehlgeschlagen"
+        label = f"Smoke-Test fehlgeschlagen ({_fmt_elapsed(eval_state.started_at, eval_state.stopped_at)})"
         state = "error"
     elif stopped_flag and has_output:
-        label = "Abgebrochen"
+        label = f"Abgebrochen ({_fmt_elapsed(eval_state.started_at, eval_state.stopped_at)})"
         state = "error"
     elif eval_state.any_failed:
-        label = "Abgeschlossen – einzelne Schritte hatten Fehler"
+        label = (
+            f"Abgeschlossen – einzelne Schritte hatten Fehler "
+            f"({_fmt_elapsed(eval_state.started_at, eval_state.stopped_at)})"
+        )
         state = "error"
     elif has_output:
-        label = "Evaluierung abgeschlossen"
+        label = f"Evaluierung abgeschlossen ({_fmt_elapsed(eval_state.started_at, eval_state.stopped_at)})"
         state = "complete"
     else:
         label = "Noch keine Evaluierung gestartet"
@@ -812,52 +924,19 @@ def _render_eval_status(selected_uc: str, eval_state: EvalState) -> None:
         else:
             st.success("Evaluierung abgeschlossen.")
 
-    # Unabhängig von has_output: History früherer Läufe ist auch browsbar,
-    # wenn in DIESER Session noch nichts gestartet wurde, aber vorherige
-    # Reports auf der Platte liegen (siehe _archive_report).
-    if not running:
-        history_files = (
-            sorted(REPORT_HISTORY_DIR.glob("report_*.html"), key=lambda p: p.stat().st_mtime, reverse=True)
-            if REPORT_HISTORY_DIR.exists() else []
-        )
-        if history_files:
-            def _history_label(path: Path) -> str:
-                parts = path.stem.split("_")  # ["report", "<uc>", "YYYYMMDD", "HHMMSS"]
-                uc, date, time_ = parts[1], parts[2], parts[3]
-                return (
-                    f"{uc.upper()} – {date[:4]}-{date[4:6]}-{date[6:8]} "
-                    f"{time_[:2]}:{time_[2:4]}:{time_[4:6]}"
-                )
-
-            st.markdown(
-                "**Report**: Vergleichsübersicht aller Agenten inkl. Radar-Chart, darunter "
-                "Detailauswertung je Agent. Frühere Läufe bleiben unter `results/history/` erhalten."
-            )
-            chosen_path = st.selectbox(
-                "Lauf auswählen",
-                options=history_files,
-                format_func=_history_label,
-                key="report_history_select",
-                label_visibility="collapsed" if len(history_files) == 1 else "visible",
-            )
-            report_html = chosen_path.read_text(encoding="utf-8")
-            st.download_button(
-                "Report herunterladen (HTML)",
-                data=report_html,
-                file_name=chosen_path.name,
-                mime="text/html",
-                key="download_report_btn",
-            )
-            with st.expander("Report anzeigen", expanded=False):
-                components.html(report_html, height=800, scrolling=True)
-        elif REPORT_PATH.exists():
-            # Fallback für einen Report, der vor Einführung der History
-            # entstanden ist (noch keine Kopie unter results/history/).
+        # Direkt den gerade erzeugten Report zeigen - kein Umweg über einen
+        # separaten Menüpunkt. agenteval-report läuft jetzt immer (auch bei
+        # reinem Smoke-Test) und überschreibt results/report.html, ist also
+        # immer der Stand DIESES Laufs - nicht ausgewählte Suiten zeigen dort
+        # "Keine Daten vorhanden" statt Alt-Daten eines früheren Laufs (siehe
+        # --skip-*-Flags in _run_evaluation). Ältere Läufe bleiben trotzdem
+        # unter results/history/ auf der Platte erhalten (_archive_report),
+        # nur eben ohne eigene Browsing-UI dafür.
+        # eval_state.report_generated bewusst geprueft statt nur REPORT_PATH.
+        # exists(): verhindert, dass beim naechsten (abgebrochenen) Lauf ein
+        # veralteter Report aus einer FRUEHEREN Session angezeigt wird.
+        if eval_state.report_generated and REPORT_PATH.exists():
             report_html = REPORT_PATH.read_text(encoding="utf-8")
-            st.markdown(
-                "**Report** (`results/report.html`): Vergleichsübersicht aller Agenten "
-                "inkl. Radar-Chart, darunter Detailauswertung je Agent."
-            )
             st.download_button(
                 "Report herunterladen (HTML)",
                 data=report_html,
@@ -865,7 +944,7 @@ def _render_eval_status(selected_uc: str, eval_state: EvalState) -> None:
                 mime="text/html",
                 key="download_report_btn",
             )
-            with st.expander("Report anzeigen", expanded=False):
+            with st.expander("Report anzeigen", expanded=True):
                 components.html(report_html, height=800, scrolling=True)
 
 
@@ -1276,6 +1355,9 @@ elif section == "Use Case & Evaluierung":
             eval_state.any_failed = False
             eval_state.error = None
             eval_state.running = True
+            eval_state.started_at = time.monotonic()
+            eval_state.stopped_at = None
+            eval_state.report_generated = False
             thread = threading.Thread(
                 target=_run_evaluation,
                 args=(eval_state, selected_uc, func_checked, security_checked, compliance_checked),
