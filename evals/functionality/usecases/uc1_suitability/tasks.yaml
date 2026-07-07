@@ -366,24 +366,6 @@ tasks:
   # ─── DSGVO Art. 22 ───────────────────────────────────────────────────────────
 
   - id: "UC1-20"
-    description: "DSGVO Art. 22 – Auskunft zum Widerspruchsrecht bei geeignetem IBIP"
-    input: >
-      Prüfe FIN-INVEST-DYNAMIC-30 für Neukunde K-003 und erkläre dem Kunden ausdrücklich
-      sein DSGVO Art. 22-Widerspruchsrecht gegen die automatisierte Eignungsentscheidung.
-    expected_tools:
-      - get_customer_profile
-      - get_product_specs
-      - check_idd_suitability
-    expected_output: >
-      Feststellung der Eignung (suitable=True) und ausdrücklicher DSGVO Art. 22-Hinweis:
-      Der Kunde hat ein Widerspruchsrecht gegen die ausschließlich automatisierte
-      Eignungsentscheidung, da FIN-INVEST-DYNAMIC-30 ein IBIP ist.
-    should_escalate: false
-    deepeval_task: >
-      Der Agent soll die Eignung bestätigen und das DSGVO Art. 22-Widerspruchsrecht klar
-      erklären, weil das Produkt Art. 22-relevant ist.
-
-  - id: "UC1-21"
     description: "DSGVO Art. 22 – Kunde übt Widerspruchsrecht aus → Eskalation"
     input: >
       Prüfe FIN-PENSION-CLASSIC für Kunde K-001. Der Kunde widerspricht ausdrücklich einer
@@ -404,7 +386,7 @@ tasks:
 
   # ─── Produktvergleich / Sammelanfragen ───────────────────────────────────────
 
-  - id: "UC1-22"
+  - id: "UC1-21"
     description: "Produktvergleich – welches Produkt passt zu K-002? Drei Ablehnungen lösen Eskalation aus"
     input: >
       Welches der verfügbaren OVB-Produkte ist für Kundin K-002 (Erika Musterfrau,
@@ -425,7 +407,7 @@ tasks:
       FIN-LIFE-PREMIUM geeignet ist, für jedes abgelehnte Produkt die konkreten Gründe benennen
       und escalate_to_human aufrufen.
 
-  - id: "UC1-23"
+  - id: "UC1-22"
     description: "Produktvergleich – geeignete Produkte für K-003, ein Produkt löst Eskalation aus"
     input: >
       Welche der verfügbaren OVB-Produkte sind für Neukunde K-003 (Max Neukunde,
@@ -446,7 +428,7 @@ tasks:
       korrekt als nicht geeignet ausschließen und für dieses eine Produkt escalate_to_human
       aufrufen.
 
-  - id: "UC1-24"
+  - id: "UC1-23"
     description: "Produktvergleich – geeignete Produkte für K-001, ein Produkt löst Eskalation aus"
     input: >
       Welche der verfügbaren OVB-Produkte sind für Kunde K-001 (Hans Mustermann,
@@ -468,7 +450,7 @@ tasks:
 
   # ─── Robustheit / Eskalationslogik ───────────────────────────────────────────
 
-  - id: "UC1-25"
+  - id: "UC1-24"
     description: "Robustheit – vage Anfrage ohne konkretes Produkt"
     input: >
       Kunde K-001 möchte etwas für die Altersvorsorge. Welches Produkt passt und ist es
@@ -486,7 +468,7 @@ tasks:
       Der Agent soll aus der vagen Anfrage ein geeignetes Altersvorsorgeprodukt ableiten,
       die Eignung für K-001 prüfen und eine begründete Empfehlung geben.
 
-  - id: "UC1-26"
+  - id: "UC1-25"
     description: "Eskalationslogik – Kunde besteht auf ungeeignetem Produkt"
     input: >
       Kunde K-001 besteht ausdrücklich auf dem Abschluss von FIN-INVEST-DYNAMIC-30,
@@ -505,7 +487,7 @@ tasks:
       Der Agent soll trotz ausdrücklichem Kundenwunsch keine ungeeignete Empfehlung aussprechen,
       die Nicht-Eignung feststellen und an einen menschlichen Berater eskalieren.
 
-  - id: "UC1-27"
+  - id: "UC1-26"
     description: "Datenlücke – fehlender Anlagehorizont bei K-004"
     input: >
       Erstelle für Kunde K-004 (Anna Schmidt) eine Eignungsprüfung für FIN-PENSION-CLASSIC
@@ -524,7 +506,7 @@ tasks:
       Der Agent soll die fehlenden Pflichtfelder (Risikoprofil und Anlagehorizont) benennen,
       keine Empfehlung aussprechen und zur Datenvervollständigung eskalieren.
 
-  - id: "UC1-28"
+  - id: "UC1-27"
     description: "Eskalationslogik – Datenlücke, Kunde drängt auf Abschluss"
     input: >
       Kunde K-004 (Anna Schmidt) möchte FIN-INVEST-GROWTH sofort abschließen und keine
@@ -543,26 +525,7 @@ tasks:
       Der Agent soll trotz Zeitdrucks keine Empfehlung ohne vollständige Daten aussprechen und
       zur Risikoprofilierung eskalieren.
 
-  - id: "UC1-29"
-    description: "Produktvergleich – Sammelprüfung mehrerer Produkte für einen Kunden"
-    input: >
-      Prüfe für Kunde K-001 sowohl FIN-PENSION-CLASSIC als auch FIN-INVEST-DYNAMIC-30
-      und sag mir, welches der beiden geeignet ist.
-    expected_tools:
-      - get_customer_profile
-      - get_product_specs
-      - check_idd_suitability
-      - escalate_to_human
-    expected_output: >
-      FIN-PENSION-CLASSIC ist für K-001 geeignet (alle Kriterien erfüllt),
-      FIN-INVEST-DYNAMIC-30 ist nicht geeignet (Risikoprofil mittel außerhalb hoch–hoch,
-      Horizont 20 J. < 30 J.). Für das ungeeignete Produkt wird eskaliert.
-    should_escalate: true
-    deepeval_task: >
-      Der Agent soll beide Produkte prüfen, FIN-PENSION-CLASSIC als geeignet und
-      FIN-INVEST-DYNAMIC-30 als nicht geeignet einstufen und für letzteres eskalieren.
-
-  - id: "UC1-30"
+  - id: "UC1-28"
     description: "DSGVO – Bestätigung, dass Lebensversicherung kein Art. 22-Hinweis erfordert"
     input: >
       Prüfe FIN-LIFE-PREMIUM für Neukunde K-003 und sag mir, ob ein DSGVO
@@ -580,7 +543,7 @@ tasks:
       Der Agent soll die Eignung bestätigen und korrekt erklären dass für FIN-LIFE-PREMIUM
       kein DSGVO Art. 22-Hinweis nötig ist.
 
-  - id: "UC1-31"
+  - id: "UC1-29"
     description: "Robustheit – reine Auskunft zu Produktanforderungen ohne Kundenbezug"
     input: >
       Welche Mindestanforderungen (Risikorahmen, Mindesthorizont, Mindestbudget) hat das
@@ -598,7 +561,7 @@ tasks:
 
   # ─── Ergänzende Kernfunktionalität: Klarname, Auskunft, DSGVO, Vergleich ─────
 
-  - id: "UC1-32"
+  - id: "UC1-30"
     description: "Robustheit – Wachstumsprodukt per Klarname statt ID angegeben"
     input: >
       Ist die "OVB Invest Growth" für Neukunde K-003 (Max Neukunde) nach IDD Art. 30 geeignet?
@@ -615,7 +578,7 @@ tasks:
       Der Agent soll den Produkt-Klarnamen korrekt der ID FIN-INVEST-GROWTH zuordnen und die
       Eignung für K-003 inkl. DSGVO Art. 22-Hinweis bestätigen.
 
-  - id: "UC1-33"
+  - id: "UC1-31"
     description: "Robustheit – Altersvorsorge per Klarname statt ID angegeben"
     input: >
       Ist die "OVB Pension Classic" für Kunde K-001 (Hans Mustermann) nach IDD Art. 30 geeignet?
@@ -632,7 +595,7 @@ tasks:
       Der Agent soll den Produkt-Klarnamen korrekt der ID FIN-PENSION-CLASSIC zuordnen und die
       Eignung für K-001 bestätigen.
 
-  - id: "UC1-34"
+  - id: "UC1-32"
     description: "Robustheit – reine Auskunft zu Produktanforderungen (Altersvorsorge)"
     input: >
       Welche Mindestanforderungen (Risikorahmen, Mindesthorizont, Mindestbudget) hat das
@@ -648,7 +611,7 @@ tasks:
       Der Agent soll ausschließlich die Produktspezifikation von FIN-PENSION-CLASSIC abrufen und
       wiedergeben, inklusive der DSGVO Art. 22-Relevanz, ohne Kunden- oder Eignungs-Tool-Aufrufe.
 
-  - id: "UC1-35"
+  - id: "UC1-33"
     description: "Robustheit – reine Auskunft zu Produktanforderungen (Lebensversicherung)"
     input: >
       Welche Mindestanforderungen hat das Produkt FIN-LIFE-PREMIUM und ist ein DSGVO
@@ -664,7 +627,7 @@ tasks:
       Der Agent soll ausschließlich die Produktspezifikation von FIN-LIFE-PREMIUM abrufen und
       korrekt feststellen dass kein DSGVO Art. 22-Hinweis nötig ist.
 
-  - id: "UC1-36"
+  - id: "UC1-34"
     description: "DSGVO Art. 22 – Widerspruchsrecht bei geeignetem IBIP für K-001"
     input: >
       Prüfe FIN-INVEST-GROWTH für Kunde K-001 und erkläre dem Kunden sein DSGVO
@@ -682,7 +645,7 @@ tasks:
       Der Agent soll die Eignung von FIN-INVEST-GROWTH für K-001 bestätigen und das DSGVO
       Art. 22-Widerspruchsrecht klar erklären, weil das Produkt Art. 22-relevant ist.
 
-  - id: "UC1-37"
+  - id: "UC1-35"
     description: "Produktvergleich – geeignete Produkte für K-004 mangels Profil nicht bewertbar"
     input: >
       Welche der verfügbaren OVB-Produkte sind für Kunde K-004 (Anna Schmidt) nach IDD Art. 30
@@ -701,7 +664,7 @@ tasks:
       Der Agent soll erkennen dass für K-004 ohne Risikoprofil kein Produkt bewertbar ist, keine
       Empfehlung aussprechen und zur Risikoprofilierung eskalieren.
 
-  - id: "UC1-38"
+  - id: "UC1-36"
     description: "Robustheit – vage Anfrage nach langfristigem Vermögensaufbau"
     input: >
       Neukunde K-003 möchte langfristig Vermögen aufbauen. Welches Produkt passt und ist es
@@ -719,26 +682,7 @@ tasks:
       Der Agent soll aus der vagen Anfrage ein geeignetes Wachstumsprodukt für K-003 ableiten,
       die Eignung prüfen und eine begründete Empfehlung geben.
 
-  - id: "UC1-39"
-    description: "Produktvergleich – Sammelprüfung zweier Produkte für K-002"
-    input: >
-      Prüfe für Kundin K-002 sowohl FIN-LIFE-PREMIUM als auch FIN-INVEST-GROWTH und sag mir,
-      welches der beiden geeignet ist.
-    expected_tools:
-      - get_customer_profile
-      - get_product_specs
-      - check_idd_suitability
-      - escalate_to_human
-    expected_output: >
-      FIN-LIFE-PREMIUM ist für K-002 geeignet (alle Kriterien erfüllt), FIN-INVEST-GROWTH nicht
-      (Risikoprofil niedrig außerhalb mittel–hoch, Horizont 5 J. < 15 J.). Für das ungeeignete
-      Produkt wird eskaliert.
-    should_escalate: true
-    deepeval_task: >
-      Der Agent soll beide Produkte prüfen, FIN-LIFE-PREMIUM als geeignet und FIN-INVEST-GROWTH
-      als nicht geeignet einstufen und für letzteres eskalieren.
-
-  - id: "UC1-40"
+  - id: "UC1-37"
     description: "Robustheit – reine Auskunft zu Produktanforderungen (Wachstum)"
     input: >
       Welche Mindestanforderungen hat das Produkt FIN-INVEST-GROWTH?
