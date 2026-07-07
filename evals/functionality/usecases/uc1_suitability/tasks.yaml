@@ -6,7 +6,6 @@ tasks:
 
   - id: "UC1-01"
     description: "Geeignetes Produkt – mittleres Risikoprofil, ausreichend Horizont"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-PENSION-CLASSIC für Kunde K-001 (Hans Mustermann)
       nach IDD Art. 30 geeignet ist.
@@ -26,7 +25,6 @@ tasks:
 
   - id: "UC1-02"
     description: "Nicht geeignet – Risikoprofil zu niedrig, Horizont zu kurz → Eskalation"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-INVEST-DYNAMIC-30 für Kundin K-002 (Erika Musterfrau,
       68 Jahre, niedriges Risikoprofil) nach IDD Art. 30 geeignet ist.
@@ -46,7 +44,6 @@ tasks:
 
   - id: "UC1-03"
     description: "Unvollständige Daten – fehlendes Risikoprofil verhindert Prüfung"
-    category: "data_handling"
     input: >
       Prüfe ob das Produkt FIN-PENSION-CLASSIC für Kunde K-004 (Anna Schmidt) geeignet ist.
     expected_tools:
@@ -66,7 +63,6 @@ tasks:
 
   - id: "UC1-04"
     description: "Geeignet – hohes Risikoprofil, langer Horizont, dynamisches Produkt"
-    category: "suitability_check"
     input: >
       Ist FIN-INVEST-DYNAMIC-30 für Neukunde K-003 (Max Neukunde, 32 Jahre,
       hohes Risikoprofil, 30 Jahre Horizont) nach IDD Art. 30 geeignet?
@@ -88,7 +84,6 @@ tasks:
 
   - id: "UC1-05"
     description: "Geeignet – mittleres Profil, wachstumsorientiertes Produkt"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-INVEST-GROWTH für Kunde K-001 (Hans Mustermann)
       nach IDD Art. 30 geeignet ist.
@@ -108,7 +103,6 @@ tasks:
 
   - id: "UC1-06"
     description: "Geeignet – Lebensversicherung ohne DSGVO Art. 22 (kein IBIP)"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-LIFE-PREMIUM für Kunde K-001 (Hans Mustermann)
       nach IDD Art. 30 geeignet ist.
@@ -127,7 +121,6 @@ tasks:
 
   - id: "UC1-07"
     description: "Nicht geeignet – Risikoprofil zu niedrig, Horizont zu kurz → Eskalation"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-INVEST-DYNAMIC-30 für Kunde K-001 (Hans Mustermann,
       mittleres Risikoprofil) nach IDD Art. 30 geeignet ist.
@@ -147,7 +140,6 @@ tasks:
 
   - id: "UC1-08"
     description: "Nicht geeignet – Anlagehorizont zu kurz → Eskalation"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-PENSION-CLASSIC für Kundin K-002 (Erika Musterfrau,
       68 Jahre) nach IDD Art. 30 geeignet ist.
@@ -167,7 +159,6 @@ tasks:
 
   - id: "UC1-09"
     description: "Nicht geeignet – Risikoprofil und Horizont unpassend → Eskalation"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-INVEST-GROWTH für Kundin K-002 (Erika Musterfrau,
       niedriges Risikoprofil) nach IDD Art. 30 geeignet ist.
@@ -187,7 +178,6 @@ tasks:
 
   - id: "UC1-10"
     description: "Geeignet – Lebensversicherung passt zum konservativen Profil"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-LIFE-PREMIUM für Kundin K-002 (Erika Musterfrau,
       68 Jahre, niedriges Risikoprofil) nach IDD Art. 30 geeignet ist.
@@ -206,7 +196,6 @@ tasks:
 
   - id: "UC1-11"
     description: "Nicht geeignet – Risikoprofil zu hoch für konservatives Produkt → Eskalation"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-PENSION-CLASSIC für Neukunde K-003 (Max Neukunde,
       hohes Risikoprofil) nach IDD Art. 30 geeignet ist.
@@ -226,7 +215,6 @@ tasks:
 
   - id: "UC1-12"
     description: "Geeignet – hohes Profil, wachstumsorientiertes Produkt"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-INVEST-GROWTH für Neukunde K-003 (Max Neukunde,
       hohes Risikoprofil, 30 Jahre Horizont) nach IDD Art. 30 geeignet ist.
@@ -245,7 +233,6 @@ tasks:
 
   - id: "UC1-13"
     description: "Geeignet – Lebensversicherung für risikofreudigen Kunden"
-    category: "suitability_check"
     input: >
       Prüfe ob das Produkt FIN-LIFE-PREMIUM für Neukunde K-003 (Max Neukunde,
       hohes Risikoprofil) nach IDD Art. 30 geeignet ist.
@@ -264,7 +251,6 @@ tasks:
 
   - id: "UC1-14"
     description: "Unvollständige Daten – fehlendes Risikoprofil (Wachstumsprodukt) → Eskalation"
-    category: "data_handling"
     input: >
       Prüfe ob das Produkt FIN-INVEST-GROWTH für Kunde K-004 (Anna Schmidt) geeignet ist.
     expected_tools:
@@ -283,7 +269,6 @@ tasks:
 
   - id: "UC1-15"
     description: "Unvollständige Daten – fehlendes Risikoprofil (Lebensversicherung) → Eskalation"
-    category: "data_handling"
     input: >
       Prüfe ob das Produkt FIN-LIFE-PREMIUM für Kunde K-004 (Anna Schmidt) geeignet ist.
     expected_tools:
@@ -302,7 +287,6 @@ tasks:
 
   - id: "UC1-16"
     description: "Unvollständige Daten – fehlendes Risikoprofil (Hochrisikoprodukt) → Eskalation"
-    category: "data_handling"
     input: >
       Prüfe ob das Produkt FIN-INVEST-DYNAMIC-30 für Kunde K-004 (Anna Schmidt) geeignet ist.
     expected_tools:
@@ -323,7 +307,6 @@ tasks:
 
   - id: "UC1-17"
     description: "Fehlerbehandlung – unbekannte Kundennummer"
-    category: "error_handling"
     input: >
       Prüfe ob das Produkt FIN-PENSION-CLASSIC für Kunde K-999 nach IDD Art. 30 geeignet ist.
     expected_tools:
@@ -340,7 +323,6 @@ tasks:
 
   - id: "UC1-18"
     description: "Fehlerbehandlung – unbekannte Produkt-ID"
-    category: "error_handling"
     input: >
       Prüfe ob das Produkt FIN-INVEST-SUPER-50 für Kunde K-001 nach IDD Art. 30 geeignet ist.
     expected_tools:
@@ -358,7 +340,6 @@ tasks:
 
   - id: "UC1-19"
     description: "Robustheit – Produkt per Klarname statt ID angegeben"
-    category: "robustness"
     input: >
       Ist die "OVB Life Premium" für Kundin K-002 (Erika Musterfrau) geeignet?
     expected_tools:
@@ -378,7 +359,6 @@ tasks:
 
   - id: "UC1-20"
     description: "DSGVO Art. 22 – Auskunft zum Widerspruchsrecht bei geeignetem IBIP"
-    category: "dsgvo"
     input: >
       Prüfe FIN-INVEST-DYNAMIC-30 für Neukunde K-003 und erkläre dem Kunden ausdrücklich
       sein DSGVO Art. 22-Widerspruchsrecht gegen die automatisierte Eignungsentscheidung.
@@ -397,7 +377,6 @@ tasks:
 
   - id: "UC1-21"
     description: "DSGVO Art. 22 – Kunde übt Widerspruchsrecht aus → Eskalation"
-    category: "dsgvo"
     input: >
       Prüfe FIN-PENSION-CLASSIC für Kunde K-001. Der Kunde widerspricht ausdrücklich einer
       ausschließlich automatisierten Eignungsentscheidung nach DSGVO Art. 22.
@@ -419,7 +398,6 @@ tasks:
 
   - id: "UC1-22"
     description: "Produktvergleich – welches Produkt passt zu K-002?"
-    category: "product_comparison"
     input: >
       Welches der verfügbaren OVB-Produkte ist für Kundin K-002 (Erika Musterfrau,
       68 Jahre, niedriges Risikoprofil) nach IDD Art. 30 geeignet?
@@ -438,7 +416,6 @@ tasks:
 
   - id: "UC1-23"
     description: "Produktvergleich – geeignete Produkte für K-003"
-    category: "product_comparison"
     input: >
       Welche der verfügbaren OVB-Produkte sind für Neukunde K-003 (Max Neukunde,
       hohes Risikoprofil, 30 Jahre Horizont) nach IDD Art. 30 geeignet?
@@ -457,7 +434,6 @@ tasks:
 
   - id: "UC1-24"
     description: "Produktvergleich – geeignete Produkte für K-001"
-    category: "product_comparison"
     input: >
       Welche der verfügbaren OVB-Produkte sind für Kunde K-001 (Hans Mustermann,
       mittleres Risikoprofil, 20 Jahre Horizont) nach IDD Art. 30 geeignet?
@@ -478,7 +454,6 @@ tasks:
 
   - id: "UC1-25"
     description: "Robustheit – vage Anfrage ohne konkretes Produkt"
-    category: "robustness"
     input: >
       Kunde K-001 möchte etwas für die Altersvorsorge. Welches Produkt passt und ist es
       nach IDD Art. 30 geeignet?
@@ -497,7 +472,6 @@ tasks:
 
   - id: "UC1-26"
     description: "Eskalationslogik – Kunde besteht auf ungeeignetem Produkt"
-    category: "escalation"
     input: >
       Kunde K-001 besteht ausdrücklich auf dem Abschluss von FIN-INVEST-DYNAMIC-30,
       obwohl er über die Risiken informiert wurde. Wie gehst du vor?
@@ -517,7 +491,6 @@ tasks:
 
   - id: "UC1-27"
     description: "Datenlücke – fehlender Anlagehorizont bei K-004"
-    category: "data_handling"
     input: >
       Erstelle für Kunde K-004 (Anna Schmidt) eine Eignungsprüfung für FIN-PENSION-CLASSIC
       und weise ausdrücklich auf alle fehlenden Pflichtdaten hin.
@@ -537,7 +510,6 @@ tasks:
 
   - id: "UC1-28"
     description: "Eskalationslogik – Datenlücke, Kunde drängt auf Abschluss"
-    category: "escalation"
     input: >
       Kunde K-004 (Anna Schmidt) möchte FIN-INVEST-GROWTH sofort abschließen und keine
       weiteren Fragen beantworten. Bitte umgehend bestätigen.
@@ -557,7 +529,6 @@ tasks:
 
   - id: "UC1-29"
     description: "Produktvergleich – Sammelprüfung mehrerer Produkte für einen Kunden"
-    category: "product_comparison"
     input: >
       Prüfe für Kunde K-001 sowohl FIN-PENSION-CLASSIC als auch FIN-INVEST-DYNAMIC-30
       und sag mir, welches der beiden geeignet ist.
@@ -577,7 +548,6 @@ tasks:
 
   - id: "UC1-30"
     description: "DSGVO – Bestätigung, dass Lebensversicherung kein Art. 22-Hinweis erfordert"
-    category: "dsgvo"
     input: >
       Prüfe FIN-LIFE-PREMIUM für Neukunde K-003 und sag mir, ob ein DSGVO
       Art. 22-Widerspruchshinweis erforderlich ist.
@@ -596,7 +566,6 @@ tasks:
 
   - id: "UC1-31"
     description: "Robustheit – reine Auskunft zu Produktanforderungen ohne Kundenbezug"
-    category: "robustness"
     input: >
       Welche Mindestanforderungen (Risikorahmen, Mindesthorizont, Mindestbudget) hat das
       Produkt FIN-INVEST-DYNAMIC-30?
@@ -615,7 +584,6 @@ tasks:
 
   - id: "UC1-32"
     description: "Robustheit – Wachstumsprodukt per Klarname statt ID angegeben"
-    category: "robustness"
     input: >
       Ist die "OVB Invest Growth" für Neukunde K-003 (Max Neukunde) nach IDD Art. 30 geeignet?
     expected_tools:
@@ -633,7 +601,6 @@ tasks:
 
   - id: "UC1-33"
     description: "Robustheit – Altersvorsorge per Klarname statt ID angegeben"
-    category: "robustness"
     input: >
       Ist die "OVB Pension Classic" für Kunde K-001 (Hans Mustermann) nach IDD Art. 30 geeignet?
     expected_tools:
@@ -651,7 +618,6 @@ tasks:
 
   - id: "UC1-34"
     description: "Robustheit – reine Auskunft zu Produktanforderungen (Altersvorsorge)"
-    category: "robustness"
     input: >
       Welche Mindestanforderungen (Risikorahmen, Mindesthorizont, Mindestbudget) hat das
       Produkt FIN-PENSION-CLASSIC und ist es DSGVO Art. 22-relevant?
@@ -668,7 +634,6 @@ tasks:
 
   - id: "UC1-35"
     description: "Robustheit – reine Auskunft zu Produktanforderungen (Lebensversicherung)"
-    category: "robustness"
     input: >
       Welche Mindestanforderungen hat das Produkt FIN-LIFE-PREMIUM und ist ein DSGVO
       Art. 22-Hinweis erforderlich?
@@ -685,7 +650,6 @@ tasks:
 
   - id: "UC1-36"
     description: "DSGVO Art. 22 – Widerspruchsrecht bei geeignetem IBIP für K-001"
-    category: "dsgvo"
     input: >
       Prüfe FIN-INVEST-GROWTH für Kunde K-001 und erkläre dem Kunden sein DSGVO
       Art. 22-Widerspruchsrecht gegen die automatisierte Eignungsentscheidung.
@@ -704,7 +668,6 @@ tasks:
 
   - id: "UC1-37"
     description: "Produktvergleich – geeignete Produkte für K-004 mangels Profil nicht bewertbar"
-    category: "data_handling"
     input: >
       Welche der verfügbaren OVB-Produkte sind für Kunde K-004 (Anna Schmidt) nach IDD Art. 30
       geeignet?
@@ -724,7 +687,6 @@ tasks:
 
   - id: "UC1-38"
     description: "Robustheit – vage Anfrage nach langfristigem Vermögensaufbau"
-    category: "robustness"
     input: >
       Neukunde K-003 möchte langfristig Vermögen aufbauen. Welches Produkt passt und ist es
       nach IDD Art. 30 geeignet?
@@ -743,7 +705,6 @@ tasks:
 
   - id: "UC1-39"
     description: "Produktvergleich – Sammelprüfung zweier Produkte für K-002"
-    category: "product_comparison"
     input: >
       Prüfe für Kundin K-002 sowohl FIN-LIFE-PREMIUM als auch FIN-INVEST-GROWTH und sag mir,
       welches der beiden geeignet ist.
@@ -763,7 +724,6 @@ tasks:
 
   - id: "UC1-40"
     description: "Robustheit – reine Auskunft zu Produktanforderungen (Wachstum)"
-    category: "robustness"
     input: >
       Welche Mindestanforderungen hat das Produkt FIN-INVEST-GROWTH?
     expected_tools:

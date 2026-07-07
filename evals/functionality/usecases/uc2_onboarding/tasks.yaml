@@ -6,7 +6,6 @@ tasks:
 
   - id: "UC2-01"
     description: "Standard-Onboarding – sauberer Datensatz, kein PEP-Treffer"
-    category: "onboarding"
     input: >
       Führe ein vollständiges Onboarding für Dokument DOC-DE-001 durch.
       Erstelle aus dem Ausweis-Datensatz eine Kundenanlage und prüfe auf GwG-Trigger.
@@ -27,7 +26,6 @@ tasks:
 
   - id: "UC2-02"
     description: "PEP-Treffer – Onboarding muss pausieren, AML-Review einleiten"
-    category: "aml_trigger"
     input: >
       Führe ein Onboarding für Dokument DOC-DE-003 durch.
       Die Kundin heißt Erika Mustermann. Prüfe auf GwG-Trigger und leite entsprechende
@@ -49,7 +47,6 @@ tasks:
 
   - id: "UC2-03"
     description: "Unvollständiges Dokument – fehlende Ausweisfelder → AML-Flag"
-    category: "data_handling"
     input: >
       Verarbeite Dokument DOC-DE-003 für ein Onboarding. Das Dokument hat möglicherweise
       unvollständige Felder. Gehe gemäß GwG-Anforderungen vor.
@@ -68,7 +65,6 @@ tasks:
 
   - id: "UC2-04"
     description: "Ungültige Adresse – PLZ und Sanktionsland"
-    category: "data_handling"
     input: >
       Führe ein Onboarding für Dokument DOC-DE-001 durch, jedoch mit
       der abweichenden Adresse: Teststraße 1, PLZ 00000, Teheran, IR.
@@ -88,7 +84,6 @@ tasks:
 
   - id: "UC2-05"
     description: "Standard-Onboarding – zweiter sauberer Datensatz (Anna Schmidt)"
-    category: "onboarding"
     input: >
       Führe ein vollständiges Onboarding für Dokument DOC-DE-002 durch.
       Erstelle aus dem Ausweis-Datensatz eine Kundenanlage und prüfe auf GwG-Trigger.
@@ -109,7 +104,6 @@ tasks:
 
   - id: "UC2-06"
     description: "Onboarding – DSGVO-konforme Datenhaltung explizit thematisiert"
-    category: "onboarding"
     input: >
       Führe das Onboarding für Dokument DOC-DE-001 durch und erläutere, wie die
       Ausweisnummer DSGVO-konform gespeichert wird.
@@ -131,7 +125,6 @@ tasks:
 
   - id: "UC2-07"
     description: "Sanktions-Screening – Sanctions-Treffer Viktor Petrov → AML-Review"
-    category: "aml_trigger"
     input: >
       Prüfe die Person 'Viktor Petrov' gegen die PEP- und Sanktionslisten (GwG §10, AMLA)
       und leite die erforderlichen Schritte ein.
@@ -149,7 +142,6 @@ tasks:
 
   - id: "UC2-08"
     description: "Screening – unauffällige Person, cleared"
-    category: "screening"
     input: >
       Prüfe die Person 'Anna Schmidt' gegen die PEP- und Sanktionslisten.
       Muss ein AML-Review eingeleitet werden?
@@ -165,7 +157,6 @@ tasks:
 
   - id: "UC2-09"
     description: "Screening – PEP-Treffer Erika Mustermann isoliert geprüft"
-    category: "aml_trigger"
     input: >
       Prüfe ausschließlich, ob 'Erika Mustermann' auf einer PEP- oder Sanktionsliste steht,
       und leite bei einem Treffer die vorgeschriebenen Schritte ein.
@@ -184,7 +175,6 @@ tasks:
 
   - id: "UC2-10"
     description: "Adressvalidierung – gültige Frankfurter Adresse"
-    category: "data_handling"
     input: >
       Validiere die Adresse: Musterstraße 1, PLZ 60313, Frankfurt am Main, DE.
       Ist sie für ein Onboarding zulässig?
@@ -200,7 +190,6 @@ tasks:
 
   - id: "UC2-11"
     description: "Adressvalidierung – ungültige PLZ 00000"
-    category: "data_handling"
     input: >
       Validiere die Adresse: Unbekannte Straße 0, PLZ 00000, Unbekannt, DE.
     expected_tools:
@@ -215,7 +204,6 @@ tasks:
 
   - id: "UC2-12"
     description: "Adressvalidierung – Sanktionsland Nordkorea (KP)"
-    category: "aml_trigger"
     input: >
       Ein Onboarding-Vorgang nennt die Adresse: Kim Il-sung Square 1, PLZ 11000, Pjöngjang, KP.
       Prüfe die Adresse und leite die nötigen Schritte ein.
@@ -232,7 +220,6 @@ tasks:
 
   - id: "UC2-13"
     description: "Adressvalidierung – Sanktionsland Syrien (SY)"
-    category: "aml_trigger"
     input: >
       Prüfe für ein Onboarding die Adresse: Umayyad Square 5, PLZ 12000, Damaskus, SY,
       und leite die erforderlichen Schritte ein.
@@ -249,7 +236,6 @@ tasks:
 
   - id: "UC2-14"
     description: "Adressvalidierung – PLZ außerhalb des gültigen Bereichs"
-    category: "data_handling"
     input: >
       Validiere die Adresse: Teststraße 5, PLZ 123456, Berlin, DE.
     expected_tools:
@@ -264,7 +250,6 @@ tasks:
 
   - id: "UC2-15"
     description: "Adressvalidierung – unvollständige Straßenangabe"
-    category: "data_handling"
     input: >
       Validiere die Adresse: 'A', PLZ 50667, Köln, DE.
     expected_tools:
@@ -281,7 +266,6 @@ tasks:
 
   - id: "UC2-16"
     description: "Unvollständiges Dokument – fehlende Gültigkeitsdaten explizit benennen"
-    category: "data_handling"
     input: >
       Extrahiere die Ausweisdaten aus Dokument DOC-DE-003 und benenne alle fehlenden
       Pflichtfelder. Wie ist gemäß GwG vorzugehen?
@@ -299,7 +283,6 @@ tasks:
 
   - id: "UC2-17"
     description: "Fehlerbehandlung – unbekannte Dokument-ID"
-    category: "error_handling"
     input: >
       Führe ein Onboarding für Dokument DOC-DE-999 durch.
     expected_tools:
@@ -315,7 +298,6 @@ tasks:
 
   - id: "UC2-18"
     description: "Ungültige Adresse – reines Sanktionsland ohne PLZ-Fehler"
-    category: "aml_trigger"
     input: >
       Führe ein Onboarding für Dokument DOC-DE-001 durch, jedoch mit der abweichenden
       Adresse: Azadi Street 10, PLZ 11369, Teheran, IR.
@@ -333,7 +315,6 @@ tasks:
 
   - id: "UC2-19"
     description: "Vollständiges Onboarding DOC-DE-003 – PEP und unvollständige Daten kombiniert"
-    category: "aml_trigger"
     input: >
       Verarbeite Dokument DOC-DE-003 vollständig: extrahiere die Daten, validiere die Adresse,
       führe das PEP-Screening durch und leite die korrekten Schritte ein.
@@ -355,7 +336,6 @@ tasks:
 
   - id: "UC2-20"
     description: "Onboarding – gültige abweichende Adresse innerhalb DE"
-    category: "onboarding"
     input: >
       Führe ein Onboarding für Dokument DOC-DE-001 durch, jedoch mit der neuen, aktuellen
       Adresse: Hauptstraße 42, PLZ 50667, Köln, DE.
@@ -374,7 +354,6 @@ tasks:
 
   - id: "UC2-21"
     description: "Robustheit – reine Extraktionsanfrage ohne Kundenanlage"
-    category: "robustness"
     input: >
       Extrahiere nur die Ausweisdaten aus Dokument DOC-DE-002 und gib sie strukturiert zurück.
       Lege noch keinen Kundendatensatz an.
@@ -390,7 +369,6 @@ tasks:
 
   - id: "UC2-22"
     description: "Onboarding – expliziter Screening-Schritt vor Kundenanlage"
-    category: "onboarding"
     input: >
       Onboarding für Dokument DOC-DE-002. Stelle sicher, dass das PEP/Sanktions-Screening
       VOR der Kundenanlage erfolgt.
@@ -409,7 +387,6 @@ tasks:
 
   - id: "UC2-23"
     description: "Adressvalidierung – gültige Adresse mit Zusatzprüfung Sanktionsland-frei"
-    category: "data_handling"
     input: >
       Validiere die Adresse: Hauptstraße 42, PLZ 50667, Köln, DE, und bestätige ausdrücklich,
       dass kein Sanktionsland betroffen ist.
@@ -425,7 +402,6 @@ tasks:
 
   - id: "UC2-24"
     description: "Fehlerbehandlung – unbekannte Dokument-ID mit Handlungsempfehlung"
-    category: "error_handling"
     input: >
       Verarbeite Dokument DOC-XX-000 für ein Onboarding und sag mir, wie ich weiter vorgehen soll.
     expected_tools:
@@ -440,7 +416,6 @@ tasks:
 
   - id: "UC2-25"
     description: "Screening – bekannter sauberer Name aus DOC-DE-001"
-    category: "screening"
     input: >
       Prüfe 'Max Neukunde' gegen die PEP- und Sanktionslisten und sag mir, ob ein Onboarding
       fortgesetzt werden darf.
@@ -456,7 +431,6 @@ tasks:
 
   - id: "UC2-26"
     description: "Sanktionsland – Onboarding mit Adresse in Nordkorea abgelehnt"
-    category: "aml_trigger"
     input: >
       Onboarding für Dokument DOC-DE-002 mit abweichender Adresse: Ryomyong Street 2,
       PLZ 11000, Pjöngjang, KP. Prüfe und leite die Schritte ein.
@@ -474,7 +448,6 @@ tasks:
 
   - id: "UC2-27"
     description: "Datenlücke – unvollständiges Dokument, Kunde drängt auf Abschluss"
-    category: "aml_trigger"
     input: >
       Die Kundin zu Dokument DOC-DE-003 möchte sofort abgeschlossen werden und hat keine Zeit
       für weitere Nachweise. Bitte umgehend Onboarding abschließen.
@@ -492,7 +465,6 @@ tasks:
 
   - id: "UC2-28"
     description: "Adressvalidierung – untere PLZ-Grenze gültig (01000)"
-    category: "data_handling"
     input: >
       Validiere die Adresse: Grenzweg 1, PLZ 01000, Dresden, DE.
     expected_tools:
@@ -507,7 +479,6 @@ tasks:
 
   - id: "UC2-29"
     description: "Vollständiges Onboarding mit explizitem Prüfbericht (DOC-DE-001)"
-    category: "onboarding"
     input: >
       Führe das Onboarding für Dokument DOC-DE-001 durch und erstelle einen kurzen Prüfbericht:
       Ausweis, Adresse, Screening-Ergebnis und Status der Kundenanlage.
@@ -528,7 +499,6 @@ tasks:
 
   - id: "UC2-30"
     description: "Screening – bekannte saubere Kundin (Erika ohne Verwechslung)"
-    category: "screening"
     input: >
       Prüfe die Person 'Erika Musterfrau' gegen die PEP- und Sanktionslisten und sag mir, ob ein
       Onboarding fortgesetzt werden darf.
@@ -545,7 +515,6 @@ tasks:
 
   - id: "UC2-31"
     description: "Onboarding – vollständiger Ablauf DOC-DE-002 mit Screening-Bestätigung"
-    category: "onboarding"
     input: >
       Führe ein vollständiges Onboarding für Dokument DOC-DE-002 durch und bestätige ausdrücklich,
       dass das PEP/Sanktions-Screening cleared ergab, bevor der Datensatz angelegt wird.
@@ -564,7 +533,6 @@ tasks:
 
   - id: "UC2-32"
     description: "Adressvalidierung – obere PLZ-Grenze gültig (99999)"
-    category: "data_handling"
     input: >
       Validiere die Adresse: Grenzweg 9, PLZ 99999, Musterort, DE.
     expected_tools:
@@ -579,7 +547,6 @@ tasks:
 
   - id: "UC2-33"
     description: "Adressvalidierung – nicht-numerische PLZ zurückweisen"
-    category: "data_handling"
     input: >
       Validiere die Adresse: Musterstraße 1, PLZ 6O313, Frankfurt am Main, DE.
     expected_tools:
@@ -593,7 +560,6 @@ tasks:
 
   - id: "UC2-34"
     description: "Onboarding – DOC-DE-001 mit expliziter Sanktionsland-Freigabe der Adresse"
-    category: "onboarding"
     input: >
       Führe das Onboarding für Dokument DOC-DE-001 durch und bestätige ausdrücklich, dass die
       Ausweisadresse (Frankfurt, DE) kein Sanktionsland betrifft.
@@ -612,7 +578,6 @@ tasks:
 
   - id: "UC2-35"
     description: "Screening – Sanctions-Treffer Viktor Petrov isoliert, hit_type Sanctions"
-    category: "aml_trigger"
     input: >
       Prüfe ausschließlich, ob 'Viktor Petrov' auf einer PEP- oder Sanktionsliste steht, nenne den
       Treffertyp und leite bei einem Treffer die vorgeschriebenen Schritte ein.
@@ -629,7 +594,6 @@ tasks:
 
   - id: "UC2-36"
     description: "Datenlücke – DOC-DE-003 unvollständige Ausweisdaten isoliert benennen"
-    category: "data_handling"
     input: >
       Extrahiere die Ausweisdaten aus Dokument DOC-DE-003 und nenne genau, welche Gültigkeitsfelder
       fehlen und worauf die Warnung verweist.
@@ -647,7 +611,6 @@ tasks:
 
   - id: "UC2-37"
     description: "Onboarding – DOC-DE-002 mit abweichender gültiger Adresse in Frankfurt"
-    category: "onboarding"
     input: >
       Führe ein Onboarding für Dokument DOC-DE-002 durch, jedoch mit der abweichenden Adresse:
       Musterstraße 1, PLZ 60313, Frankfurt am Main, DE.
@@ -666,7 +629,6 @@ tasks:
 
   - id: "UC2-38"
     description: "Adressvalidierung – gültige Dresdner Adresse ohne Beanstandung"
-    category: "data_handling"
     input: >
       Validiere die Adresse: Grenzweg 1, PLZ 01067, Dresden, DE. Ist sie für ein Onboarding
       zulässig?
@@ -681,7 +643,6 @@ tasks:
 
   - id: "UC2-39"
     description: "Fehlerbehandlung – unbekannte Dokument-ID beim reinen Extraktionsauftrag"
-    category: "error_handling"
     input: >
       Extrahiere die Ausweisdaten aus Dokument DOC-DE-500 und gib sie strukturiert zurück.
     expected_tools:
@@ -697,7 +658,6 @@ tasks:
 
   - id: "UC2-40"
     description: "Onboarding – DOC-DE-001 mit gültiger abweichender Adresse in Dresden"
-    category: "onboarding"
     input: >
       Führe ein Onboarding für Dokument DOC-DE-001 durch, jedoch mit der neuen, aktuellen Adresse:
       Grenzweg 1, PLZ 01067, Dresden, DE.

@@ -7,7 +7,6 @@ tasks:
 
   - id: "UC3-01"
     description: "Hochrisiko – Kreditwürdigkeitsprüfung (Annex III Nr. 5b)"
-    category: "risk_classification"
     input: >
       Ich plane folgende KI-Anwendung: Ein Algorithmus zur automatischen
       Kreditwürdigkeitsprüfung für Privatkundenkredite.
@@ -30,7 +29,6 @@ tasks:
 
   - id: "UC3-02"
     description: "Begrenztes Risiko – KI-Chatbot im Kundendialog (Art. 52)"
-    category: "risk_classification"
     input: >
       Ich plane einen KI-Chatbot für die Beantwortung allgemeiner Kundenanfragen
       (keine Beratung, keine Entscheidungen). Ist er zulässig?
@@ -52,7 +50,6 @@ tasks:
 
   - id: "UC3-03"
     description: "Zitationstreue-Test: Agent darf nichts erfinden"
-    category: "faithfulness"
     input: >
       Mein KI-System hilft Beratern bei der IDD-Eignungsprüfung (Suitability Check).
       Was muss ich nach EU AI Act und OVB-Governance beachten?
@@ -74,7 +71,6 @@ tasks:
 
   - id: "UC3-04"
     description: "Minimales Risiko – Spam-Filter, keine verbindlichen Anforderungen"
-    category: "risk_classification"
     input: >
       Wir nutzen einen KI-basierten Spam-Filter für interne E-Mails.
       Hat das irgendwelche EU AI Act-Auswirkungen?
@@ -94,7 +90,6 @@ tasks:
 
   - id: "UC3-05"
     description: "Personalauswahl-KI – Hochrisiko, Annex III Nr. 5"
-    category: "risk_classification"
     input: >
       Ich möchte eine KI-Anwendung einsetzen, die Bewerbungsunterlagen analysiert
       und eine Einstellungsentscheidung empfiehlt. Welche Pflichten habe ich?
@@ -116,7 +111,6 @@ tasks:
 
   - id: "UC3-06"
     description: "Hochrisiko – Bonitätsbewertung (Annex III Nr. 5b)"
-    category: "risk_classification"
     input: >
       Ich plane ein KI-System zur Bonitätsbewertung von Privatkunden vor Vertragsabschluss.
       Ist es nach EU AI Act und OVB-Governance zulässig und welche Pflichten ergeben sich?
@@ -136,7 +130,6 @@ tasks:
 
   - id: "UC3-07"
     description: "Hochrisiko – Recruitment-KI (englischer Begriff)"
-    category: "risk_classification"
     input: >
       We plan to deploy a recruitment AI that screens applicants automatically.
       Ist das nach EU AI Act zulässig und welche Pflichten habe ich?
@@ -156,7 +149,6 @@ tasks:
 
   - id: "UC3-08"
     description: "Hochrisiko – Personalauswahl-System"
-    category: "risk_classification"
     input: >
       Wir möchten ein KI-System für die Personalauswahl im Vertrieb einsetzen. Welche
       regulatorischen Pflichten ergeben sich nach EU AI Act und OVB-Governance?
@@ -175,7 +167,6 @@ tasks:
 
   - id: "UC3-09"
     description: "Hochrisiko – Kreditwürdigkeitsprüfung mit Fokus auf DSGVO Art. 22"
-    category: "faithfulness"
     input: >
       Unser KI-System zur Kreditwürdigkeitsprüfung trifft die Kreditentscheidung vollautomatisch.
       Welche Betroffenenrechte sind nach DSGVO relevant und welche Quelle belegt das?
@@ -197,7 +188,6 @@ tasks:
 
   - id: "UC3-10"
     description: "Begrenztes Risiko – Produktempfehlung ohne Beratung (Art. 52)"
-    category: "risk_classification"
     input: >
       Wir planen eine KI-gestützte Produktempfehlung auf unserer Website (reine Vorschläge,
       keine verbindliche Beratung). Welche Pflichten habe ich?
@@ -217,7 +207,6 @@ tasks:
 
   - id: "UC3-11"
     description: "Begrenztes Risiko – KI-Beratungsassistent"
-    category: "risk_classification"
     input: >
       Ich möchte einen KI-Beratungsassistenten einführen, der Beratern Textbausteine vorschlägt
       (keine Kundenentscheidungen). Ist das zulässig?
@@ -236,7 +225,6 @@ tasks:
 
   - id: "UC3-12"
     description: "Begrenztes Risiko – KI im Kundendialog"
-    category: "risk_classification"
     input: >
       Wir setzen KI im Kundendialog ein, um allgemeine Fragen zu beantworten. Was müssen wir
       nach EU AI Act beachten?
@@ -255,7 +243,6 @@ tasks:
 
   - id: "UC3-13"
     description: "Begrenztes Risiko – Transparenzpflicht konkret erläutern"
-    category: "faithfulness"
     input: >
       Für unseren Chatbot: Welche konkrete Transparenzpflicht schreibt der EU AI Act vor und
       mit welcher Quelle ist sie belegt?
@@ -277,7 +264,6 @@ tasks:
 
   - id: "UC3-14"
     description: "Minimales Risiko – Spam-Filter, Aufwand und Rechtsgrundlage"
-    category: "risk_classification"
     input: >
       Unser interner Spam-Filter nutzt KI. Welchen regulatorischen Aufwand müssen wir einplanen
       und worauf beruht die Einstufung?
@@ -297,7 +283,6 @@ tasks:
 
   - id: "UC3-15"
     description: "Minimales Risiko – Bestätigung, dass keine EU-AI-Act-Pflichten bestehen"
-    category: "faithfulness"
     input: >
       Löst unser KI-Spam-Filter irgendwelche verbindlichen EU-AI-Act-Pflichten aus?
       Bitte nur belegte Aussagen.
@@ -318,7 +303,6 @@ tasks:
 
   - id: "UC3-16"
     description: "OVB-Governance – AI-Review-Board-Genehmigungspflicht (§3)"
-    category: "governance"
     input: >
       Muss unsere geplante KI zur Kreditwürdigkeitsprüfung vor dem Produktiveinsatz intern
       genehmigt werden? Welche OVB-Governance-Regel gilt?
@@ -338,7 +322,6 @@ tasks:
 
   - id: "UC3-17"
     description: "OVB-Governance – Folgenabschätzung und EU-Datenbank-Registrierung (§7)"
-    category: "governance"
     input: >
       Welche zusätzlichen OVB-internen Pflichten gelten für ein Hochrisiko-KI-System bei uns,
       und mit welcher Policy sind sie belegt?
@@ -358,7 +341,6 @@ tasks:
 
   - id: "UC3-18"
     description: "Governance-Matching – Timeline-Vergleich high vs. limited vs. minimal"
-    category: "governance"
     input: >
       Wie unterscheiden sich die Umsetzungszeiträume der OVB-Governance-Policies für
       Hochrisiko-, begrenztes und minimales Risiko?
@@ -376,7 +358,6 @@ tasks:
 
   - id: "UC3-19"
     description: "Zitationstreue – Frage nach nicht existierendem Artikel"
-    category: "faithfulness"
     input: >
       Gilt für unsere Kreditwürdigkeitsprüfungs-KI der 'Artikel 99 EU AI Act zur Pflicht­versicherung'?
       Bitte mit Quelle beantworten.
@@ -394,7 +375,6 @@ tasks:
 
   - id: "UC3-20"
     description: "Zitationstreue – Transparenzpflicht bei Hochrisiko (Art. 13)"
-    category: "faithfulness"
     input: >
       Welche Transparenzanforderung gilt für unser Hochrisiko-KI-System zur Kreditwürdigkeitsprüfung
       und mit welcher Quelle ist sie belegt?
@@ -414,7 +394,6 @@ tasks:
 
   - id: "UC3-21"
     description: "Zitationstreue – menschliche Aufsicht bei Hochrisiko (Art. 14)"
-    category: "faithfulness"
     input: >
       Muss bei unserer Personalauswahl-KI ein Mensch die Ergebnisse überwachen? Welche Quelle
       belegt das?
@@ -434,7 +413,6 @@ tasks:
 
   - id: "UC3-22"
     description: "Zitationstreue – Datenverwaltung/Governance bei Hochrisiko (Art. 10)"
-    category: "faithfulness"
     input: >
       Welche Anforderung stellt der EU AI Act an die Trainingsdaten unseres Hochrisiko-Systems
       zur Bonitätsbewertung? Bitte mit Quelle.
@@ -455,7 +433,6 @@ tasks:
 
   - id: "UC3-23"
     description: "Grenzfall – Mischbeschreibung, Hochrisiko dominiert"
-    category: "risk_classification"
     input: >
       Unser System ist ein Chatbot, der zugleich eine automatische Kreditwürdigkeitsprüfung
       durchführt. Wie ist es einzustufen?
@@ -475,7 +452,6 @@ tasks:
 
   - id: "UC3-24"
     description: "Grenzfall – unklare Anwendung, konservative Einstufung"
-    category: "robustness"
     input: >
       Wir haben ein KI-Tool, wissen aber noch nicht genau, wofür wir es einsetzen. Wie sollen wir
       regulatorisch vorgehen?
@@ -493,7 +469,6 @@ tasks:
 
   - id: "UC3-25"
     description: "Hochrisiko – Eignungsprüfung/Suitability-Check (Finanzberatung)"
-    category: "risk_classification"
     input: >
       Unser KI-System unterstützt die Eignungsprüfung bei der Finanzberatung. Welche EU-AI-Act-
       und OVB-Pflichten ergeben sich?
@@ -513,7 +488,6 @@ tasks:
 
   - id: "UC3-26"
     description: "Robustheit – Frage nach zuständiger interner Genehmigungsinstanz"
-    category: "governance"
     input: >
       Wer muss bei OVB einer Hochrisiko-KI-Anwendung vor dem Produktiveinsatz zustimmen und
       welche Policy regelt das?
@@ -531,7 +505,6 @@ tasks:
 
   - id: "UC3-27"
     description: "Maßnahmenliste – vollständige Hochrisiko-TODOs generieren"
-    category: "action_list"
     input: >
       Erstelle für unsere Kreditwürdigkeitsprüfungs-KI 'CreditScorer' eine priorisierte
       Maßnahmenliste gemäß OVB-Governance.
@@ -552,7 +525,6 @@ tasks:
 
   - id: "UC3-28"
     description: "Maßnahmenliste – begrenztes Risiko, reduzierter Umfang"
-    category: "action_list"
     input: >
       Erstelle für unseren Kundendialog-Chatbot 'DialogBot' eine Maßnahmenliste nach
       OVB-Governance.
@@ -572,7 +544,6 @@ tasks:
 
   - id: "UC3-29"
     description: "Minimales Risiko – Maßnahmenliste ohne verbindliche Pflichten"
-    category: "action_list"
     input: >
       Erstelle für unseren Spam-Filter 'MailGuard' die OVB-Governance-Maßnahmenliste.
     expected_tools:
@@ -591,7 +562,6 @@ tasks:
 
   - id: "UC3-30"
     description: "Zitationstreue – nur belegte Quellen bei mehrschichtiger Frage"
-    category: "faithfulness"
     input: >
       Für unsere Bonitätsbewertungs-KI: fasse alle relevanten regulatorischen Grundlagen zusammen
       und nenne zu jeder die Quelle.
@@ -611,7 +581,6 @@ tasks:
 
   - id: "UC3-31"
     description: "Begrenztes Risiko – Abgrenzung: warum nicht Hochrisiko"
-    category: "risk_classification"
     input: >
       Unser Chatbot gibt allgemeine Produkthinweise, trifft aber keine Kredit- oder
       Einstellungsentscheidungen. Warum ist er nicht Hochrisiko?
@@ -631,7 +600,6 @@ tasks:
 
   - id: "UC3-32"
     description: "Hochrisiko – reine Klassifizierung ohne Maßnahmenliste"
-    category: "risk_classification"
     input: >
       Klassifiziere nur das Risikolevel unserer KI zur Einstellungsentscheidung – noch keine
       Maßnahmenliste.
@@ -647,7 +615,6 @@ tasks:
 
   - id: "UC3-33"
     description: "Zitationstreue – EU-Datenbank-Registrierung mit Quelle belegen"
-    category: "faithfulness"
     input: >
       Muss unsere Hochrisiko-Kreditwürdigkeitsprüfung in einer EU-Datenbank registriert werden?
       Womit ist das belegt?
@@ -667,7 +634,6 @@ tasks:
 
   - id: "UC3-34"
     description: "Grenzfall – Anwendung ohne Keyword-Treffer, minimal als Default"
-    category: "robustness"
     input: >
       Wir betreiben einen internen KI-gestützten Übersetzungsdienst für Meeting-Notizen.
       Welches Risikolevel gilt?
@@ -687,7 +653,6 @@ tasks:
 
   - id: "UC3-35"
     description: "Begrenztes Risiko – reine Klassifizierung Chatbot ohne Maßnahmenliste"
-    category: "risk_classification"
     input: >
       Klassifiziere nur das Risikolevel unseres KI-Chatbots für allgemeine Kundenanfragen –
       noch keine Maßnahmenliste.
@@ -703,7 +668,6 @@ tasks:
 
   - id: "UC3-36"
     description: "Minimales Risiko – reine Klassifizierung Spam-Filter ohne Maßnahmenliste"
-    category: "risk_classification"
     input: >
       Klassifiziere nur das Risikolevel unseres KI-Spam-Filters – erstelle noch keine
       Maßnahmenliste.
@@ -719,7 +683,6 @@ tasks:
 
   - id: "UC3-37"
     description: "Maßnahmenliste – Personalauswahl-KI 'HR-Screener', vollständige Hochrisiko-TODOs"
-    category: "action_list"
     input: >
       Erstelle für unsere Personalauswahl-KI 'HR-Screener' eine priorisierte Maßnahmenliste
       gemäß OVB-Governance.
@@ -740,7 +703,6 @@ tasks:
 
   - id: "UC3-38"
     description: "Zitationstreue – Genehmigungspflicht mit OVB-Policy-Quelle belegen"
-    category: "faithfulness"
     input: >
       Muss unsere KI zur Bonitätsbewertung vor dem Produktiveinsatz intern genehmigt werden?
       Womit ist das belegt?
@@ -760,7 +722,6 @@ tasks:
 
   - id: "UC3-39"
     description: "Governance-Matching – Timeline für begrenztes Risiko isoliert abrufen"
-    category: "governance"
     input: >
       Wie lange dauert die OVB-Governance-Umsetzung für ein KI-System mit begrenztem Risiko und
       welche Anforderungen umfasst sie?
@@ -777,7 +738,6 @@ tasks:
 
   - id: "UC3-40"
     description: "Zitationstreue – Transparenzpflicht bei begrenztem Risiko (Beratungsassistent)"
-    category: "faithfulness"
     input: >
       Für unseren KI-Beratungsassistenten: welche Transparenzpflicht gilt und mit welcher Quelle
       ist sie belegt?
