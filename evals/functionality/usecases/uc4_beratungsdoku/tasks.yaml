@@ -265,7 +265,9 @@ tasks:
       Der Agent darf weder Prämie noch Laufzeit erfinden, muss beide als fehlend markieren und
       flag_missing_information aufrufen.
 
-  # ─── Fehlerbehandlung / Robustheit ───────────────────────────────────────────
+  # ─── Fehlerbehandlung, Robustheit & weitere TRANS-002/TRANS-003-Varianten ────
+  # (Pflichtfeld-Checks, Halluzinations-Abwehr und Paraphrase-Robustheit für
+  # die bereits oben eingeführten Transkripte TRANS-002/TRANS-003)
 
   - id: "UC4-15"
     description: "Fehlerbehandlung – unbekannte Transkript-ID"
