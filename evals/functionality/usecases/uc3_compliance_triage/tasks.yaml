@@ -149,24 +149,6 @@ tasks:
       die Hochrisiko-Anforderungen ausgeben.
 
   - id: "UC3-08"
-    description: "Hochrisiko – Personalauswahl-System"
-    input: >
-      Wir möchten ein KI-System für die Personalauswahl im Vertrieb einsetzen. Welche
-      regulatorischen Pflichten ergeben sich nach EU AI Act und OVB-Governance?
-    expected_tools:
-      - retrieve_regulatory_corpus
-      - classify_risk_level
-      - match_governance_policy
-      - generate_action_list
-    expected_output: >
-      Risikolevel: high_risk (Annex III Nr. 5: Personalauswahl). 12 Wochen Aufwand, vollständige
-      Hochrisiko-Anforderungen. Quelle zitiert: EU-AI-Act/Annex-III/Nr.5.
-    should_escalate: false
-    deepeval_task: >
-      Der Agent soll Personalauswahl als high_risk klassifizieren, Annex III Nr. 5 zitieren und
-      die Maßnahmenliste inkl. Timeline ausgeben.
-
-  - id: "UC3-09"
     description: "Hochrisiko – Kreditwürdigkeitsprüfung mit Fokus auf DSGVO Art. 22"
     input: >
       Unser KI-System zur Kreditwürdigkeitsprüfung trifft die Kreditentscheidung vollautomatisch.
@@ -187,7 +169,7 @@ tasks:
 
   # ─── Begrenztes Risiko: alle Anwendungstypen ─────────────────────────────────
 
-  - id: "UC3-10"
+  - id: "UC3-09"
     description: "Begrenztes Risiko – Produktempfehlung ohne Beratung (Art. 52)"
     input: >
       Wir planen eine KI-gestützte Produktempfehlung auf unserer Website (reine Vorschläge,
@@ -206,7 +188,7 @@ tasks:
       Der Agent soll produktempfehlung als limited_risk klassifizieren, Art. 52 zitieren und nur
       die für begrenztes Risiko relevanten Anforderungen ausgeben.
 
-  - id: "UC3-11"
+  - id: "UC3-10"
     description: "Begrenztes Risiko – KI-Beratungsassistent"
     input: >
       Ich möchte einen KI-Beratungsassistenten einführen, der Beratern Textbausteine vorschlägt
@@ -224,7 +206,7 @@ tasks:
       Der Agent soll beratungsassistent als limited_risk klassifizieren, Art. 52 zitieren und
       keine Hochrisiko-Anforderungen ausgeben.
 
-  - id: "UC3-12"
+  - id: "UC3-11"
     description: "Begrenztes Risiko – KI im Kundendialog"
     input: >
       Wir setzen KI im Kundendialog ein, um allgemeine Fragen zu beantworten. Was müssen wir
@@ -242,7 +224,7 @@ tasks:
       Der Agent soll kundendialog als limited_risk klassifizieren und die Transparenzpflicht nach
       Art. 52 mit Quellenzitat ausgeben.
 
-  - id: "UC3-13"
+  - id: "UC3-12"
     description: "Begrenztes Risiko – Transparenzpflicht konkret erläutern"
     input: >
       Für unseren Chatbot: Welche konkrete Transparenzpflicht schreibt der EU AI Act vor und
@@ -263,7 +245,7 @@ tasks:
 
   # ─── Minimales Risiko ────────────────────────────────────────────────────────
 
-  - id: "UC3-14"
+  - id: "UC3-13"
     description: "Minimales Risiko – Spam-Filter, Aufwand und Rechtsgrundlage"
     input: >
       Unser interner Spam-Filter nutzt KI. Welchen regulatorischen Aufwand müssen wir einplanen
@@ -282,7 +264,7 @@ tasks:
       Der Agent soll minimal_risk klassifizieren, Erwägungsgrund 47 zitieren und den Aufwand von
       1 Woche korrekt aus der Policy ausgeben.
 
-  - id: "UC3-15"
+  - id: "UC3-14"
     description: "Minimales Risiko – Bestätigung, dass keine EU-AI-Act-Pflichten bestehen"
     input: >
       Löst unser KI-Spam-Filter irgendwelche verbindlichen EU-AI-Act-Pflichten aus?
@@ -302,7 +284,7 @@ tasks:
 
   # ─── OVB-Governance-Fokus ────────────────────────────────────────────────────
 
-  - id: "UC3-16"
+  - id: "UC3-15"
     description: "OVB-Governance – AI-Review-Board-Genehmigungspflicht (§3)"
     input: >
       Muss unsere geplante KI zur Kreditwürdigkeitsprüfung vor dem Produktiveinsatz intern
@@ -321,7 +303,7 @@ tasks:
       Der Agent soll die Genehmigungspflicht nach OVB-AI-Policy §3 nennen und die Quellen-ID
       OVB-AI-Policy/v1.2/§3 zitieren.
 
-  - id: "UC3-17"
+  - id: "UC3-16"
     description: "OVB-Governance – Folgenabschätzung und EU-Datenbank-Registrierung (§7)"
     input: >
       Wir planen ein System zur Kreditwürdigkeitsprüfung unserer Kunden. Welche zusätzlichen
@@ -340,7 +322,7 @@ tasks:
       Der Agent soll die Zusatzpflichten (Folgenabschätzung, EU-Datenbank-Registrierung) nach
       OVB-AI-Policy §7 nennen und die Quellen-ID zitieren.
 
-  - id: "UC3-18"
+  - id: "UC3-17"
     description: "Governance-Matching – Timeline-Vergleich high vs. limited vs. minimal"
     input: >
       Wie unterscheiden sich die Umsetzungszeiträume der OVB-Governance-Policies für
@@ -357,7 +339,7 @@ tasks:
 
   # ─── Zitationstreue / Halluzinations-Abwehr ──────────────────────────────────
 
-  - id: "UC3-19"
+  - id: "UC3-18"
     description: "Zitationstreue – Frage nach nicht existierendem Artikel"
     input: >
       Gilt für unsere Kreditwürdigkeitsprüfungs-KI der 'Artikel 99 EU AI Act zur Pflicht­versicherung'?
@@ -374,7 +356,7 @@ tasks:
       Der Agent soll den nicht existierenden Artikel NICHT bestätigen, sondern nur durch den
       Korpus belegte Quellen zitieren – jede Bestätigung des erfundenen Artikels ist ein Misserfolg.
 
-  - id: "UC3-20"
+  - id: "UC3-19"
     description: "Zitationstreue – Transparenzpflicht bei Hochrisiko (Art. 13)"
     input: >
       Welche Transparenzanforderung gilt für unser Hochrisiko-KI-System zur Kreditwürdigkeitsprüfung
@@ -393,7 +375,7 @@ tasks:
       Der Agent soll die Transparenzpflicht nach Art. 13 nennen und EU-AI-Act/Art.13 als Quelle
       zitieren, ohne Halluzinationen.
 
-  - id: "UC3-21"
+  - id: "UC3-20"
     description: "Zitationstreue – menschliche Aufsicht bei Hochrisiko (Art. 14)"
     input: >
       Muss bei unserer Personalauswahl-KI ein Mensch die Ergebnisse überwachen? Welche Quelle
@@ -412,7 +394,7 @@ tasks:
       Der Agent soll die Pflicht zur menschlichen Aufsicht nach Art. 14 bestätigen und
       EU-AI-Act/Art.14 zitieren.
 
-  - id: "UC3-22"
+  - id: "UC3-21"
     description: "Zitationstreue – Datenverwaltung/Governance bei Hochrisiko (Art. 10)"
     input: >
       Welche Anforderung stellt der EU AI Act an die Trainingsdaten unseres Hochrisiko-Systems
@@ -432,7 +414,7 @@ tasks:
 
   # ─── Grenzfälle / Mehrdeutigkeit / Sicherheit ────────────────────────────────
 
-  - id: "UC3-23"
+  - id: "UC3-22"
     description: "Grenzfall – Mischbeschreibung, Hochrisiko dominiert"
     input: >
       Unser System ist ein Chatbot, der zugleich eine automatische Kreditwürdigkeitsprüfung
@@ -451,7 +433,7 @@ tasks:
       Der Agent soll erkennen dass bei Mischanwendungen die Hochrisiko-Komponente
       (Kreditwürdigkeitsprüfung) die Einstufung bestimmt, und high_risk klassifizieren.
 
-  - id: "UC3-24"
+  - id: "UC3-23"
     description: "Grenzfall – unklare Anwendung, konservative Einstufung"
     input: >
       Wir haben ein KI-Tool, wissen aber noch nicht genau, wofür wir es einsetzen. Wie sollen wir
@@ -468,7 +450,7 @@ tasks:
       Der Agent soll transparent machen dass ohne Anwendungszweck nur die konservative
       Default-Einstufung (minimal_risk) möglich ist und eine rechtliche Prüfung nötig bleibt.
 
-  - id: "UC3-25"
+  - id: "UC3-24"
     description: "Hochrisiko – Eignungsprüfung/Suitability-Check (Finanzberatung)"
     input: >
       Unser KI-System unterstützt die Eignungsprüfung bei der Finanzberatung. Welche EU-AI-Act-
@@ -487,7 +469,7 @@ tasks:
       Der Agent soll eignungsprüfung als high_risk klassifizieren, passende Quellen zitieren und
       die vollständige Maßnahmenliste ausgeben.
 
-  - id: "UC3-26"
+  - id: "UC3-25"
     description: "Robustheit – Frage nach zuständiger interner Genehmigungsinstanz"
     input: >
       Wer muss bei OVB einer Hochrisiko-KI-Anwendung vor dem Produktiveinsatz zustimmen und
@@ -504,7 +486,7 @@ tasks:
       Der Agent soll das AI-Review-Board als Genehmigungsinstanz nennen und OVB-AI-Policy/v1.2/§3
       (und §7) zitieren.
 
-  - id: "UC3-27"
+  - id: "UC3-26"
     description: "Maßnahmenliste – vollständige Hochrisiko-TODOs generieren"
     input: >
       Erstelle für unsere Kreditwürdigkeitsprüfungs-KI 'CreditScorer' eine priorisierte
@@ -524,7 +506,7 @@ tasks:
       Der Agent soll den vollständigen Workflow durchlaufen und über generate_action_list eine
       priorisierte Hochrisiko-Maßnahmenliste mit Fristen für 'CreditScorer' ausgeben.
 
-  - id: "UC3-28"
+  - id: "UC3-27"
     description: "Maßnahmenliste – begrenztes Risiko, reduzierter Umfang"
     input: >
       Erstelle für unseren Kundendialog-Chatbot 'DialogBot' eine Maßnahmenliste nach
@@ -543,7 +525,7 @@ tasks:
       Der Agent soll limited_risk klassifizieren und eine reduzierte Maßnahmenliste (nur
       begrenztes-Risiko-Anforderungen) für 'DialogBot' generieren.
 
-  - id: "UC3-29"
+  - id: "UC3-28"
     description: "Minimales Risiko – Maßnahmenliste ohne verbindliche Pflichten"
     input: >
       Erstelle für unseren Spam-Filter 'MailGuard' die OVB-Governance-Maßnahmenliste.
@@ -561,7 +543,7 @@ tasks:
       Der Agent soll minimal_risk klassifizieren und die Maßnahmenliste ohne verbindliche
       EU-AI-Act-Pflichten (1 Woche) für 'MailGuard' ausgeben.
 
-  - id: "UC3-30"
+  - id: "UC3-29"
     description: "Zitationstreue – nur belegte Quellen bei mehrschichtiger Frage"
     input: >
       Für unsere Bonitätsbewertungs- und Kreditprüfungs-KI: fasse alle relevanten regulatorischen
@@ -580,7 +562,7 @@ tasks:
       Der Agent soll ausschließlich Quellen aus dem Korpus zitieren (jede Aussage mit Quellen-ID
       belegt) und keine Grundlage erfinden.
 
-  - id: "UC3-31"
+  - id: "UC3-30"
     description: "Begrenztes Risiko – Abgrenzung: warum nicht Hochrisiko"
     input: >
       Unser Chatbot gibt allgemeine Produkthinweise, trifft aber keine Kredit- oder
@@ -599,7 +581,7 @@ tasks:
       Der Agent soll limited_risk klassifizieren und nachvollziehbar begründen warum kein
       Hochrisiko-Tatbestand (Annex III) erfüllt ist, mit Quellenzitat Art. 52.
 
-  - id: "UC3-32"
+  - id: "UC3-31"
     description: "Hochrisiko – reine Klassifizierung ohne Maßnahmenliste"
     input: >
       Klassifiziere nur das Risikolevel unserer KI zur Einstellungsentscheidung – noch keine
@@ -614,11 +596,11 @@ tasks:
       Der Agent soll ausschließlich classify_risk_level aufrufen und high_risk zurückgeben, ohne
       generate_action_list.
 
-  - id: "UC3-33"
-    description: "Zitationstreue – EU-Datenbank-Registrierung mit Quelle belegen"
+  - id: "UC3-32"
+    description: "Zitationstreue – EU-Datenbank-Registrierung mit Quelle belegen (Personalauswahl)"
     input: >
-      Muss unsere Hochrisiko-Kreditwürdigkeitsprüfung in einer EU-Datenbank registriert werden?
-      Womit ist das belegt?
+      Muss unser geplantes Hochrisiko-System zur automatisierten Personalauswahl intern
+      in einer EU-Datenbank registriert werden? Womit ist das belegt?
     expected_tools:
       - retrieve_regulatory_corpus
       - classify_risk_level
@@ -633,7 +615,7 @@ tasks:
       Der Agent soll die Registrierungspflicht nennen und ausschließlich mit OVB-AI-Policy/v1.2/§7
       (und ggf. den EU-AI-Act-Quellen) belegen.
 
-  - id: "UC3-34"
+  - id: "UC3-33"
     description: "Grenzfall – Anwendung ohne Keyword-Treffer, minimal als Default"
     input: >
       Wir betreiben einen internen KI-gestützten Übersetzungsdienst für Meeting-Notizen.
@@ -652,7 +634,7 @@ tasks:
 
   # ─── Ergänzende Kernfunktionalität: Klassifizierung, Zitationstreue, Governance ─
 
-  - id: "UC3-35"
+  - id: "UC3-34"
     description: "Begrenztes Risiko – reine Klassifizierung Chatbot ohne Maßnahmenliste"
     input: >
       Klassifiziere nur das Risikolevel unseres KI-Chatbots für allgemeine Kundenanfragen –
@@ -667,7 +649,7 @@ tasks:
       Der Agent soll ausschließlich classify_risk_level aufrufen und limited_risk zurückgeben, ohne
       generate_action_list.
 
-  - id: "UC3-36"
+  - id: "UC3-35"
     description: "Minimales Risiko – reine Klassifizierung Spam-Filter ohne Maßnahmenliste"
     input: >
       Klassifiziere nur das Risikolevel unseres KI-Spam-Filters – erstelle noch keine
@@ -682,7 +664,7 @@ tasks:
       Der Agent soll ausschließlich classify_risk_level aufrufen und minimal_risk zurückgeben, ohne
       generate_action_list.
 
-  - id: "UC3-37"
+  - id: "UC3-36"
     description: "Maßnahmenliste – Personalauswahl-KI 'HR-Screener', vollständige Hochrisiko-TODOs"
     input: >
       Erstelle für unsere Personalauswahl-KI 'HR-Screener' eine priorisierte Maßnahmenliste
@@ -702,7 +684,7 @@ tasks:
       Der Agent soll den vollständigen Workflow durchlaufen und über generate_action_list eine
       priorisierte Hochrisiko-Maßnahmenliste mit Fristen für 'HR-Screener' ausgeben.
 
-  - id: "UC3-38"
+  - id: "UC3-37"
     description: "Zitationstreue – Genehmigungspflicht mit OVB-Policy-Quelle belegen"
     input: >
       Muss unsere KI zur Bonitätsbewertung vor dem Produktiveinsatz intern genehmigt werden?
@@ -721,7 +703,7 @@ tasks:
       Der Agent soll die Genehmigungspflicht nennen und ausschließlich mit OVB-AI-Policy/v1.2/§3
       (und ggf. den EU-AI-Act-Quellen) belegen.
 
-  - id: "UC3-39"
+  - id: "UC3-38"
     description: "Governance-Matching – Timeline für begrenztes Risiko isoliert abrufen"
     input: >
       Wie lange dauert die OVB-Governance-Umsetzung für ein KI-System mit begrenztem Risiko und
@@ -737,7 +719,7 @@ tasks:
       Der Agent soll die Timeline (4 Wochen) und die Anforderungen für limited_risk über
       match_governance_policy abrufen und korrekt wiedergeben.
 
-  - id: "UC3-40"
+  - id: "UC3-39"
     description: "Zitationstreue – Transparenzpflicht bei begrenztem Risiko (Beratungsassistent)"
     input: >
       Für unseren KI-Beratungsassistenten: welche Transparenzpflicht gilt und mit welcher Quelle
