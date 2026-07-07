@@ -986,6 +986,12 @@ def _section_eval_overhead_all(agents_data: list[dict], judge_model: str) -> str
 # Multi-Agent-Vergleich
 # ---------------------------------------------------------------------------
 
+# Eine Palette für den gesamten Multi-Agent-Vergleich (Radar-Chart, Legende,
+# Gesamtbewertungs-Karten) – Reihenfolge entspricht der Agenten-Reihenfolge in
+# agents_data, damit ein Agent überall dieselbe Farbe hat.
+_AGENT_COLORS = ["#00b7e5", "#28a745", "#e17055", "#6c5ce7", "#fd79a8", "#6c757d"]
+
+
 def _radar_svg(entries: list[dict]) -> str:
     """Inline SVG Radar/Spider-Chart (5 Achsen, kein JS, kein CDN).
 
@@ -1011,7 +1017,7 @@ def _radar_svg(entries: list[dict]) -> str:
     ]
     n_axes = len(AXES)
     angles = [-math.pi / 2 + i * 2 * math.pi / n_axes for i in range(n_axes)]
-    COLORS = ["#00b7e5", "#28a745", "#e17055", "#6c5ce7", "#fd79a8"]
+    COLORS = _AGENT_COLORS
 
     def pt(axis_i: int, frac: float) -> tuple[float, float]:
         a = angles[axis_i]
@@ -1460,7 +1466,12 @@ def _section_overall_score(agents_data: list[dict]) -> str:
         f"<script>"
         f"(function(){{"
         f"  const AGENTS={data_js};"
-        f"  const COLS=['#28a745','#00b7e5','#fdcb6e','#e17055','#a29bfe','#6c757d'];"
+        f"  const COLS={_json.dumps(_AGENT_COLORS)};"
+        # Farbe an die Position in AGENTS (= Reihenfolge in agents_data, wie im
+        # Agenten-Vergleich/Radar-Chart) binden, NICHT an den Rang nach Score -
+        # sonst behaelt Platz 1 immer dieselbe Farbe, auch wenn beim Verschieben
+        # der Regler ein anderer Agent auf Platz 1 rutscht.
+        f"  AGENTS.forEach((a,i)=>{{a.colorIdx=i;}});"
         f"  const validCosts=AGENTS.map(a=>a.cost_raw).filter(c=>c>0);"
         f"  const minCost=validCosts.length?Math.min(...validCosts):0;"
         f"  AGENTS.forEach(a=>{{a.d4=(a.cost_raw>0&&minCost>0)?+(minCost/a.cost_raw).toFixed(4):null;}});"
@@ -1487,7 +1498,7 @@ def _section_overall_score(agents_data: list[dict]) -> str:
         f"    document.getElementById('ovb-cards').innerHTML=scored.map((a,i)=>{{"
         f"      const pct=(a.score*100).toFixed(1);"
         f"      const bar=Math.round(a.score*100);"
-        f"      const col=COLS[i%COLS.length];"
+        f"      const col=COLS[a.colorIdx%COLS.length];"
         f"      const medal=i<3?medals[i]+' ':'';"
         f"      const rank=i>=3?`<span style='font-size:.75rem;color:#b2bec3'>#${{i+1}}</span> `:'';"
         f"      const d1s=a.d1!=null?(a.d1*100).toFixed(1)+'%':'–';"
