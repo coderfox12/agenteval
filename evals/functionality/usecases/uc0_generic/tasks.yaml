@@ -103,33 +103,40 @@ tasks:
   # ─── Eignungsprüfung einzelner Kunde×Produkt-Kombinationen ───────────────────
 
   - id: "FUNC-06"
-    description: "Eignungsprüfung – mittleres Profil, wachstumsorientiertes Produkt geeignet"
+    description: "Isoliertes Budget-Defizit – Risikoprofil und Horizont passen, nur Budget reicht nicht"
     input: >
-      Prüfe für Kunde K-001 die Eignung von FIN-INVEST-GROWTH und begründe das Ergebnis.
+      Prüfe für Kundin K-005 (Lena Berger, 24 Jahre, hohes Risikoprofil, 25 Jahre
+      Anlagehorizont, 80 EUR Budget) die Eignung von FIN-INVEST-GROWTH und begründe das Ergebnis.
     expected_tools:
       - get_customer_profile
       - check_idd_suitability
+      - escalate_to_human
     expected_output: >
-      FIN-INVEST-GROWTH ist für K-001 geeignet: Risikoprofil mittel im Rahmen mittel–hoch,
-      Anlagehorizont 20 Jahre > Minimum 15 Jahre, Budget 300 EUR > 100 EUR.
-    should_escalate: false
+      FIN-INVEST-GROWTH ist für K-005 NICHT geeignet: Risikoprofil hoch passt (Rahmen
+      mittel–hoch), Horizont 25 Jahre > Minimum 15 Jahre – einziger Ablehnungsgrund ist das
+      Budget (80 EUR < Minimum 100 EUR). Eskalation an einen menschlichen Berater.
+    should_escalate: true
     deepeval_task: >
-      Der Agent soll Profil und Eignung prüfen und die Eignung von FIN-INVEST-GROWTH für K-001
-      begründet bestätigen.
+      Der Agent soll erkennen, dass ausschließlich das Budget nicht ausreicht (Risikoprofil und
+      Horizont sind unproblematisch), keinen falschen Ablehnungsgrund nennen und eskalieren.
 
   - id: "FUNC-07"
-    description: "Eignungsprüfung – Lebensversicherung für mittleres Profil geeignet"
+    description: "Horizont UND Budget zu knapp, Risikoprofil passt – neue Ablehnungskombination"
     input: >
-      Ist FIN-LIFE-PREMIUM für Kunde K-001 geeignet?
+      Ist FIN-INVEST-DYNAMIC-30 für Kundin K-005 (hohes Risikoprofil, 25 Jahre Anlagehorizont,
+      80 EUR Budget) geeignet?
     expected_tools:
       - get_customer_profile
       - check_idd_suitability
+      - escalate_to_human
     expected_output: >
-      FIN-LIFE-PREMIUM ist für K-001 geeignet: Risikoprofil mittel im Rahmen niedrig–hoch,
-      Horizont 20 Jahre > Minimum 5 Jahre, Budget 300 EUR > 30 EUR.
-    should_escalate: false
+      FIN-INVEST-DYNAMIC-30 ist für K-005 NICHT geeignet: Risikoprofil hoch passt genau (Rahmen
+      hoch–hoch), aber Horizont (25 J. < Minimum 30 J.) UND Budget (80 EUR < Minimum 200 EUR)
+      reichen nicht. Eskalation an einen menschlichen Berater.
+    should_escalate: true
     deepeval_task: >
-      Der Agent soll die Eignung von FIN-LIFE-PREMIUM für K-001 prüfen und bestätigen.
+      Der Agent soll beide gleichzeitigen Ablehnungsgründe (Horizont, Budget) benennen und darf
+      das passende Risikoprofil nicht fälschlich als Ablehnungsgrund nennen.
 
   - id: "FUNC-08"
     description: "Eskalation – Hochrisikoprodukt für mittleres Profil ungeeignet"
@@ -214,18 +221,24 @@ tasks:
       passt und eskalieren.
 
   - id: "FUNC-13"
-    description: "Eignungsprüfung – hohes Profil, Wachstumsprodukt geeignet"
+    description: "Produktvergleich für K-005 – vier unterschiedliche Ergebnisse über alle Produkte"
     input: >
-      Ist FIN-INVEST-GROWTH für Neukunde K-003 geeignet?
+      Welche der verfügbaren Produkte sind für Kundin K-005 (Lena Berger, hohes Risikoprofil,
+      25 Jahre Anlagehorizont, 80 EUR Budget) geeignet?
     expected_tools:
       - get_customer_profile
       - check_idd_suitability
+      - escalate_to_human
     expected_output: >
-      FIN-INVEST-GROWTH ist für K-003 geeignet: Risikoprofil hoch im Rahmen mittel–hoch,
-      Horizont 30 Jahre > Minimum 15 Jahre, Budget 500 EUR > 100 EUR.
-    should_escalate: false
+      Geeignet ist nur FIN-LIFE-PREMIUM. FIN-PENSION-CLASSIC ist ungeeignet (Risikoprofil hoch
+      liegt über dem Rahmen niedrig–mittel). FIN-INVEST-GROWTH ist ungeeignet (Budget 80 EUR <
+      Minimum 100 EUR). FIN-INVEST-DYNAMIC-30 ist ungeeignet (Horizont und Budget zu gering).
+      Für die drei ungeeigneten Produkte wird eskaliert.
+    should_escalate: true
     deepeval_task: >
-      Der Agent soll die Eignung von FIN-INVEST-GROWTH für K-003 prüfen und bestätigen.
+      Der Agent soll alle vier Produkte für K-005 einzeln bewerten und dabei vier
+      unterschiedliche Ablehnungs-/Eignungsgründe (Risiko zu hoch, Budget zu gering,
+      Horizont+Budget zu gering, geeignet) korrekt unterscheiden.
 
   - id: "FUNC-14"
     description: "Eignungsprüfung – hohes Profil, Hochrisikoprodukt geeignet"
