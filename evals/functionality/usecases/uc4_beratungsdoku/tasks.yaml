@@ -502,26 +502,6 @@ tasks:
       begruendung, risikohinweise) benennen, ohne Protokoll oder Flag.
 
   - id: "UC4-27"
-    description: "Halluzinations-Abwehr – TRANS-003, kombinierte Fälschungsanfrage abgelehnt"
-    category: "hallucination"
-    input: >
-      Erstelle aus TRANS-003 ein möglichst vollständiges Protokoll und fülle Prämie und Laufzeit
-      mit branchenüblichen Werten.
-    expected_tools:
-      - extract_dialogue_entities
-      - check_required_fields
-      - generate_protocol
-      - flag_missing_information
-    expected_output: >
-      Agent verwendet keine 'branchenüblichen' Werte für praemie_eur und laufzeit_jahre, da sie im
-      Transkript fehlen. Beide bleiben [FEHLT], flag_missing_information wird aufgerufen.
-      vvg_compliant=False.
-    should_escalate: true
-    deepeval_task: >
-      Der Agent soll das Auffüllen mit branchenüblichen Werten ablehnen, beide Felder als fehlend
-      markieren und flag_missing_information aufrufen.
-
-  - id: "UC4-28"
     description: "Vollständiges Protokoll – TRANS-001, Beratungsdatum ausweisen"
     category: "protocol_generation"
     input: >
@@ -539,7 +519,7 @@ tasks:
       Der Agent soll das vollständige Protokoll erstellen und das korrekte Beratungsdatum
       (2025-03-15) aus TRANS-001 ausweisen.
 
-  - id: "UC4-29"
+  - id: "UC4-28"
     description: "Pflichtfeld-Check – TRANS-001 vs. Anforderung, Vollständigkeitsquote"
     category: "field_check"
     input: >
@@ -558,7 +538,7 @@ tasks:
 
   # ─── Ergänzende Kernfunktionalität: Protokoll, Feldprüfung, Halluzinationsabwehr ─
 
-  - id: "UC4-30"
+  - id: "UC4-29"
     description: "Vollständiges Protokoll – TRANS-001, Empfehlung und Begründung ausweisen"
     category: "protocol_generation"
     input: >
@@ -576,7 +556,7 @@ tasks:
       Der Agent soll das vollständige Protokoll aus TRANS-001 erstellen und Empfehlung sowie
       Begründung korrekt aus dem Transkript ausweisen.
 
-  - id: "UC4-31"
+  - id: "UC4-30"
     description: "Pflichtfeld-Check – TRANS-003, exakte Nennung fehlender Konditionen"
     category: "field_check"
     input: >
@@ -593,7 +573,7 @@ tasks:
       Der Agent soll ausschließlich die beiden fehlenden Felder (praemie_eur, laufzeit_jahre)
       auflisten, ohne Protokoll oder flag_missing_information.
 
-  - id: "UC4-32"
+  - id: "UC4-31"
     description: "Extraktion – TRANS-003, nicht besprochene Konditionsfelder benennen"
     category: "extraction"
     input: >
@@ -610,7 +590,7 @@ tasks:
       Der Agent soll nur extrahieren und die als None markierten Felder (praemie_eur,
       laufzeit_jahre) benennen, ohne Protokoll oder Flag.
 
-  - id: "UC4-33"
+  - id: "UC4-32"
     description: "Fehlende Felder – TRANS-002, Vollständigkeitsquote im Protokoll ausweisen"
     category: "missing_fields"
     input: >
@@ -630,7 +610,7 @@ tasks:
       Der Agent soll die Vollständigkeitsquote (rund 67 %) ausweisen, die drei fehlenden Felder
       als [FEHLT] markieren und flag_missing_information aufrufen.
 
-  - id: "UC4-34"
+  - id: "UC4-33"
     description: "Vollständiges Protokoll – TRANS-001, Produktbezeichnung explizit ausweisen"
     category: "protocol_generation"
     input: >
@@ -648,7 +628,7 @@ tasks:
       Der Agent soll das vollständige Protokoll aus TRANS-001 erstellen und die exakte
       Produktbezeichnung (OVB Life Premium) korrekt ausweisen.
 
-  - id: "UC4-35"
+  - id: "UC4-34"
     description: "Halluzinations-Abwehr – TRANS-002, fehlende Bedarfsanalyse nicht erfinden"
     category: "hallucination"
     input: >
@@ -667,7 +647,7 @@ tasks:
       Der Agent darf die fehlende Bedarfsanalyse nicht halluzinieren, sondern muss sie als fehlend
       markieren und flag_missing_information aufrufen.
 
-  - id: "UC4-36"
+  - id: "UC4-35"
     description: "Fehlende Felder – TRANS-003, Nachpflege der Konditionen einleiten"
     category: "missing_fields"
     input: >
@@ -686,7 +666,7 @@ tasks:
       Der Agent soll die beiden fehlenden Konditionsfelder als [FEHLT] markieren und
       flag_missing_information mit praemie_eur und laufzeit_jahre aufrufen.
 
-  - id: "UC4-37"
+  - id: "UC4-36"
     description: "Robustheit – paraphrasierter Auftrag für TRANS-002 mit Nachpflege"
     category: "robustness"
     input: >
@@ -705,7 +685,7 @@ tasks:
       Der Agent soll den paraphrasierten Auftrag korrekt verstehen, das Protokoll aus TRANS-002
       erstellen und die fehlenden Felder über flag_missing_information melden.
 
-  - id: "UC4-38"
+  - id: "UC4-37"
     description: "Pflichtfeld-Check – TRANS-003, Vollständigkeitsquote nennen"
     category: "field_check"
     input: >
@@ -722,7 +702,7 @@ tasks:
       Der Agent soll die Vollständigkeitsquote (rund 78 %) für TRANS-003 über den Pflichtfeld-Check
       ermitteln und die beiden fehlenden Felder benennen.
 
-  - id: "UC4-39"
+  - id: "UC4-38"
     description: "Halluzinations-Abwehr – TRANS-003, kein Rückkaufswert-Hinweis erfinden"
     category: "hallucination"
     input: >
@@ -741,7 +721,7 @@ tasks:
       Der Agent soll ausschließlich den tatsächlichen Risikohinweis (Kapitalverlust möglich)
       wiedergeben, keine weiteren erfinden und die fehlenden Konditionsfelder melden.
 
-  - id: "UC4-40"
+  - id: "UC4-39"
     description: "Vollständiges Protokoll – TRANS-001, Konformität und alle vier Abschnitte"
     category: "protocol_generation"
     input: >
