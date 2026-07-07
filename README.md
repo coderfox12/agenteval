@@ -241,6 +241,75 @@ agenteval-report --help
 
 ---
 
+## Lokale Modelle anbinden (Ollama / LM Studio)
+
+Agenten müssen nicht über einen Cloud-Anbieter laufen. Sowohl Ollama als auch LM Studio
+bieten eine OpenAI-kompatible API (`/v1/chat/completions` etc.) an — das Framework braucht
+dafür KEINEN Sonder-Code, nur einen normalen Eintrag in `agents.yaml` mit passendem
+`api_base` (siehe Kommentare dort).
+
+Beispiel: Mac Studio der OVB (Ollama, 21 vorinstallierte Modelle), nur per VPN erreichbar.
+
+> **Windows-PowerShell:** `curl` ist dort nur ein Alias für `Invoke-WebRequest` und
+> liefert kein rohes JSON – das betrifft beide `curl`-Aufrufe unten (Health-Check und
+> Modellliste). Stattdessen `curl.exe` (echtes curl, seit Win10 vorinstalliert) oder
+> `Invoke-RestMethod` verwenden:
+> ```powershell
+> curl.exe http://10.233.217.20:11434/api/tags
+> # oder mit automatischem JSON-Parsing:
+> Invoke-RestMethod http://10.233.217.20:11434/api/tags | ConvertTo-Json -Depth 4
+> ```
+> In Git Bash, WSL oder macOS/Linux-Terminal funktioniert `curl` dagegen wie unten
+> gezeigt unverändert.
+
+**1. VPN verbinden** – Cisco AnyConnect / Cisco Secure Client, Server-URL
+`https://connect.ovb.eu/vpn` (Login mit stud.tu-darmstadt-Mailadresse; Passwort zuvor
+ggf. über https://selfservice.ovb.eu/ per SMS neu setzen). Verbindung prüfen:
+
+```bash
+curl http://10.233.217.20:11434/
+# → "Ollama is running"
+```
+
+**2. Verfügbare Modellnamen abfragen** – `model:` in `agents.yaml` muss exakt matchen:
+
+```bash
+curl http://10.233.217.20:11434/api/tags
+```
+
+**3. Agent-Eintrag ergänzen:**
+
+```yaml
+# agents.yaml
+  - id: mac-studio-llama
+    label: "Llama 3.1 (OVB Mac Studio, Ollama)"
+    model: llama3.1:8b            # exakter Name aus /api/tags
+    api_key_env: AGENT_API_KEY_3
+    api_base: http://10.233.217.20:11434/v1
+```
+
+```bash
+# .env
+AGENT_API_KEY_3=dummy   # Ollama prüft den Key nicht, das SDK braucht aber einen nicht-leeren String
+```
+
+Zu beachten:
+- **Tool-Calling**: Der Functionality-Agent nutzt `llm.bind_tools()`
+  ([evals/functionality/agent/graph.py](evals/functionality/agent/graph.py)) – das
+  unterstützen nicht alle Ollama-Modelle zuverlässig (z. B. `llama3.1`/`qwen2.5` sind
+  dafür bekannt geeignet).
+- **VPN muss während des gesamten Eval-Laufs aktiv bleiben** – für automatisierte/
+  wiederkehrende Läufe (z. B. CI) ungeeignet, für manuelle Testläufe aber problemlos.
+
+**LM Studio statt Ollama:** Gleiches Prinzip, andere Adresse. LM Studio hört
+standardmäßig auf Port `1234` statt `11434`, die Modellliste liefert
+`GET /v1/models` statt `/api/tags` (Server muss vorher im LM-Studio-UI unter
+"Developer" gestartet werden). `api_base` in `agents.yaml` entsprechend anpassen,
+z. B. `http://<host>:1234/v1` – der Rest (Agent-Eintrag, `.env`-Key, Tool-Calling-
+Vorbehalt) bleibt identisch.
+
+---
+
 ## Red-Team-Suite (D2)
 
 100+ kuratierte Tests in 9 Angriffsklassen (generische Baseline) + UC-spezifische Erweiterungen:
