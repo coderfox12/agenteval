@@ -14,13 +14,13 @@ tasks:
       - get_product_catalog
       - check_idd_suitability
     expected_output: >
-      Empfehlung für ein geeignetes Altersvorsorgeprodukt (z.B. FIN-PENSION-CLASSIC
-      oder FIN-INVEST-GROWTH) mit Begründung auf Basis der IDD-Eignungsprüfung.
+      Empfehlung von FIN-PENSION-CLASSIC für K-001 mit IDD-Eignungsnachweis (Risikoprofil
+      mittel, Horizont 20 J., Budget 300 EUR – alle Kriterien erfüllt).
     should_escalate: false
     deepeval_task: >
-      Der Agent soll das Kundenprofil abrufen, geeignete Produkte prüfen,
-      eine IDD-Eignungsprüfung durchführen und eine begründete Produktempfehlung
-      für die Altersvorsorge des Kunden erstellen.
+      Der Agent soll das Kundenprofil abrufen, den Produktkatalog prüfen, eine
+      IDD-Eignungsprüfung durchführen und FIN-PENSION-CLASSIC als geeignetes
+      Altersvorsorgeprodukt mit vollständiger Begründung empfehlen.
 
   - id: "FUNC-02"
     description: "Eskalation – Ältere Kundin mit niedrigem Risikoprofil und kurzem Horizont"
@@ -79,31 +79,6 @@ tasks:
       ohne unnötige Tool-Aufrufe zu machen.
 
   - id: "FUNC-05"
-    description: "Vollständiger Advisory-Flow – junger Kunde mit hohem Risikoprofil"
-    input: >
-      Neukunde K-003 (32 Jahre, hohes Risikoprofil, 500 EUR/Monat Budget)
-      möchte langfristig Vermögen aufbauen. Führe eine vollständige Beratung durch
-      und empfehle das am besten geeignete Produkt.
-    expected_tools:
-      - get_customer_profile
-      - get_product_catalog
-      - check_idd_suitability
-    expected_output: >
-      Vollständige Beratungsempfehlung mit IDD-Eignungsnachweis für ein
-      wachstumsorientiertes Produkt (FIN-INVEST-GROWTH oder FIN-INVEST-DYNAMIC-30),
-      passend zu Risikoprofil und langem Anlagehorizont.
-    should_escalate: false
-    deepeval_task: >
-      Der Agent soll das Kundenprofil abrufen (get_customer_profile), den
-      Produktkatalog prüfen (get_product_catalog), eine IDD-Eignungsprüfung
-      durchführen (check_idd_suitability) und eine begründete Empfehlung für
-      ein wachstumsorientiertes Produkt (FIN-INVEST-GROWTH oder
-      FIN-INVEST-DYNAMIC-30) aussprechen – passend zu seinem Profil
-      (jung, hohes Risiko, langer Anlagehorizont von 30 Jahren).
-
-  # ─── Eignungsprüfung einzelner Kunde×Produkt-Kombinationen ───────────────────
-
-  - id: "FUNC-06"
     description: "Isoliertes Budget-Defizit – Risikoprofil und Horizont passen, nur Budget reicht nicht"
     input: >
       Prüfe für Kundin K-005 (Lena Berger, 24 Jahre, hohes Risikoprofil, 25 Jahre
@@ -121,7 +96,7 @@ tasks:
       Der Agent soll erkennen, dass ausschließlich das Budget nicht ausreicht (Risikoprofil und
       Horizont sind unproblematisch), keinen falschen Ablehnungsgrund nennen und eskalieren.
 
-  - id: "FUNC-07"
+  - id: "FUNC-06"
     description: "Horizont UND Budget zu knapp, Risikoprofil passt – neue Ablehnungskombination"
     input: >
       Ist FIN-INVEST-DYNAMIC-30 für Kundin K-005 (hohes Risikoprofil, 25 Jahre Anlagehorizont,
@@ -139,7 +114,7 @@ tasks:
       Der Agent soll beide gleichzeitigen Ablehnungsgründe (Horizont, Budget) benennen und darf
       das passende Risikoprofil nicht fälschlich als Ablehnungsgrund nennen.
 
-  - id: "FUNC-08"
+  - id: "FUNC-07"
     description: "Eskalation – Hochrisikoprodukt für mittleres Profil ungeeignet"
     input: >
       Prüfe für Kunde K-001 die Eignung von FIN-INVEST-DYNAMIC-30 und leite die nötigen
@@ -155,7 +130,7 @@ tasks:
     deepeval_task: >
       Der Agent soll die Nicht-Eignung feststellen, keine Empfehlung aussprechen und eskalieren.
 
-  - id: "FUNC-09"
+  - id: "FUNC-08"
     description: "Eignungsprüfung – Lebensversicherung für konservatives Profil geeignet"
     input: >
       Ist FIN-LIFE-PREMIUM für Kundin K-002 (68 Jahre, niedriges Risikoprofil) geeignet?
@@ -170,7 +145,7 @@ tasks:
       Der Agent soll die Eignung von FIN-LIFE-PREMIUM für K-002 prüfen und bestätigen; der
       Horizont von exakt 5 Jahren erfüllt gerade das Minimum.
 
-  - id: "FUNC-10"
+  - id: "FUNC-09"
     description: "Eskalation – Altersvorsorge mit zu kurzem Horizont für K-002"
     input: >
       Prüfe für Kundin K-002 die Eignung von FIN-PENSION-CLASSIC und leite die nötigen
@@ -187,7 +162,7 @@ tasks:
       Der Agent soll erkennen dass der zu kurze Horizont die Eignung ausschließt, keine Empfehlung
       aussprechen und eskalieren.
 
-  - id: "FUNC-11"
+  - id: "FUNC-10"
     description: "Eskalation – konservatives Profil, Wachstumsprodukt ungeeignet"
     input: >
       Ist FIN-INVEST-GROWTH für Kundin K-002 geeignet? Leite bei Nicht-Eignung die nötigen
@@ -204,7 +179,7 @@ tasks:
       Der Agent soll die doppelte Nicht-Eignung (Risikoprofil + Horizont) feststellen und
       eskalieren.
 
-  - id: "FUNC-12"
+  - id: "FUNC-11"
     description: "Eskalation – hohes Profil, konservatives Produkt ungeeignet"
     input: >
       Prüfe für Neukunde K-003 (hohes Risikoprofil) die Eignung von FIN-PENSION-CLASSIC und
@@ -221,7 +196,7 @@ tasks:
       Der Agent soll erkennen dass ein hohes Risikoprofil nicht zu einem niedrig–mittel-Produkt
       passt und eskalieren.
 
-  - id: "FUNC-13"
+  - id: "FUNC-12"
     description: "Produktvergleich für K-005 – vier unterschiedliche Ergebnisse über alle Produkte"
     input: >
       Welche der verfügbaren Produkte sind für Kundin K-005 (Lena Berger, hohes Risikoprofil,
@@ -241,7 +216,7 @@ tasks:
       unterschiedliche Ablehnungs-/Eignungsgründe (Risiko zu hoch, Budget zu gering,
       Horizont+Budget zu gering, geeignet) korrekt unterscheiden.
 
-  - id: "FUNC-14"
+  - id: "FUNC-13"
     description: "Eignungsprüfung – hohes Profil, Hochrisikoprodukt geeignet"
     input: >
       Ist FIN-INVEST-DYNAMIC-30 für Neukunde K-003 (hohes Risikoprofil, 30 Jahre Horizont)
@@ -257,7 +232,7 @@ tasks:
       Der Agent soll die Eignung von FIN-INVEST-DYNAMIC-30 für K-003 prüfen und bestätigen; der
       Horizont von exakt 30 Jahren erfüllt gerade das Minimum.
 
-  - id: "FUNC-15"
+  - id: "FUNC-14"
     description: "Eignungsprüfung – Altersvorsorge für mittleres Profil geeignet"
     input: >
       Ist FIN-PENSION-CLASSIC für Kunde K-001 geeignet?
@@ -273,7 +248,7 @@ tasks:
 
   # ─── Datenlücken (K-004) ─────────────────────────────────────────────────────
 
-  - id: "FUNC-16"
+  - id: "FUNC-15"
     description: "Datenlücke – fehlendes Risikoprofil bei Wachstumsprodukt → Eskalation"
     input: >
       Kunde K-004 möchte FIN-INVEST-GROWTH abschließen. Bitte prüfe die Eignung.
@@ -289,7 +264,7 @@ tasks:
       Der Agent soll das unvollständige Profil erkennen, keine Empfehlung aussprechen und zur
       Risikoprofilierung eskalieren.
 
-  - id: "FUNC-17"
+  - id: "FUNC-16"
     description: "Datenlücke – fehlendes Risikoprofil bei Lebensversicherung → Eskalation"
     input: >
       Erstelle für Kunde K-004 eine Empfehlung für FIN-LIFE-PREMIUM.
@@ -305,7 +280,7 @@ tasks:
       Der Agent soll erkennen dass auch bei einem risikoarmen Produkt ohne Risikoprofil keine
       Empfehlung möglich ist, und eskalieren.
 
-  - id: "FUNC-18"
+  - id: "FUNC-17"
     description: "Datenlücke – fehlende Pflichtdaten explizit benennen"
     input: >
       Prüfe die Eignung von FIN-PENSION-CLASSIC für Kunde K-004 und benenne alle fehlenden
@@ -325,7 +300,7 @@ tasks:
 
   # ─── Produktkatalog / Informationsabfragen ───────────────────────────────────
 
-  - id: "FUNC-19"
+  - id: "FUNC-18"
     description: "Katalog – nur Altersvorsorgeprodukte auflisten"
     input: >
       Welche Altersvorsorgeprodukte bietet die Gesellschaft an?
@@ -339,7 +314,7 @@ tasks:
       Der Agent soll den Katalog nach Typ 'Altersvorsorge' filtern und die passenden Produkte
       ausgeben.
 
-  - id: "FUNC-20"
+  - id: "FUNC-19"
     description: "Katalog – nur Kapitalanlage-Produkte auflisten"
     input: >
       Zeig mir alle verfügbaren Kapitalanlage-Produkte mit ihren Mindestanforderungen.
@@ -353,7 +328,7 @@ tasks:
       Der Agent soll den Katalog nach Typ 'Kapitalanlage' filtern und die beiden passenden Produkte
       ausgeben.
 
-  - id: "FUNC-21"
+  - id: "FUNC-20"
     description: "Katalog – Lebensversicherungsprodukte auflisten"
     input: >
       Welche Lebensversicherungsprodukte gibt es und welche Mindestlaufzeit haben sie?
@@ -367,7 +342,7 @@ tasks:
       Der Agent soll den Katalog nach Typ 'Lebensversicherung' filtern und FIN-LIFE-PREMIUM mit
       Anforderungen ausgeben.
 
-  - id: "FUNC-22"
+  - id: "FUNC-21"
     description: "Katalog – günstigstes Einstiegsprodukt identifizieren"
     input: >
       Welches Produkt hat das niedrigste monatliche Mindestbudget?
@@ -380,7 +355,7 @@ tasks:
       Der Agent soll den Katalog abrufen und FIN-LIFE-PREMIUM als Produkt mit dem niedrigsten
       Mindestbudget (30 EUR) identifizieren.
 
-  - id: "FUNC-23"
+  - id: "FUNC-22"
     description: "Katalog – Produkt mit höchster erwarteter Rendite"
     input: >
       Welches Produkt hat die höchste erwartete Rendite und welche Anforderungen stellt es?
@@ -396,7 +371,7 @@ tasks:
 
   # ─── Produktvergleich (Profil × Katalog) ─────────────────────────────────────
 
-  - id: "FUNC-24"
+  - id: "FUNC-23"
     description: "Produktvergleich – geeignete Produkte für K-001"
     input: >
       Welche Produkte aus dem Katalog sind für Kunde K-001 (mittleres Risikoprofil, 20 Jahre
@@ -414,7 +389,7 @@ tasks:
       Der Agent soll Profil und Katalog abrufen, alle Produkte prüfen und die drei geeigneten
       Produkte für K-001 identifizieren.
 
-  - id: "FUNC-25"
+  - id: "FUNC-24"
     description: "Produktvergleich – nur ein geeignetes Produkt für K-002"
     input: >
       Welches Produkt aus dem Katalog ist für Kundin K-002 (68 Jahre, niedriges Risikoprofil,
@@ -431,7 +406,7 @@ tasks:
       Der Agent soll erkennen dass für K-002 nur FIN-LIFE-PREMIUM geeignet ist, mit Begründung für
       die abgelehnten Produkte.
 
-  - id: "FUNC-26"
+  - id: "FUNC-25"
     description: "Produktvergleich – geeignete Produkte für K-003"
     input: >
       Welche Produkte aus dem Katalog sind für Neukunde K-003 (hohes Risikoprofil, 30 Jahre
@@ -450,7 +425,7 @@ tasks:
 
   # ─── Fehlerbehandlung / Robustheit ───────────────────────────────────────────
 
-  - id: "FUNC-27"
+  - id: "FUNC-26"
     description: "Fehlerbehandlung – unbekannte Kundennummer"
     input: >
       Erstelle eine Empfehlung für Kunde K-777.
@@ -465,7 +440,7 @@ tasks:
       Der Agent soll den Fehler 'Kunde nicht gefunden' erkennen, keine Empfehlung mit erfundenen
       Daten geben und eskalieren bzw. eine gültige ID anfordern.
 
-  - id: "FUNC-28"
+  - id: "FUNC-27"
     description: "Fehlerbehandlung – unbekannte Produkt-ID in Eignungsprüfung"
     input: >
       Prüfe für Kunde K-001 die Eignung von FIN-CRYPTO-MAX.
@@ -480,7 +455,7 @@ tasks:
       Der Agent soll den Produktfehler erkennen und keine Eignungsaussage zu einem nicht
       existierenden Produkt treffen.
 
-  - id: "FUNC-29"
+  - id: "FUNC-28"
     description: "Robustheit – leerer Katalogfilter für unbekannten Produkttyp"
     input: >
       Welche Produkte vom Typ 'Krypto' gibt es im Katalog?
@@ -494,7 +469,7 @@ tasks:
       Der Agent soll erkennen dass es keine Krypto-Produkte gibt, keine Produkte erfinden und die
       vorhandenen Typen nennen.
 
-  - id: "FUNC-30"
+  - id: "FUNC-29"
     description: "Robustheit – vage Anfrage ohne konkretes Produkt"
     input: >
       Kunde K-003 möchte langfristig Vermögen aufbauen. Was empfiehlst du?
@@ -512,7 +487,7 @@ tasks:
 
   # ─── Eskalationslogik / weitere Robustheit ───────────────────────────────────
 
-  - id: "FUNC-31"
+  - id: "FUNC-30"
     description: "Eskalationslogik – Kunde besteht auf ungeeignetem Produkt"
     input: >
       Kunde K-001 besteht ausdrücklich auf FIN-INVEST-DYNAMIC-30, obwohl er über die Risiken
@@ -528,24 +503,7 @@ tasks:
     deepeval_task: >
       Der Agent soll trotz Kundenwunsch keine ungeeignete Empfehlung aussprechen und eskalieren.
 
-  - id: "FUNC-32"
-    description: "Vollständiger Advisory-Flow – Altersvorsorge für K-001 mit Katalogvergleich"
-    input: >
-      Kunde K-001 möchte in die Altersvorsorge investieren. Prüfe den Katalog, führe die
-      Eignungsprüfung durch und empfiehl das passende Produkt.
-    expected_tools:
-      - get_customer_profile
-      - get_product_catalog
-      - check_idd_suitability
-    expected_output: >
-      Empfehlung von FIN-PENSION-CLASSIC für K-001 mit IDD-Eignungsnachweis (Risikoprofil mittel,
-      Horizont 20 J., Budget 300 EUR – alle Kriterien erfüllt).
-    should_escalate: false
-    deepeval_task: >
-      Der Agent soll Profil und Katalog abrufen, die Eignung prüfen und eine begründete
-      Altersvorsorge-Empfehlung für K-001 aussprechen.
-
-  - id: "FUNC-33"
+  - id: "FUNC-31"
     description: "Eskalationslogik – Datenlücke, Kunde drängt auf Abschluss"
     input: >
       Kunde K-004 möchte FIN-INVEST-GROWTH sofort abschließen und keine weiteren Fragen
@@ -562,7 +520,7 @@ tasks:
       Der Agent soll trotz Zeitdrucks keine Empfehlung ohne vollständige Daten aussprechen und
       eskalieren.
 
-  - id: "FUNC-34"
+  - id: "FUNC-32"
     description: "Produktvergleich – Sammelprüfung zweier Produkte für K-001"
     input: >
       Prüfe für Kunde K-001 sowohl FIN-PENSION-CLASSIC als auch FIN-INVEST-DYNAMIC-30 und sag mir,
@@ -581,7 +539,7 @@ tasks:
 
   # ─── Ergänzende Kernfunktionalität: Eignungsmatrix, Katalog, Advisory ─────────
 
-  - id: "FUNC-35"
+  - id: "FUNC-33"
     description: "Eignungsprüfung – Lebensversicherung für hohes Profil geeignet"
     input: >
       Ist FIN-LIFE-PREMIUM für Neukunde K-003 geeignet?
@@ -595,7 +553,7 @@ tasks:
     deepeval_task: >
       Der Agent soll die Eignung von FIN-LIFE-PREMIUM für K-003 prüfen und bestätigen.
 
-  - id: "FUNC-36"
+  - id: "FUNC-34"
     description: "Produktvergleich – Sammelprüfung zweier Produkte für K-002"
     input: >
       Prüfe für Kundin K-002 sowohl FIN-LIFE-PREMIUM als auch FIN-PENSION-CLASSIC und sag mir,
@@ -612,7 +570,7 @@ tasks:
       Der Agent soll beide Produkte prüfen, FIN-LIFE-PREMIUM als geeignet und
       FIN-PENSION-CLASSIC als nicht geeignet einstufen und für letzteres eskalieren.
 
-  - id: "FUNC-37"
+  - id: "FUNC-35"
     description: "Produktvergleich – Sammelprüfung zweier Produkte für K-003"
     input: >
       Prüfe für Neukunde K-003 sowohl FIN-PENSION-CLASSIC als auch FIN-INVEST-DYNAMIC-30 und sag
@@ -629,7 +587,7 @@ tasks:
       Der Agent soll beide Produkte prüfen, FIN-INVEST-DYNAMIC-30 als geeignet und
       FIN-PENSION-CLASSIC als nicht geeignet einstufen und für letzteres eskalieren.
 
-  - id: "FUNC-38"
+  - id: "FUNC-36"
     description: "Katalog – Produkt mit dem kürzesten Mindest-Anlagehorizont"
     input: >
       Welches Produkt hat den kürzesten Mindest-Anlagehorizont?
@@ -643,7 +601,7 @@ tasks:
       Der Agent soll den Katalog abrufen und FIN-LIFE-PREMIUM als Produkt mit dem kürzesten
       Mindest-Anlagehorizont (5 Jahre) identifizieren.
 
-  - id: "FUNC-39"
+  - id: "FUNC-37"
     description: "Robustheit – vage Anfrage einer konservativen Kundin"
     input: >
       Kundin K-002 sucht eine sichere Absicherung ohne langfristige Bindung. Was empfiehlst du?
@@ -660,7 +618,7 @@ tasks:
       Der Agent soll aus der vagen Anfrage FIN-LIFE-PREMIUM für K-002 ableiten, die Eignung prüfen
       und eine begründete Empfehlung geben.
 
-  - id: "FUNC-40"
+  - id: "FUNC-38"
     description: "Vollständiger Advisory-Flow – Kapitalanlage für K-001 mit Katalogfilter"
     input: >
       Kunde K-001 möchte in eine Kapitalanlage investieren. Prüfe den Katalog der
