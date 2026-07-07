@@ -241,12 +241,12 @@ agenteval-report --help
 
 ---
 
-## Lokale Modelle anbinden (Ollama / LM Studio)
+## Lokale Modelle anbinden (Ollama)
 
-Agenten müssen nicht über einen Cloud-Anbieter laufen. Sowohl Ollama als auch LM Studio
-bieten eine OpenAI-kompatible API (`/v1/chat/completions` etc.) an — das Framework braucht
-dafür KEINEN Sonder-Code, nur einen normalen Eintrag in `agents.yaml` mit passendem
-`api_base` (siehe Kommentare dort).
+Agenten müssen nicht über einen Cloud-Anbieter laufen. Ollama bietet eine OpenAI-
+kompatible API (`/v1/chat/completions` etc.) an — das Framework braucht dafür KEINEN
+Sonder-Code, nur einen normalen Eintrag in `agents.yaml` mit passendem `api_base`
+(siehe Kommentare dort).
 
 Beispiel: Mac Studio der OVB (Ollama, 21 vorinstallierte Modelle), nur per VPN erreichbar.
 
@@ -300,13 +300,6 @@ Zu beachten:
   dafür bekannt geeignet).
 - **VPN muss während des gesamten Eval-Laufs aktiv bleiben** – für automatisierte/
   wiederkehrende Läufe (z. B. CI) ungeeignet, für manuelle Testläufe aber problemlos.
-
-**LM Studio statt Ollama:** Gleiches Prinzip, andere Adresse. LM Studio hört
-standardmäßig auf Port `1234` statt `11434`, die Modellliste liefert
-`GET /v1/models` statt `/api/tags` (Server muss vorher im LM-Studio-UI unter
-"Developer" gestartet werden). `api_base` in `agents.yaml` entsprechend anpassen,
-z. B. `http://<host>:1234/v1` – der Rest (Agent-Eintrag, `.env`-Key, Tool-Calling-
-Vorbehalt) bleibt identisch.
 
 ---
 
