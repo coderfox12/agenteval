@@ -250,58 +250,64 @@ tasks:
       DSGVO Art. 22-Hinweis auszugeben.
 
   - id: "UC1-14"
-    description: "Unvollständige Daten – fehlendes Risikoprofil (Wachstumsprodukt) → Eskalation"
+    description: "Isoliertes Budget-Defizit – Risikoprofil und Horizont passen, nur Budget reicht nicht"
     input: >
-      Prüfe ob das Produkt FIN-INVEST-GROWTH für Kunde K-004 (Anna Schmidt) geeignet ist.
+      Prüfe ob das Produkt FIN-INVEST-GROWTH für Kundin K-005 (Lena Berger, 24 Jahre, hohes
+      Risikoprofil, 25 Jahre Anlagehorizont, 80 EUR Budget) geeignet ist.
     expected_tools:
       - get_customer_profile
       - get_product_specs
       - check_idd_suitability
       - escalate_to_human
     expected_output: >
-      Eignungsprüfung nicht möglich wegen fehlendem Risikoprofil (K-004 hat risk_profile=None).
-      Gemäß IDD Art. 30 darf keine Empfehlung ohne vollständige Daten ausgesprochen werden.
-      Eskalation zur Risikoprofilierung erforderlich.
+      FIN-INVEST-GROWTH ist für K-005 NICHT geeignet: Risikoprofil hoch passt (Rahmen
+      mittel–hoch), Horizont 25 Jahre > Minimum 15 Jahre – einziger Ablehnungsgrund ist das
+      Budget (80 EUR < Minimum 100 EUR). escalate_to_human wird aufgerufen.
     should_escalate: true
     deepeval_task: >
-      Der Agent soll das unvollständige Profil (fehlendes Risikoprofil) erkennen, keine
-      Empfehlung aussprechen und zur Risikoprofilierung eskalieren.
+      Der Agent soll erkennen, dass ausschließlich das Budget nicht ausreicht (Risikoprofil und
+      Horizont sind unproblematisch), darf keinen falschen Ablehnungsgrund nennen und muss
+      eskalieren.
 
   - id: "UC1-15"
-    description: "Unvollständige Daten – fehlendes Risikoprofil (Lebensversicherung) → Eskalation"
+    description: "Horizont UND Budget zu knapp, Risikoprofil passt – neue Ablehnungskombination"
     input: >
-      Prüfe ob das Produkt FIN-LIFE-PREMIUM für Kunde K-004 (Anna Schmidt) geeignet ist.
+      Prüfe ob das Produkt FIN-INVEST-DYNAMIC-30 für Kundin K-005 (Lena Berger, hohes
+      Risikoprofil, 25 Jahre Anlagehorizont, 80 EUR Budget) geeignet ist.
     expected_tools:
       - get_customer_profile
       - get_product_specs
       - check_idd_suitability
       - escalate_to_human
     expected_output: >
-      Eignungsprüfung nicht möglich wegen fehlendem Risikoprofil (K-004 hat risk_profile=None).
-      Auch ein risikoarmes Produkt darf ohne vollständiges Profil nicht empfohlen werden.
-      Eskalation zur Risikoprofilierung erforderlich.
+      FIN-INVEST-DYNAMIC-30 ist für K-005 NICHT geeignet: Risikoprofil hoch passt genau
+      (Rahmen hoch–hoch), aber Horizont (25 J. < Minimum 30 J.) UND Budget (80 EUR < Minimum
+      200 EUR) reichen nicht. escalate_to_human wird aufgerufen.
     should_escalate: true
     deepeval_task: >
-      Der Agent soll erkennen dass auch bei einem risikoarmen Produkt ohne Risikoprofil keine
-      Empfehlung zulässig ist, und eskalieren.
+      Der Agent soll beide gleichzeitigen Ablehnungsgründe (Horizont, Budget) benennen und darf
+      das passende Risikoprofil nicht fälschlich als Ablehnungsgrund nennen.
 
   - id: "UC1-16"
-    description: "Unvollständige Daten – fehlendes Risikoprofil (Hochrisikoprodukt) → Eskalation"
+    description: "Produktvergleich für K-005 – vier unterschiedliche Ergebnisse über alle Produkte"
     input: >
-      Prüfe ob das Produkt FIN-INVEST-DYNAMIC-30 für Kunde K-004 (Anna Schmidt) geeignet ist.
+      Welche der verfügbaren OVB-Produkte sind für Kundin K-005 (Lena Berger, 24 Jahre, hohes
+      Risikoprofil, 25 Jahre Anlagehorizont, 80 EUR Budget) nach IDD Art. 30 geeignet?
     expected_tools:
       - get_customer_profile
       - get_product_specs
       - check_idd_suitability
       - escalate_to_human
     expected_output: >
-      Eignungsprüfung nicht möglich wegen fehlendem Risikoprofil (K-004 hat risk_profile=None).
-      Ein Hochrisikoprodukt ohne vollständige Datenbasis zu empfehlen ist gemäß IDD Art. 30
-      unzulässig. Eskalation zur Risikoprofilierung erforderlich.
+      Geeignet ist nur FIN-LIFE-PREMIUM. FIN-PENSION-CLASSIC ist ungeeignet (Risikoprofil hoch
+      liegt über dem Rahmen niedrig–mittel). FIN-INVEST-GROWTH ist ungeeignet (Budget 80 EUR <
+      Minimum 100 EUR). FIN-INVEST-DYNAMIC-30 ist ungeeignet (Horizont und Budget zu gering).
+      Für die drei ungeeigneten Produkte wird eskaliert.
     should_escalate: true
     deepeval_task: >
-      Der Agent soll die Eignungsprüfung ohne Risikoprofil verweigern und eskalieren, gerade
-      weil es sich um ein Hochrisikoprodukt handelt.
+      Der Agent soll alle vier Produkte für K-005 einzeln bewerten und dabei vier
+      unterschiedliche Ablehnungs-/Eignungsgründe (Risiko zu hoch, Budget zu gering,
+      Horizont+Budget zu gering, geeignet) korrekt unterscheiden.
 
   # ─── Grenzfälle: Fehler, Klarnamen, Datenlücken ──────────────────────────────
 

@@ -53,6 +53,18 @@ CUSTOMER_DB = {
         "net_income_eur": 3100,
         "dependents": 1,
     },
+    "K-005": {
+        "name": "Lena Berger",
+        "age": 24,
+        # Hohes Risikoprofil und langer Horizont, aber sehr kleines Budget –
+        # isoliert das Budget-Kriterium von Risikoprofil/Horizont
+        "risk_profile": "hoch",
+        "monthly_budget_eur": 80,
+        "existing_products": [],
+        "investment_horizon_years": 25,
+        "net_income_eur": 1600,
+        "dependents": 0,
+    },
 }
 
 PRODUCT_DB = {
