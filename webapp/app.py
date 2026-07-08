@@ -570,7 +570,10 @@ def run_command(cmd: str, eval_state: EvalState, cwd: Path | None = None, extra_
     # wiederholt sich dieser Block dutzende Male mit identischem Inhalt, der
     # ohnehin schon im WIRTSCHAFTLICHKEIT-Bericht pro Task sichtbar ist.
     # Hier zu einer einzigen Zusammenfassung am Ende kollabieren.
-    _skip_block_re = re.compile(r"^Test .+ was skipped\.")
+    # \S+::\S+ statt "was skipped." als Anker: pytest bricht die Meldung ohne
+    # echtes Terminal oft mitten im Satz um ("...was\nskipped. Reason:...") -
+    # der Node-ID-Teil (Datei::Testname) bleibt dabei aber immer zusammen.
+    _skip_block_re = re.compile(r"^Test \S+::\S+")
     in_skip_block = False
     skip_block_lines = 0
     suppressed_blocks = 0

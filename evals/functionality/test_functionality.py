@@ -145,7 +145,7 @@ def _get_agent(cfg: dict) -> tuple[UseCaseAgent, CostTracker]:
 
 _cache: dict[tuple[str, str], tuple[str, list[ToolCall]] | None] = {}
 _errors: dict[tuple[str, str], str] = {}
-_AGENT_MAX_RETRIES = 3
+_AGENT_MAX_RETRIES = 4
 
 
 def _run_and_record(agent_cfg: dict, task: dict) -> tuple[str, list[ToolCall]] | None:
@@ -188,7 +188,7 @@ def _run_and_record(agent_cfg: dict, task: dict) -> tuple[str, list[ToolCall]] |
             except Exception as exc:
                 last_exc = exc
                 if attempt < _AGENT_MAX_RETRIES - 1:
-                    time.sleep(2 ** attempt)  # 1s, 2s
+                    time.sleep(3 * (2 ** attempt))  # 3s, 6s, 12s
         else:
             err_str = str(last_exc)
             tracker.record_error(task["id"], err_str, cost_usd=wasted_cost_usd or None)
@@ -209,6 +209,14 @@ def _skip_if_error(agent_cfg: dict, task: dict) -> None:
 _PARAMS = [(a, t) for a in AGENTS_CONFIG for t in TASKS]
 _IDS    = [f"{a['id']}__{t['id']}" for a, t in _PARAMS]
 
+# Einreihungsreihenfolge nur fuer warm_caches() (siehe dort): agentweise
+# gruppiert (wie _PARAMS) wuerde dazu fuehren, dass zuerst alle Jobs eines
+# einzelnen (ggf. langsamen) Agenten die Worker-Threads des ThreadPoolExecutor
+# belegen, bevor ueberhaupt ein Job eines anderen Agenten drankommt
+# (FIFO-Queue) - der Lauf wuerde faktisch in Phasen zerfallen statt parallel
+# zu laufen. Aufgabenweise interleaved vermeidet das.
+_WARM_ORDER = [(a, t) for t in TASKS for a in AGENTS_CONFIG]
+
 
 # ─── Metrik-Cache: (agent_id, task_id, metric_name) → (score, judge_cost) ──────
 # Separat vom Ergebnis-Cache (_cache), weil eine LLM-Judge-Bewertung erst
@@ -219,7 +227,7 @@ _metric_cache: dict[tuple[str, str, str], tuple[float | None, float]] = {}
 _metric_errors: dict[tuple[str, str, str], str] = {}
 _metric_cache_lock = threading.Lock()
 _LLM_JUDGE_METRICS = ("task_completion", "answer_relevancy", "faithfulness", "hallucination")
-_METRIC_MAX_RETRIES = 3
+_METRIC_MAX_RETRIES = 4
 
 
 def _build_test_case_and_metric(task: dict, metric_name: str, actual_output: str):
@@ -276,7 +284,7 @@ def _prewarm_metric(agent_cfg: dict, task: dict, metric_name: str) -> None:
         except Exception as exc:
             last_exc = exc
             if attempt < _METRIC_MAX_RETRIES - 1:
-                time.sleep(2 ** attempt)  # 1s, 2s
+                time.sleep(3 * (2 ** attempt))  # 3s, 6s, 12s
 
     print(f"⚠  Judge-Metrik '{metric_name}' für {key} nach {_METRIC_MAX_RETRIES} Versuchen fehlgeschlagen: {last_exc}")
     with _metric_cache_lock:
@@ -311,7 +319,7 @@ def warm_caches() -> None:
     die verbleibende Race beim Erststart eines Agenten abgesichert.
     """
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(_run_and_record, agent_cfg, task) for agent_cfg, task in _PARAMS]
+        futures = [executor.submit(_run_and_record, agent_cfg, task) for agent_cfg, task in _WARM_ORDER]
         concurrent.futures.wait(futures)
 
     metric_jobs = [

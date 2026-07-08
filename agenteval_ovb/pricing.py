@@ -38,7 +38,8 @@ PRICES_PER_1M: dict[str, dict[str, float]] = {
     # und agent/graph.py für die Anbieter-Fixierung (provider.only).
     "openai/gpt-oss-120b":                    {"input": 0.039, "output": 0.19},   # Anbieter: DeepInfra
     "google/gemini-2.5-flash-lite":           {"input": 0.10,  "output": 0.40},   # Anbieter: Google
-    "deepseek/deepseek-v4-flash":              {"input": 0.10,  "output": 0.20},   # Anbieter: DeepInfra
+    "deepseek/deepseek-v4-flash":              {"input": 0.0983, "output": 0.1966}, # Kein provider_pin (Rate-Limits) - Naeherungswert
+    "mistralai/mistral-small-3.2-24b-instruct": {"input": 0.075, "output": 0.20},  # Anbieter: DeepInfra
     "meta-llama/llama-3.1-8b-instruct:free":  {"input": 0.0,   "output": 0.0},
 }
 

@@ -49,7 +49,11 @@ agents:
   - id: deepseek-v4-flash
     label: "DeepSeek V4 Flash (OpenRouter)"
     model: deepseek/deepseek-v4-flash
-    provider_pin: DeepInfra
+    # Kein provider_pin (Ausnahme): Rate-Limits bei einzelnen Anbietern
+    # (DeepInfra, dann Baidu) machten den Lauf unzuverlaessig. OpenRouter
+    # verteilt Anfragen ohne Pin automatisch ueber alle verfuegbaren
+    # Anbieter - Preis in pricing.py bleibt als Naeherung (DeepInfra-Preis)
+    # bewusst unangetastet, siehe Chat vom 2026-07-08.
     api_key_env: AGENT_API_KEY_2
     api_base: https://openrouter.ai/api/v1
 
@@ -57,5 +61,12 @@ agents:
     label: "Gemini 2.5 Flash Lite (OpenRouter)"
     model: google/gemini-2.5-flash-lite
     provider_pin: Google
+    api_key_env: AGENT_API_KEY_2
+    api_base: https://openrouter.ai/api/v1
+
+  - id: mistral-small-3.2-24b
+    label: "Mistral Small 3.2 24B (OpenRouter)"
+    model: mistralai/mistral-small-3.2-24b-instruct
+    provider_pin: DeepInfra
     api_key_env: AGENT_API_KEY_2
     api_base: https://openrouter.ai/api/v1
