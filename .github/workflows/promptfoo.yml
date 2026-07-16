@@ -111,6 +111,13 @@ jobs:
         env:
           AGENT_API_KEY_1: ${{ secrets.AGENT_API_KEY_1 }}
           AGENT_API_KEY_2: ${{ secrets.AGENT_API_KEY_2 }}
+          # Das llm-rubric-Grading in den D2/D3-Suiten laeuft ueber den Judge
+          # (defaultTest.options.provider.config.apiKey = JUDGE_OPENAI_API_KEY,
+          # gesetzt aus JUDGE_API_KEY in run_promptfoo_multi_agent.py). Fehlte
+          # hier bisher, wodurch der Judge-Key in diesem Job leer blieb - anders
+          # als in den Jobs smoke und functionality, die ihn schon immer
+          # durchreichen.
+          JUDGE_API_KEY:   ${{ secrets.JUDGE_API_KEY }}
         run: python scripts/run_promptfoo_multi_agent.py
       - name: Ergebnisse hochladen
         uses: actions/upload-artifact@v7
