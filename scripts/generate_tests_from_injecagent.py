@@ -9,11 +9,11 @@ Wissenschaftliche Grundlage:
 
 Verwendung:
   python scripts/generate_tests_from_injecagent.py
-  python scripts/generate_tests_from_injecagent.py --limit 50 --out evals/security/generated/
+  python scripts/generate_tests_from_injecagent.py --limit 50 --out evals/generated/
 
 Das Skript lädt die JSONL-Dateien von GitHub, normalisiert die Felder und
 gibt promptfoo-YAML aus. Die generierten Dateien sind die akademische Basis –
-die Finance-Adaptionen befinden sich in evals/security_eval_finance.yaml.
+die Finance-Adaptionen befinden sich in evals/security/security_eval_finance.yaml.
 """
 
 import argparse
@@ -200,7 +200,7 @@ def write_yaml(entries: list[dict], out_path: Path, dataset_name: str):
     header = f"""# AUTO-GENERATED – NICHT MANUELL BEARBEITEN
 # Quelle:   InjecAgent (Zhan et al., 2024) – https://github.com/uiuc-kang-lab/InjecAgent
 # Erzeugt:  python scripts/generate_tests_from_injecagent.py
-# Angepasst: evals/security_eval_finance.yaml  ← Finance-Eigenleistung
+# Angepasst: evals/security/security_eval_finance.yaml  ← Finance-Eigenleistung
 #
 # Statistik: {len(entries)} Testfälle  |  DH: {dh_count}  |  DS: {ds_count}
 # Angriffsklassen: IPI (Indirect Prompt Injection), DE (Data Exfiltration)
@@ -304,10 +304,10 @@ def main():
     print(f"Ausgabe: {out_dir.resolve()}")
     print()
     print("Nächste Schritte:")
-    print("  1. Generierte Fälle prüfen:  evals/security/generated/")
-    print("  2. Finance-Adaptionen:           evals/security_eval_finance.yaml")
+    print(f"  1. Generierte Fälle prüfen:  {out_dir}/")
+    print("  2. Finance-Adaptionen:      evals/security/security_eval_finance.yaml")
     print("  3. Eval starten:")
-    print("     npx promptfoo eval --config evals/security/generated/injecagent_combined.yaml")
+    print(f"     npx promptfoo eval --config {out_dir}/injecagent_combined.yaml")
 
 
 if __name__ == "__main__":

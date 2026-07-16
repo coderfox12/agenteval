@@ -28,7 +28,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from agenteval_ovb.agents_config import load_agents_config, provider_pin_extra_body, require_api_base
+from agenteval_ovb.agents_config import (
+    load_agents_config,
+    provider_pin_extra_body,
+    require_api_base,
+    require_api_key,
+)
 from agenteval_ovb.promptfoo_utils import DEFAULT_MAX_CONCURRENCY, PROMPTFOO_VERSION
 
 ROOT = Path(__file__).parent.parent
@@ -43,9 +48,9 @@ load_dotenv(ROOT / ".env")
 NPX = shutil.which("npx") or "npx"
 
 
-def _entry_env(cfg: dict, api_base: str) -> dict:
+def _entry_env(cfg: dict, api_base: str, label: str) -> dict:
     env = os.environ.copy()
-    env["OPENAI_API_KEY"]  = os.environ.get(cfg["api_key_env"], "")
+    env["OPENAI_API_KEY"]  = require_api_key(cfg, label)
     env["MODEL_NAME"]      = cfg["model"]
     env["OPENAI_BASE_URL"] = api_base
     env["MODEL_PASSTHROUGH_JSON"] = json.dumps(provider_pin_extra_body(cfg))
@@ -54,7 +59,7 @@ def _entry_env(cfg: dict, api_base: str) -> dict:
 
 def run_smoke(label: str, cfg: dict, api_base: str) -> bool:
     print(f"\n▶  Smoke-Test: {label}  (Modell: {cfg['model']}, Endpunkt: {api_base})")
-    env = _entry_env(cfg, api_base)
+    env = _entry_env(cfg, api_base, label)
     # Eigenes, isoliertes PROMPTFOO_CONFIG_DIR pro Job: promptfoo schreibt jeden
     # Lauf zusätzlich in eine lokale SQLite-Verlaufs-DB (Default ~/.promptfoo) –
     # bei den hier parallel laufenden Jobs (Judge + alle Agenten gleichzeitig)

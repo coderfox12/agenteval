@@ -29,7 +29,9 @@ Unterschied ist nur, *wie* du `.env`/`agents.yaml` befüllst und den Lauf starte
 
 ```bash
 cp .env.example .env
-# .env im Editor öffnen: AGENT_API_KEY_1 + JUDGE_API_KEY eintragen
+# .env im Editor öffnen: AGENT_API_KEY_2 + JUDGE_API_KEY eintragen
+#   (die mitgelieferte agents.yaml nutzt AGENT_API_KEY_2 für alle Agenten –
+#    maßgeblich ist immer api_key_env des jeweiligen Agenten)
 # agents.yaml im Editor öffnen: Judge + mind. einen Agenten eintragen
 #   (model, api_key_env, api_base – api_base ist Pflicht, siehe Kommentare in der Datei)
 
@@ -93,7 +95,7 @@ USE_CASE  ×  agents.yaml
 | Dimension | Tool | Metriken |
 |-----------|------|---------|
 | **D1 Funktionalität** | LangGraph + DeepEval | `task_completion` (Kern, UC-übergreifend) + UC-spezifisch: `tool_correctness`, `answer_relevancy`, `faithfulness` (UC3), `hallucination` + `required_fields` (UC4) |
-| **D2 Sicherheit** | promptfoo | Prompt-Injection-Resistenz (9 Angriffsklassen, 100+ Tests); generische Baseline + UC-spezifisch |
+| **D2 Sicherheit** | promptfoo | Prompt-Injection-Resistenz (12 Angriffsklassen, 100 Tests); generische Baseline + UC-spezifisch |
 | **D3 Compliance** | promptfoo + Scorecard | EU AI Act Art. 9/13/14/15/52; generische Baseline (14 Tests) + UC-spezifisch |
 | **Wirtschaftlichkeit** *(Querschnitt)* | CostTracker + Report | Tokens, Kosten in USD, Latenz (p50/p95) |
 
@@ -120,7 +122,7 @@ make eval-all             # Alle 4 Use Cases sequenziell
 make smoke                # R0: Hello-World Smoke Test
 make security             # D2+D3: Security & Compliance für alle Agenten
 make compliance           # Alias für 'make security' (Runner deckt beides ab)
-make functionality        # D1: LangGraph + DeepEval, Agenten parallel (-n auto)
+make functionality        # D1: LangGraph + DeepEval, Agenten-Läufe threadparallel
 make report               # HTML-Report erzeugen → results/report.html
 make install              # pip install -e .
 make clean                # results/-Ordner löschen
@@ -162,6 +164,9 @@ agenteval_ovb/                  ← installierbares Python-Package (das EINZIGE,
   scorecard.py                  ← EU AI Act Scorecard-Generator (CLI: agenteval-scorecard)
   report.py                     ← HTML-Report-Generator (CLI: agenteval-report)
   pricing.py                    ← Kostenberechnung nach Modell
+  agents_config.py              ← Laden/Validieren von agents.yaml (Judge + Agenten)
+  branding.py                   ← OVB-Markenfarben (gemeinsam für Web-App und Report)
+  promptfoo_utils.py            ← promptfoo-Ausgaben parsen + CLI-Konstanten (Version, Concurrency)
 
 webapp/                         ← separate Streamlit-App, ruft Make-Targets/Skripte auf
   app.py                        ← Konfiguration (.env/agents.yaml) + Live-Ausführung im Browser
@@ -235,9 +240,8 @@ agenteval-report --help
 |----------|---------|-------|
 | Python | ≥ 3.11 | Package, DeepEval, Scorecard |
 | Node.js | ≥ 20 | promptfoo |
-| AGENT_API_KEY_1 (mind. einer) | – | Getestete Agenten (Pflicht) |
+| AGENT_API_KEY_* (mind. einer) | – | Getestete Agenten (Pflicht). Welcher Key gilt, legt `api_key_env` pro Agent in `agents.yaml` fest – die mitgelieferte Konfiguration nutzt `AGENT_API_KEY_2`. |
 | JUDGE_API_KEY | – | LLM-as-Judge / DeepEval (Pflicht) |
-| AGENT_API_KEY_2, _3, ... | – | Weitere Agenten, beliebiger Anbieter (optional) |
 
 ---
 
@@ -305,16 +309,20 @@ Zu beachten:
 
 ## Red-Team-Suite (D2)
 
-100+ kuratierte Tests in 9 Angriffsklassen (generische Baseline) + UC-spezifische Erweiterungen:
+100 kuratierte Tests in 12 Angriffsklassen (generische Baseline) + UC-spezifische Erweiterungen.
+Neun Klassen stammen aus der akademischen Basis, drei sind OVB-Eigenleistung:
 
 | Klasse | Beschreibung | Basis |
 |--------|-------------|-------|
-| DPI | Direct Prompt Injection | AgentDojo |
+| DPI | Direct Prompt Injection | AgentDojo/InjecAgent |
 | IPI | Indirect Prompt Injection | InjecAgent |
 | DE | Data Exfiltration | InjecAgent/AgentDojo |
 | GH | Goal Hijacking | AgentDojo |
-| IO | Instruction Override | AgentDojo |
-| CP | Context Poisoning | AgentDojo |
+| IO | Instruction Override | AgentDojo/InjecAgent |
+| CP | Context Poisoning | AgentDojo/InjecAgent |
+| JB | Jailbreaking | AgentDojo |
+| AE | Adversarial Examples | InjecAgent |
+| RA | Role Assumption | AgentDojo |
 | PA | Persona Adoption | OVB-spezifisch |
 | SL | Secret Data Leakage | OVB-spezifisch |
 | MSI | Multi-Step Injection | OVB-spezifisch |
@@ -323,8 +331,6 @@ Taxonomie: [`docs/security_taxonomy.yaml`](docs/security_taxonomy.yaml)
 
 ---
 
-## Lizenz
-
-Apache 2.0 – siehe [LICENSE](LICENSE)
+## Nutzungsrechte
 
 OVB Holding AG erhält ein uneingeschränktes, nicht-exklusives Nutzungsrecht an allen Artefakten.

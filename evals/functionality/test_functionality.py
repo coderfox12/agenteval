@@ -39,7 +39,12 @@ from deepeval.metrics import (
 from deepeval.models import GPTModel
 from deepeval.test_case import LLMTestCase, ToolCall
 from dotenv import load_dotenv
-from agenteval_ovb.agents_config import load_agents_config, provider_pin_extra_body, require_api_base
+from agenteval_ovb.agents_config import (
+    load_agents_config,
+    provider_pin_extra_body,
+    require_api_base,
+    require_api_key,
+)
 from agenteval_ovb.pricing import price_per_token, validate_agents_config
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -74,7 +79,11 @@ TASKS         = load_tasks()
 _JUDGE_CFG      = _CONFIG.get("judge", {})
 _JUDGE_API_BASE = require_api_base(_JUDGE_CFG, "judge")
 _JUDGE_MODEL    = _JUDGE_CFG.get("model", "gpt-5.4-mini")
-_JUDGE_API_KEY  = os.environ.get(_JUDGE_CFG.get("api_key_env", "JUDGE_API_KEY"))
+# api_key_env ist beim Judge per Konvention JUDGE_API_KEY (siehe agents.yaml);
+# der Fallback hält eine agents.yaml ohne diesen Schlüssel lauffähig.
+_JUDGE_API_KEY  = require_api_key(
+    {"api_key_env": _JUDGE_CFG.get("api_key_env", "JUDGE_API_KEY")}, "judge"
+)
 
 # Preis-Validierung: lieber jetzt abbrechen als falsche Wirtschaftlichkeits-
 # Zahlen im Report erzeugen, weil ein Modell in pricing.py fehlt.
@@ -82,8 +91,7 @@ validate_agents_config(_CONFIG)
 
 # DeepEval liest OPENAI_API_KEY und OPENAI_BASE_URL aus der Umgebung.
 # Wir setzen sie auf die Judge-Credentials aus agents.yaml.
-if _JUDGE_API_KEY:
-    os.environ["OPENAI_API_KEY"] = _JUDGE_API_KEY
+os.environ["OPENAI_API_KEY"] = _JUDGE_API_KEY
 os.environ["OPENAI_BASE_URL"] = _JUDGE_API_BASE
 
 # DeepEval berechnet Kosten selbst aus den echten Tokens der API-Antwort
@@ -123,7 +131,7 @@ def _get_agent(cfg: dict) -> tuple[UseCaseAgent, CostTracker]:
         with _agent_init_lock:
             if agent_id not in _agent_instances:
                 api_base = require_api_base(cfg, f"Agent '{agent_id}'")
-                api_key = os.environ.get(cfg["api_key_env"])
+                api_key = require_api_key(cfg, f"Agent '{agent_id}'")
                 _agent_instances[agent_id] = UseCaseAgent(
                     tools=_UC["tools"],
                     system_prompt=_UC["system_prompt"],

@@ -38,7 +38,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from agenteval_ovb.agents_config import load_agents_config, provider_pin_extra_body, require_api_base
+from agenteval_ovb.agents_config import (
+    load_agents_config,
+    provider_pin_extra_body,
+    require_api_base,
+    require_api_key,
+)
 from agenteval_ovb.pricing import validate_agents_config
 from agenteval_ovb.promptfoo_utils import (
     DEFAULT_MAX_CONCURRENCY,
@@ -128,14 +133,14 @@ def _agent_env(agent: dict, judge: dict) -> dict:
     agent_base = require_api_base(agent, f"Agent '{agent.get('id', '?')}'")
     judge_base = require_api_base(judge, "judge")
     env = os.environ.copy()
-    env["OPENAI_API_KEY"]  = os.environ.get(agent["api_key_env"], "")
+    env["OPENAI_API_KEY"]  = require_api_key(agent, f"Agent '{agent.get('id', '?')}'")
     env["MODEL_NAME"]      = agent["model"]
     env["OPENAI_BASE_URL"] = agent_base
     # Judge-Credentials separat, eigene Env-Variablen-Namen – die Eval-YAMLs
     # nutzen sie für defaultTest.options.provider, damit das Grading über den
     # konfigurierten Judge läuft statt über den gerade getesteten Agenten.
     env["JUDGE_MODEL_NAME"]      = judge["model"]
-    env["JUDGE_OPENAI_API_KEY"]  = os.environ.get(judge["api_key_env"], "")
+    env["JUDGE_OPENAI_API_KEY"]  = require_api_key(judge, "judge")
     env["JUDGE_OPENAI_BASE_URL"] = judge_base
     # provider_pin (falls in agents.yaml gesetzt) als JSON für die
     # passthrough-Config in den Eval-YAMLs – fixiert den OpenRouter-Anbieter,

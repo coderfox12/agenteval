@@ -1704,7 +1704,7 @@ def generate_multi_agent_report(
   {blocks}
   {overhead_all}
 </div>
-<footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>
+<footer>Agent-Eval@OVB · OVB Holding AG × TU Darmstadt</footer>
 <script>
 function ovbToggle(el){{el.closest('.section-group').classList.toggle('collapsed');}}
 function ovbCollapseAll(){{document.querySelectorAll('.section-group.agent-section').forEach(g=>g.classList.add('collapsed'));}}
@@ -1818,7 +1818,7 @@ def generate_report(
   {_section_compliance(comp_data, comp_stats, scorecard)}
   {_section_eval_overhead(sec_data, comp_stats, func_data, judge_model)}
 </div>
-<footer>Agent-Eval@OVB · Apache 2.0 · OVB Holding AG × TU Darmstadt</footer>
+<footer>Agent-Eval@OVB · OVB Holding AG × TU Darmstadt</footer>
 </body>
 </html>"""
 

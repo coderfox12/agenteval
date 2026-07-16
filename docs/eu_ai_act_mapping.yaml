@@ -209,9 +209,9 @@ cross_reference:
   IO:
     articles: ["Art. 9", "Art. 15"]
     rationale: "Anweisungsüberschreibung ist ein Robustheitsproblem"
-  TM:
-    articles: ["Art. 9", "Art. 14", "Art. 15"]
-    rationale: "Werkzeugmissbrauch erfordert menschliche Aufsicht und Risikomanagement"
+  RA:
+    articles: ["Art. 9", "Art. 15", "Art. 52"]
+    rationale: "Rollenübernahme umgeht Sicherheitseinschränkungen und verletzt Transparenzpflichten"
   JB:
     articles: ["Art. 9", "Art. 15", "Art. 52"]
     rationale: "Jailbreaking umgeht Sicherheitsfilter und Transparenzpflichten"

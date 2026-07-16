@@ -17,28 +17,38 @@
 #   OpenRouter:  api_base: https://openrouter.ai/api/v1
 #                (Proxy für Anthropic/Gemini/Llama etc.)
 #                model: anthropic/claude-3-haiku | google/gemini-flash-1.5 | meta-llama/...
+#   Ollama:      api_base: http://<host>:11434/v1
+#                (lokal oder self-hosted, OpenAI-kompatibel – kein Sonder-Code
+#                nötig). model: exakter Name aus /api/tags. api_key_env auf
+#                einen Dummy-Wert setzen: Ollama prüft den Key nicht, das SDK
+#                braucht aber einen nicht-leeren String. Siehe README,
+#                Abschnitt "Lokale Modelle anbinden (Ollama)".
 #
 # provider_pin (NUR für OpenRouter relevant, optional): erzwingt einen
 # konkreten Hosting-Anbieter für dieses Modell über OpenRouters
-# provider.only-Parameter (siehe scripts/run_promptfoo_multi_agent.py,
-# evals/functionality/agent/graph.py). Ohne provider_pin routet OpenRouter
+# provider.only-Parameter (Logik: agenteval_ovb/agents_config.py,
+# provider_pin_extra_body). Ohne provider_pin routet OpenRouter
 # denselben Modellnamen je nach Verfügbarkeit an viele verschiedene Hosts
 # mit TEILS STARK UNTERSCHIEDLICHEN Preisen für dasselbe Modell (real
 # gemessen: bis Faktor 3,4 Unterschied bei openai/gpt-oss-120b je
 # Anbieter) – die Preistabelle in pricing.py kann das ohne Pin nicht
 # zuverlässig abbilden. Bei direktem Zugriff auf eine Provider-API
-# (api_base zeigt NICHT auf openrouter.ai) einfach weglassen – dort gibt
-# es ohnehin nur einen Anbieter, also keine Preis-Varianz.
+# (api_base zeigt NICHT auf openrouter.ai) einfach weglassen oder leer
+# lassen (beides gleichwertig) – dort gibt es ohnehin nur einen Anbieter,
+# also keine Preis-Varianz.
 # Empfehlung: einen Anbieter mit hoher Uptime UND einem Preis wählen, der
 # auch als eigenständige Direkt-API existiert (z. B. DeepInfra, Google) –
 # dann gilt der hinterlegte Preis unverändert, falls später direkt statt
 # über OpenRouter auf diesen Anbieter zugegriffen wird.
 
 # ── Judge (LLM-as-Judge für alle Evaluationen) ────────────────────────────────
-# api_key_env bleibt JUDGE_API_KEY, auch wenn das Modell über OpenRouter läuft –
-# der Judge-Key wird strikt getrennt von den Agenten-Keys verwaltet. In .env
-# unter JUDGE_API_KEY den eigenen OpenRouter-Key eintragen (api_base bestimmt
-# den Provider, nicht der Name der Env-Variable).
+# api_key_env ist für den Judge immer JUDGE_API_KEY – der Judge-Key wird
+# strikt getrennt von den Agenten-Keys verwaltet, auch wenn Judge und Agenten
+# beim selben Anbieter laufen. Der Name der Env-Variable sagt nichts über den
+# Anbieter aus: welcher Provider tatsächlich angesprochen wird, bestimmt
+# allein api_base (siehe oben). Der Judge kann also bei einem beliebigen
+# Anbieter liegen – unabhängig davon, wo die getesteten Agenten laufen.
+# Der unten stehende Block ist nur die aktuelle Konfiguration, keine Vorgabe.
 judge:
   model: openai/gpt-oss-120b
   provider_pin: DeepInfra
@@ -49,11 +59,10 @@ agents:
   - id: deepseek-v4-flash
     label: "DeepSeek V4 Flash (OpenRouter)"
     model: deepseek/deepseek-v4-flash
-    # Kein provider_pin (Ausnahme): Rate-Limits bei einzelnen Anbietern
-    # (DeepInfra, dann Baidu) machten den Lauf unzuverlaessig. OpenRouter
-    # verteilt Anfragen ohne Pin automatisch ueber alle verfuegbaren
-    # Anbieter - Preis in pricing.py bleibt als Naeherung (DeepInfra-Preis)
-    # bewusst unangetastet, siehe Chat vom 2026-07-08.
+    # Bewusst ohne Pin: Rate-Limits einzelner Anbieter (DeepInfra, dann Baidu)
+    # machten den Lauf unzuverlässig – ohne Pin verteilt OpenRouter über alle
+    # verfügbaren Anbieter.
+    provider_pin:
     api_key_env: AGENT_API_KEY_2
     api_base: https://openrouter.ai/api/v1
 
